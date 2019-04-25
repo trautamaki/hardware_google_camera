@@ -9,9 +9,14 @@ LOCAL_VENDOR_MODULE := true
 
 LOCAL_SRC_FILES := \
     EmulatedCameraProviderHWLImpl.cpp \
-    EmulatedCameraDeviceHWLImpl.cpp
+    EmulatedCameraDeviceHWLImpl.cpp \
+    EmulatedScene.cpp \
+    EmulatedSensor.cpp \
+    HWLUtils.cpp \
+    JpegCompressor.cpp
 
 LOCAL_C_INCLUDES := \
+    external/libjpeg-turbo \
     hardware/libhardware/include/hardware \
     vendor/google/camera/common/hal/common \
     vendor/google/camera/common/hal/hwl_interface \
@@ -25,6 +30,7 @@ LOCAL_SHARED_LIBRARIES := \
     libgooglecamerahalutils \
     libhardware \
     liblog \
+    libjpeg \
     libjsoncpp \
     libbase \
     libutils

@@ -23,6 +23,8 @@
 #include "camera_common.h"
 #include "EmulatedCameraProviderHWLImpl.h"
 #include "EmulatedCameraDeviceHWLImpl.h"
+#include "EmulatedSensor.h"
+#include "HWLUtils.h"
 
 namespace android {
 
@@ -316,6 +318,18 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
         if ((ret == OK) && (entry.count > 0)) {
             mSupportsFlash = entry.data.u8[0];
         }
+    }
+
+    EmulatedSensor::SensorCharacteristics sensorCharacteristics;
+    auto ret = getSensorCharacteristics(staticMeta.get(), &sensorCharacteristics);
+    if (ret != OK) {
+        ALOGE("%s: Unable to extract sensor characteristics!", __FUNCTION__);
+        return ret;
+    }
+
+    if (!EmulatedSensor::areCharacteristicsSupported(sensorCharacteristics)) {
+        ALOGE("%s: Sensor characteristics not supported!", __FUNCTION__);
+        return BAD_VALUE;
     }
 
     mStaticMedata.push_back(std::move(staticMeta));
