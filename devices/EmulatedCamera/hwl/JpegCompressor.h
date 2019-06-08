@@ -44,10 +44,10 @@ public:
 
     struct JpegListener {
         // Called when JPEG compression has finished, or encountered an error
-        virtual void onJpegDone(const StreamBuffer &jpegBuffer, bool success) = 0;
+        virtual void onJpegDone(const SensorBuffer &jpegBuffer, bool success) = 0;
         // Called when the input buffer for JPEG is not needed any more,
         // if the buffer came from the framework.
-        virtual void onJpegInputDone(const StreamBuffer &inputBuffer) = 0;
+        virtual void onJpegInputDone(const SensorBuffer &inputBuffer) = 0;
         virtual ~JpegListener();
     };
 
@@ -83,7 +83,7 @@ private:
     Buffers *mBuffers;
     JpegListener *mListener;
 
-    StreamBuffer mJpegBuffer, mAuxBuffer;
+    SensorBuffer mJpegBuffer, mAuxBuffer;
     bool mFoundJpeg, mFoundAux;
 
     jpeg_compress_struct mCInfo;

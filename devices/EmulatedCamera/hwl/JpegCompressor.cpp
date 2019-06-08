@@ -121,7 +121,7 @@ status_t JpegCompressor::compress() {
     ALOGV("%s: Compressing start", __FUNCTION__);
     bool mFoundAux = false;
     for (size_t i = 0; i < mBuffers->size(); i++) {
-        const StreamBuffer &b = (*mBuffers)[i];
+        const SensorBuffer &b = (*mBuffers)[i];
         if (b.format == HAL_PIXEL_FORMAT_BLOB) {
             mJpegBuffer = b;
             mFoundJpeg = true;
@@ -173,12 +173,13 @@ status_t JpegCompressor::compress() {
     jpeg_start_compress(&mCInfo, TRUE);
     if (checkError("Error starting compression")) return NO_INIT;
 
-    size_t rowStride = mAuxBuffer.stride * 3;
+    size_t rowStride = mAuxBuffer.plane.img.stride * 3;
     const size_t kChunkSize = 32;
     while (mCInfo.next_scanline < mCInfo.image_height) {
         JSAMPROW chunk[kChunkSize];
         for (size_t i = 0; i < kChunkSize; i++) {
-            chunk[i] = (JSAMPROW)(mAuxBuffer.img + (i + mCInfo.next_scanline) * rowStride);
+            chunk[i] = (JSAMPROW)(mAuxBuffer.plane.img.img +
+                    (i + mCInfo.next_scanline) * rowStride);
         }
         jpeg_write_scanlines(&mCInfo, chunk, kChunkSize);
         if (checkError("Error while compressing")) return NO_INIT;
@@ -239,7 +240,7 @@ void JpegCompressor::cleanUp() {
 
     if (mFoundAux) {
         if (mAuxBuffer.streamId == 0) {
-            delete[] mAuxBuffer.img;
+            delete[] mAuxBuffer.plane.img.img;
         } else if (!mSynchronous) {
             mListener->onJpegInputDone(mAuxBuffer);
         }
@@ -262,8 +263,8 @@ void JpegCompressor::jpegErrorHandler(j_common_ptr cinfo) {
 void JpegCompressor::jpegInitDestination(j_compress_ptr cinfo) {
     JpegDestination *dest = static_cast<JpegDestination *>(cinfo->dest);
     ALOGV("%s: Setting destination to %p, size %zu", __FUNCTION__,
-            dest->parent->mJpegBuffer.img, kMaxJpegSize);
-    dest->next_output_byte = (JOCTET *)(dest->parent->mJpegBuffer.img);
+            dest->parent->mJpegBuffer.plane.img.img, kMaxJpegSize);
+    dest->next_output_byte = (JOCTET *)(dest->parent->mJpegBuffer.plane.img.img);
     dest->free_in_buffer = kMaxJpegSize;
 }
 

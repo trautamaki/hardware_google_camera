@@ -81,8 +81,17 @@
 
 #include "Base.h"
 #include "EmulatedScene.h"
+#include "HandleImporter.h"
+
+#include <hwl_types.h>
+
+#include <functional>
 
 namespace android {
+
+using android::hardware::camera::common::V1_0::helper::HandleImporter;
+using google_camera_hal::HwlPipelineCallback;
+using google_camera_hal::HwlPipelineResult;
 
 class EmulatedSensor : private Thread, public virtual RefBase {
 public:
@@ -118,16 +127,28 @@ public:
      */
 
     struct SensorSettings {
+        HwlPipelineCallback notifyCallback;
+        uint32_t pipelineId;
         nsecs_t exposureTime, frameDuration;
         uint32_t gain;
-        Buffers *outputBuffers;
         uint32_t frameNumber;
-
-        SensorSettings() : exposureTime(0), frameDuration(0), gain(0), outputBuffers(nullptr),
+        SensorSettings () :
+                notifyCallback {nullptr, nullptr},
+                pipelineId(0),
+                exposureTime(0),
+                frameDuration(0),
+                gain(0),
                 frameNumber(0) {}
+
+        SensorSettings (HwlPipelineCallback notifyCallback, uint32_t pipelineId,
+                nsecs_t exposureTime, nsecs_t frameDuration, uint32_t gain,
+                uint32_t frameNumber) : notifyCallback(notifyCallback),
+                pipelineId(pipelineId), exposureTime(exposureTime), frameDuration(frameDuration),
+                gain(gain), frameNumber(frameNumber) {}
     };
 
-    void setCurrentSettings(SensorSettings settings);
+    void setCurrentRequest(SensorSettings settings, std::unique_ptr<HwlPipelineResult> result,
+            std::unique_ptr<Buffers> outputBuffers);
 
     /*
      * Synchronizing with sensor operation (vertical sync)
@@ -143,22 +164,6 @@ public:
     // since the last wait for a new frame. Returns true if new frame is
     // returned, false if timed out.
     bool waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime);
-
-    /*
-     * Interrupt event servicing from the sensor. Only triggers for sensor
-     * cycles that have valid buffers to write to.
-     */
-    struct SensorListener {
-        enum Event {
-            EXPOSURE_START,  // Start of exposure
-        };
-
-        virtual void onSensorEvent(uint32_t frameNumber, Event e,
-                nsecs_t timestamp) = 0;
-        virtual ~SensorListener();
-    };
-
-    void setSensorListener(SensorListener *listener);
 
     static const nsecs_t kSupportedExposureTimeRange[2];
     static const nsecs_t kSupportedFrameDurationRange[2];
@@ -196,12 +201,15 @@ private:
     static const float kReadNoiseVarBeforeGain;
     static const float kReadNoiseVarAfterGain;
 
-    static const uint32_t kDefaultSensitivity;
+    static const int32_t kDefaultSensitivity;
     Mutex mControlMutex;  // Lock before accessing control parameters
     // Start of control parameters
     Condition mVSync;
     bool mGotVSync;
     SensorSettings mCurrentSettings;
+    std::unique_ptr<HwlPipelineResult> mCurrentResult;
+    std::unique_ptr<Buffers> mCurrentOutputBuffers;
+    HandleImporter mImporter;
 
     // End of control parameters
 
@@ -211,7 +219,6 @@ private:
     Condition mReadoutComplete;
     Buffers *mCapturedBuffers;
     nsecs_t mCaptureTime;
-    SensorListener *mListener;
     // End of readout variables
 
     // Time of sensor startup, used for simulation zero-time point
@@ -226,14 +233,14 @@ private:
     virtual bool threadLoop();
 
     nsecs_t mNextCaptureTime;
-    Buffers *mNextCapturedBuffers;
+    std::unique_ptr<Buffers> mNextCapturedBuffers;
 
     std::unique_ptr<EmulatedScene> mScene;
 
     void captureRaw(uint8_t *img, uint32_t gain, uint32_t stride);
     void captureRGBA(uint8_t *img, uint32_t gain, uint32_t stride);
     void captureRGB(uint8_t *img, uint32_t gain, uint32_t stride);
-    void captureNV21(uint8_t *img, uint32_t gain, uint32_t stride);
+    void captureNV21(YCbCrPlanes yuvLayout, uint32_t gain);
     void captureDepth(uint8_t *img, uint32_t gain, uint32_t stride);
 };
 

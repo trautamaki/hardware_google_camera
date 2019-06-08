@@ -23,6 +23,7 @@
 #include "camera_common.h"
 #include "EmulatedCameraProviderHWLImpl.h"
 #include "EmulatedCameraDeviceHWLImpl.h"
+#include "EmulatedCameraDeviceSessionHWLImpl.h"
 #include "EmulatedSensor.h"
 #include "HWLUtils.h"
 
@@ -329,6 +330,11 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
 
     if (!EmulatedSensor::areCharacteristicsSupported(sensorCharacteristics)) {
         ALOGE("%s: Sensor characteristics not supported!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    if (!EmulatedCameraDeviceSessionHwlImpl::areCharacteristicsSupported(*staticMeta)) {
+        ALOGE("%s: Camera device characteristics not supported!", __FUNCTION__);
         return BAD_VALUE;
     }
 

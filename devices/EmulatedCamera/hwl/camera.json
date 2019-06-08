@@ -169,7 +169,7 @@
       "android.request.partialResultCount":
         "1",
       "android.request.availableCapabilities":
-        ["0", "1", "2", "6"],
+        ["0", "1", "2"],
       "android.request.availableRequestKeys":
         ["786435", "786433", "786432", "524290",
         "524291", "524288", "524289", "524292",

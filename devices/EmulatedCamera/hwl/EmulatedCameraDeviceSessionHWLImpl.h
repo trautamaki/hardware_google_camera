@@ -17,6 +17,8 @@
 #ifndef EMULATOR_CAMERA_HAL_HWL_CAMERA_DEVICE_SESSION_HWL_IMPL_H
 #define EMULATOR_CAMERA_HAL_HWL_CAMERA_DEVICE_SESSION_HWL_IMPL_H
 
+#include <set>
+
 #include <camera_device_session_hwl.h>
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedRequestProcessor.h"
@@ -38,6 +40,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
           std::unique_ptr<HalCameraMetadata> staticMeta);
 
   virtual ~EmulatedCameraDeviceSessionHwlImpl();
+
+  static bool areCharacteristicsSupported(const HalCameraMetadata& characteristics);
 
   // Override functions in CameraDeviceSessionHwl
   status_t ConstructDefaultRequestSettings(
@@ -76,8 +80,19 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
   status_t initialize(uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta);
 
+  // helper methods
+  bool supportsCapability(uint8_t cap);
+
   EmulatedCameraDeviceSessionHwlImpl() :
-      mRequestProcessor(std::make_unique<EmulatedRequestProcessor> ()) {}
+      mMaxPipelineDepth(0) {}
+
+  // Supported capabilities and features
+  static const std::set<uint8_t> kSupportedCapabilites;
+  std::set<uint8_t> mAvailableCapabilites;
+  std::set<int32_t> mAvailableCharacteritics;
+  std::set<int32_t> mAvailableResults;
+  std::set<int32_t> mAvailableRequests;
+  uint8_t mMaxPipelineDepth;
 
   // Protects the API entry points
   mutable std::mutex mAPIMutex;

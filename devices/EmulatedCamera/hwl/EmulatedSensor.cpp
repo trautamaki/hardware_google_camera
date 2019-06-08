@@ -33,6 +33,9 @@
 
 namespace android {
 
+using google_camera_hal::NotifyMessage;
+using google_camera_hal::MessageType;
+
  // 1 us - 30 sec
 const nsecs_t EmulatedSensor::kSupportedExposureTimeRange[2] = {1000LL, 30000000000LL} ;
 
@@ -40,7 +43,7 @@ const nsecs_t EmulatedSensor::kSupportedExposureTimeRange[2] = {1000LL, 30000000
 const nsecs_t EmulatedSensor::kSupportedFrameDurationRange[2] = {33331760LL, 30000000000LL};
 
 const int32_t EmulatedSensor::kSupportedSensitivityRange[2] = {100, 1600};
-const uint32_t EmulatedSensor::kDefaultSensitivity = 100;
+const int32_t EmulatedSensor::kDefaultSensitivity = 100;
 
 // Sensor defaults
 const uint8_t EmulatedSensor::kSupportedColorFilterArrangement =
@@ -85,7 +88,7 @@ float sqrtf_approx(float r) {
 
 EmulatedSensor::EmulatedSensor() : Thread(false),
         mGotVSync(false),
-        mCapturedBuffers(nullptr), mListener(nullptr) {
+        mCapturedBuffers(nullptr) {
 }
 
 EmulatedSensor::~EmulatedSensor() {
@@ -179,9 +182,13 @@ status_t EmulatedSensor::shutDown() {
     return res;
 }
 
-void EmulatedSensor::setCurrentSettings(SensorSettings settings) {
+void EmulatedSensor::setCurrentRequest(SensorSettings settings,
+        std::unique_ptr<HwlPipelineResult> result, std::unique_ptr<Buffers> outputBuffers) {
+    ALOGE("%s: frameNumber: %u", __func__, settings.frameNumber);
     Mutex::Autolock lock(mControlMutex);
     mCurrentSettings = settings;
+    mCurrentResult = std::move(result);
+    mCurrentOutputBuffers = std::move(outputBuffers);
 }
 
 bool EmulatedSensor::waitForVSync(nsecs_t reltime) {
@@ -217,18 +224,11 @@ bool EmulatedSensor::waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime) {
     return true;
 }
 
-EmulatedSensor::SensorListener::~SensorListener() {}
-
-void EmulatedSensor::setSensorListener(SensorListener *listener) {
-    Mutex::Autolock lock(mControlMutex);
-    mListener = listener;
-}
-
 status_t EmulatedSensor::readyToRun() {
     ALOGV("Starting up sensor thread");
     mStartupTime = systemTime();
     mNextCaptureTime = 0;
-    mNextCapturedBuffers = NULL;
+    mNextCapturedBuffers = nullptr;
     return OK;
 }
 
@@ -246,19 +246,23 @@ bool EmulatedSensor::threadLoop() {
     uint64_t exposureDuration;
     uint64_t frameDuration;
     uint32_t gain;
-    Buffers *nextBuffers;
+    uint32_t pipelineId;
+    std::unique_ptr<Buffers> nextBuffers;
+    std::unique_ptr<HwlPipelineResult> nextResult;
     uint32_t frameNumber;
-    SensorListener *listener = NULL;
+    HwlPipelineCallback notifyCallback;
     {
         Mutex::Autolock lock(mControlMutex);
         exposureDuration = mCurrentSettings.exposureTime;
         frameDuration = mCurrentSettings.frameDuration;
         gain = mCurrentSettings.gain;
-        nextBuffers = mCurrentSettings.outputBuffers;
+        std::swap(nextBuffers, mCurrentOutputBuffers);
+        std::swap(nextResult, mCurrentResult);
         frameNumber = mCurrentSettings.frameNumber;
-        listener = mListener;
-        // Don't reuse a buffer set
-        mCurrentSettings.outputBuffers = nullptr;
+        pipelineId = mCurrentSettings.pipelineId;
+        notifyCallback = mCurrentSettings.notifyCallback;
+        // Don't reuse callbacks after set
+        mCurrentSettings.notifyCallback = {nullptr, nullptr};
 
         // Signal VSync for start of readout
         ALOGVV("Sensor VSync");
@@ -279,23 +283,25 @@ bool EmulatedSensor::threadLoop() {
     nsecs_t simulatedTime = startRealTime;
     nsecs_t frameEndRealTime = startRealTime + frameDuration;
 
-    if (mNextCapturedBuffers != NULL) {
+    if (mNextCapturedBuffers != nullptr) {
         ALOGVV("Sensor starting readout");
         // Pretend we're doing readout now; will signal once enough time has elapsed
-        capturedBuffers = mNextCapturedBuffers;
-        captureTime = mNextCaptureTime;
+        //capturedBuffers = mNextCapturedBuffers;
+        //captureTime = mNextCaptureTime;
     }
     simulatedTime += mRowReadoutTime + kMinVerticalBlank;
 
     // TODO: Move this signal to another thread to simulate readout
     // time properly
     if (capturedBuffers != NULL) {
+        /*
         ALOGVV("Sensor readout complete");
         Mutex::Autolock lock(mReadoutMutex);
         if (mCapturedBuffers != NULL) {
             ALOGV("Waiting for readout thread to catch up!");
             mReadoutComplete.wait(mReadoutMutex);
         }
+        */
 
         mCapturedBuffers = capturedBuffers;
         mCaptureTime = captureTime;
@@ -307,21 +313,23 @@ bool EmulatedSensor::threadLoop() {
      * Stage 2: Capture new image
      */
     mNextCaptureTime = simulatedTime;
-    mNextCapturedBuffers = nextBuffers;
+    std::swap(mNextCapturedBuffers,  nextBuffers);
 
-    if (mNextCapturedBuffers != NULL) {
-        if (listener != NULL) {
-            listener->onSensorEvent(frameNumber, SensorListener::EXPOSURE_START,
-                    mNextCaptureTime);
+    if (mNextCapturedBuffers != nullptr) {
+        if (notifyCallback.notify != nullptr) {
+            NotifyMessage msg {
+                .type = MessageType::kShutter,
+                .message.shutter = {
+                    .frame_number = frameNumber,
+                        .timestamp_ns = static_cast<uint64_t>(mNextCaptureTime)}};
+            notifyCallback.notify(pipelineId, msg);
         }
         ALOGVV("Starting next capture: Exposure: %f ms, gain: %d",
                 (float)exposureDuration / 1e6, gain);
         mScene->setExposureDuration((float)exposureDuration / 1e9);
         mScene->calculateScene(mNextCaptureTime);
 
-        // Might be adding more buffers, so size isn't constant
-        for (size_t i = 0; i < mNextCapturedBuffers->size(); i++) {
-            const StreamBuffer &b = (*mNextCapturedBuffers)[i];
+        for (const auto& b : *mNextCapturedBuffers) {
             ALOGVV(
                     "Sensor capturing buffer %d: stream %d,"
                     " %d x %d, format %x, stride %d, buf %p, img %p",
@@ -329,28 +337,28 @@ bool EmulatedSensor::threadLoop() {
                     b.img);
             switch (b.format) {
                 case HAL_PIXEL_FORMAT_RAW16:
-                    captureRaw(b.img, gain, b.stride);
+                    captureRaw(b.plane.img.img, gain, b.plane.img.stride);
                     break;
                 case HAL_PIXEL_FORMAT_RGB_888:
-                    captureRGB(b.img, gain, b.stride);
+                    captureRGB(b.plane.img.img, gain, b.plane.img.stride);
                     break;
                 case HAL_PIXEL_FORMAT_RGBA_8888:
-                    captureRGBA(b.img, gain, b.stride);
+                    captureRGBA(b.plane.img.img, gain, b.plane.img.stride);
                     break;
                 case HAL_PIXEL_FORMAT_BLOB:
                     if (b.dataSpace != HAL_DATASPACE_DEPTH) {
                         // Add auxillary buffer of the right size
                         // Assumes only one BLOB (JPEG) buffer in
                         // mNextCapturedBuffers
-                        StreamBuffer bAux;
+                        SensorBuffer bAux;
                         bAux.streamId = 0;
                         bAux.width = b.width;
                         bAux.height = b.height;
                         bAux.format = HAL_PIXEL_FORMAT_RGB_888;
-                        bAux.stride = b.width;
+                        bAux.plane.img.stride = b.width;
                         bAux.buffer = NULL;
                         // TODO: Reuse these
-                        bAux.img = new uint8_t[b.width * b.height * 3];
+                        bAux.plane.img.img = new uint8_t[b.width * b.height * 3];
                         mNextCapturedBuffers->push_back(bAux);
                     } else {
                         ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__, b.format, b.dataSpace);
@@ -358,10 +366,10 @@ bool EmulatedSensor::threadLoop() {
                     break;
                 case HAL_PIXEL_FORMAT_YCrCb_420_SP:
                 case HAL_PIXEL_FORMAT_YCbCr_420_888:
-                    captureNV21(b.img, gain, b.stride);
+                    captureNV21(b.plane.imgYCrCb, gain);
                     break;
                 case HAL_PIXEL_FORMAT_Y16:
-                    captureDepth(b.img, gain, b.stride);
+                    captureDepth(b.plane.img.img, gain, b.plane.img.stride);
                     break;
                 default:
                     ALOGE("%s: Unknown format %x, no output", __FUNCTION__, b.format);
@@ -387,6 +395,16 @@ bool EmulatedSensor::threadLoop() {
     ALOGVV("Frame cycle took %d ms, target %d ms",
             (int)((endRealTime - startRealTime) / 1000000),
             (int)(frameDuration / 1000000));
+
+    if ((notifyCallback.process_pipeline_result != nullptr) && (nextResult.get() != nullptr)) {
+        nextResult->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP, &mNextCaptureTime, 1);
+        for (auto &outputBuffer : nextResult->output_buffers) {
+            mImporter.unlock(outputBuffer.buffer);
+        }
+
+        notifyCallback.process_pipeline_result(std::move(nextResult));
+    }
+
     return true;
 };
 
@@ -490,7 +508,7 @@ void EmulatedSensor::captureRGB(uint8_t *img, uint32_t gain, uint32_t stride) {
     ALOGVV("RGB sensor image captured");
 }
 
-void EmulatedSensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t stride) {
+void EmulatedSensor::captureNV21(YCbCrPlanes yuvLayout, uint32_t gain) {
     float totalGain = gain / 100.0 * kBaseGainFactor;
     // Using fixed-point math with 6 bits of fractional precision.
     // In fixed-point math, calculate total scaling from electrons to 8bpp
@@ -509,14 +527,13 @@ void EmulatedSensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t stride) {
 
     // inc = how many pixels to skip while reading every next pixel
     // horizontally.
-    uint32_t inc = ceil((float)mChars.width / stride);
-    // outH = projected vertical resolution based on stride.
-    uint32_t outH = mChars.height / inc;
+    uint32_t inc = ceil((float)mChars.width / yuvLayout.yStride);
     for (unsigned int y = 0, outY = 0; y < mChars.height; y += inc, outY++) {
-        uint8_t *pxY = img + outY * stride;
-        uint8_t *pxVU = img + (outH + outY / 2) * stride;
+        uint8_t *pxY = yuvLayout.imgY + outY * yuvLayout.yStride;
+        uint8_t *pxCb = yuvLayout.imgCb + (outY / 2) * yuvLayout.CbCrStride;
+        uint8_t *pxCr = yuvLayout.imgCr + (outY / 2) * yuvLayout.CbCrStride;
         mScene->setReadoutPixel(0, y);
-        for (unsigned int outX = 0; outX < stride; outX++) {
+        for (unsigned int outX = 0; outX < yuvLayout.yStride; outX++) {
             int32_t rCount, gCount, bCount;
             // TODO: Perfect demosaicing is a cheat
             const uint32_t *pixel = mScene->getPixelElectrons();
@@ -527,15 +544,15 @@ void EmulatedSensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t stride) {
             bCount = pixel[EmulatedScene::B] * scale64x;
             bCount = bCount < saturationPoint ? bCount : saturationPoint;
 
-            *pxY++ = (rgbToY[0] * rCount + rgbToY[1] * gCount + rgbToY[2] * bCount) /
-                scaleOutSq;
+            *pxY++ = (rgbToY[0] * rCount + rgbToY[1] * gCount + rgbToY[2] * bCount) / scaleOutSq;
             if (outY % 2 == 0 && outX % 2 == 0) {
-                *pxVU++ = (rgbToCb[0] * rCount + rgbToCb[1] * gCount +
+                *pxCb = (rgbToCb[0] * rCount + rgbToCb[1] * gCount +
                         rgbToCb[2] * bCount + rgbToCb[3]) /
                     scaleOutSq;
-                *pxVU++ = (rgbToCr[0] * rCount + rgbToCr[1] * gCount +
+                *pxCr = (rgbToCr[0] * rCount + rgbToCr[1] * gCount +
                         rgbToCr[2] * bCount + rgbToCr[3]) /
                     scaleOutSq;
+                pxCr += yuvLayout.CbCrStep; pxCb += yuvLayout.CbCrStep;
             }
 
             // Skip unprocessed pixels from sensor.

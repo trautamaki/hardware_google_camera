@@ -22,6 +22,7 @@
 #include <queue>
 #include <thread>
 
+#include "EmulatedSensor.h"
 #include "hwl_types.h"
 
 namespace android {
@@ -32,15 +33,19 @@ using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineRequest;
 using google_camera_hal::StreamBuffer;
 
+struct EmulatedStream : public HalStream {
+    uint32_t width, height;
+};
+
 struct EmulatedPipeline {
     HwlPipelineCallback cb;
-    std::vector<HalStream> streams;
+    std::vector<EmulatedStream> streams;
     uint32_t physicalCameraId, pipelineId;
 };
 
 class EmulatedRequestProcessor {
 public:
-    EmulatedRequestProcessor();
+    EmulatedRequestProcessor(uint8_t maxPipelineDepth, sp<EmulatedSensor> sensor);
     virtual ~EmulatedRequestProcessor();
 
     // Process given pipeline requests and invoke the respective callback in a separate thread
@@ -50,9 +55,10 @@ public:
 
 private:
 
-    void RequestProcessorLoop();
+    void requestProcessorLoop();
 
     std::mutex mProcessMutex;
+    std::condition_variable mRequestCondition;
     std::thread mRequestThread;
     bool mProcessorDone = false;
 
@@ -64,11 +70,13 @@ private:
         std::vector<StreamBuffer> inputBuffers;
         // TODO: input buffer meta
         std::vector<StreamBuffer> outputBuffers;
+        // Stream Id -> Hal stream map
+        std::unordered_map<int32_t, EmulatedStream> streamMap;
     };
 
-    std::condition_variable mRequestCondition;
-    std::mutex mRequestMutex;
     std::queue<PendingRequest> mPendingRequests;
+    uint8_t mMaxPipelineDepth;
+    sp<EmulatedSensor> mSensor;
 };
 
 }  // namespace android

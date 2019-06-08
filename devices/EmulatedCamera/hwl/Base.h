@@ -26,20 +26,34 @@
 
 namespace android {
 
-/* Internal structure for passing buffers across threads */
-struct StreamBuffer {
-  // Positive numbers are output streams
-  // Negative numbers are input reprocess streams
-  // Zero is an auxillary buffer
-  int streamId;
-  uint32_t width, height;
-  uint32_t format;
-  uint32_t dataSpace;
-  uint32_t stride;
-  buffer_handle_t *buffer;
-  uint8_t *img;
+struct YCbCrPlanes {
+    uint8_t *imgY, *imgCb, *imgCr;
+    uint32_t yStride, CbCrStride, CbCrStep;
 };
-typedef Vector<StreamBuffer> Buffers;
+
+struct SinglePlane {
+    uint8_t *img;
+    uint32_t stride;
+};
+
+/* Internal structure for passing buffers across threads */
+struct SensorBuffer {
+    // Positive numbers are output streams
+    // Negative numbers are input reprocess streams
+    // Zero is an auxillary buffer
+    int streamId;
+    uint32_t width, height;
+    uint32_t format;
+    uint32_t dataSpace;
+    buffer_handle_t *buffer;
+
+    union Plane {
+        SinglePlane img;
+        YCbCrPlanes imgYCrCb;
+    } plane;
+};
+
+typedef Vector<SensorBuffer> Buffers;
 
 }  // namespace android
 

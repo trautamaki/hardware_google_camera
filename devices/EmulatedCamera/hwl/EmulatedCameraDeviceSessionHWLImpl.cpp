@@ -24,12 +24,83 @@
 #include <utils/Trace.h>
 
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
+#include "EmulatedSensor.h"
+#include "HWLUtils.h"
 
 namespace android {
+
+const std::set<uint8_t> EmulatedCameraDeviceSessionHwlImpl::kSupportedCapabilites = {
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_MANUAL_POST_PROCESSING,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_RAW,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_READ_SENSOR_SETTINGS,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT,
+    //TODO: We should eventually support all capabilities
+};
+
+bool EmulatedCameraDeviceSessionHwlImpl::areCharacteristicsSupported(
+        const HalCameraMetadata& characteristics) {
+
+    camera_metadata_ro_entry_t entry;
+    auto ret = characteristics.Get(ANDROID_REQUEST_PIPELINE_MAX_DEPTH, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+        if (entry.data.u8[0] == 0) {
+            ALOGE("%s: Maximum request pipeline must have a non zero value!", __FUNCTION__);
+            return false;
+        }
+    } else {
+        ALOGE("%s: Maximum request pipeline request depth absent!", __FUNCTION__);
+        return false;
+    }
+
+    ret = characteristics.Get(ANDROID_REQUEST_AVAILABLE_CAPABILITIES, &entry);
+    if ((ret == OK) && (entry.count > 0)) {
+        for (size_t i = 0; i < entry.count; i++) {
+            if (kSupportedCapabilites.find(entry.data.u8[i]) == kSupportedCapabilites.end()) {
+                ALOGE("%s: Capability: %u not supported", __FUNCTION__, entry.data.u8[i]);
+                return false;
+            }
+        }
+    } else {
+        ALOGE("%s: No available capabilities!", __FUNCTION__);
+        return false;
+    }
+
+    ret = characteristics.Get(ANDROID_REQUEST_AVAILABLE_CHARACTERISTICS_KEYS, &entry);
+    if ((ret != OK) || (entry.count == 0)) {
+        ALOGE("%s: No available characteristic keys!", __FUNCTION__);
+        return false;
+    }
+
+    ret = characteristics.Get(ANDROID_REQUEST_AVAILABLE_CHARACTERISTICS_KEYS, &entry);
+    if ((ret != OK) || (entry.count == 0)) {
+        ALOGE("%s: No available characteristic keys!", __FUNCTION__);
+        return false;
+    }
+
+    ret = characteristics.Get(ANDROID_REQUEST_AVAILABLE_RESULT_KEYS, &entry);
+    if ((ret != OK) || (entry.count == 0)) {
+        ALOGE("%s: No available result keys!", __FUNCTION__);
+        return false;
+    }
+
+    ret = characteristics.Get(ANDROID_REQUEST_AVAILABLE_REQUEST_KEYS, &entry);
+    if ((ret != OK) || (entry.count == 0)) {
+        ALOGE("%s: No available request keys!", __FUNCTION__);
+        return false;
+    }
+
+    return true;
+}
 
 std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> EmulatedCameraDeviceSessionHwlImpl::Create(
         uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta) {
     ATRACE_CALL();
+    if (staticMeta.get() == nullptr) {
+        return nullptr;
+    }
+
     auto session = std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl>(
             new EmulatedCameraDeviceSessionHwlImpl);
     if (session == nullptr) {
@@ -49,11 +120,49 @@ std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> EmulatedCameraDeviceSessionH
 
 status_t EmulatedCameraDeviceSessionHwlImpl::initialize(uint32_t cameraId,
         std::unique_ptr<HalCameraMetadata> staticMeta) {
-    //TODO: Iterate over static metadata and infer capabilities
+    if (!areCharacteristicsSupported(*staticMeta)) {
+        return BAD_VALUE;
+    }
+
     mCameraId = cameraId;
     mStaticMetadata = std::move(staticMeta);
+    //TODO: Iterate over static metadata and infer capabilities plus features
+    camera_metadata_ro_entry_t entry;
+    mStaticMetadata->Get(ANDROID_REQUEST_PIPELINE_MAX_DEPTH, &entry);
+    mMaxPipelineDepth = entry.data.u8[0];
+
+    mStaticMetadata->Get(ANDROID_REQUEST_AVAILABLE_CHARACTERISTICS_KEYS, &entry);
+    mAvailableCharacteritics.insert(entry.data.i32, entry.data.i32 + entry.count);
+    mStaticMetadata->Get(ANDROID_REQUEST_AVAILABLE_RESULT_KEYS, &entry);
+    mAvailableResults.insert(entry.data.i32, entry.data.i32 + entry.count);
+    mStaticMetadata->Get(ANDROID_REQUEST_AVAILABLE_REQUEST_KEYS, &entry);
+    mAvailableRequests.insert(entry.data.i32, entry.data.i32 + entry.count);
+
+    mStaticMetadata->Get(ANDROID_REQUEST_AVAILABLE_CAPABILITIES, &entry);
+    mAvailableCapabilites.insert(entry.data.u8, entry.data.u8 + entry.count);
+    EmulatedSensor::SensorCharacteristics sensorCharacteristics;
+    auto ret = getSensorCharacteristics(mStaticMetadata.get(), &sensorCharacteristics);
+    if (ret != OK) {
+        ALOGE("%s: Unable to extract sensor characteristics %s (%d)", __FUNCTION__, strerror(-ret),
+                ret);
+        return ret;
+    }
+
+    sp<EmulatedSensor> emulatedSensor = new EmulatedSensor();
+    ret = emulatedSensor->startUp(sensorCharacteristics);
+    if (ret != OK) {
+        ALOGE("%s: Failed on sensor start up %s (%d)", __FUNCTION__, strerror(-ret), ret);
+        return ret;
+    }
+
+    mRequestProcessor = std::make_unique<EmulatedRequestProcessor> (mMaxPipelineDepth,
+            emulatedSensor);
 
     return OK;
+}
+
+bool EmulatedCameraDeviceSessionHwlImpl::supportsCapability(uint8_t cap) {
+    return mAvailableCapabilites.find(cap) != mAvailableCapabilites.end();
 }
 
 EmulatedCameraDeviceSessionHwlImpl::~EmulatedCameraDeviceSessionHwlImpl() { }
@@ -126,15 +235,17 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
 
     emulatedPipeline.streams.reserve(request_config.streams.size());
     for (const auto& stream : request_config.streams) {
-        HalStream halStream = {
+        EmulatedStream halStream = {{
                 .id = stream.id,
                 .override_format = stream.format,
                 .producer_usage = GRALLOC_USAGE_SW_WRITE_OFTEN,
                 .consumer_usage = 0,
-                .max_buffers = 1, // TODO: calculate max buffers accordingly
+                .max_buffers = mMaxPipelineDepth,
                 .override_data_space = stream.data_space,
                 .is_physical_camera_stream = stream.is_physical_camera_stream,
-                .physical_camera_id = stream.physical_camera_id,
+                .physical_camera_id = stream.physical_camera_id,},
+                .width = stream.width,
+                .height = stream.height,
         };
         emulatedPipeline.streams.push_back(halStream);
     }
@@ -149,7 +260,6 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
 status_t EmulatedCameraDeviceSessionHwlImpl::GetConfiguredHalStream(
     uint32_t pipeline_id, std::vector<HalStream>* hal_streams) const {
     ATRACE_CALL();
-    ALOGE("%s: E", __func__);
     std::lock_guard<std::mutex> lock(mAPIMutex);
     if (hal_streams == nullptr) {
         ALOGE("%s hal_streams is nullptr", __FUNCTION__);
