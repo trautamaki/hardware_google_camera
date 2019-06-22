@@ -38,10 +38,36 @@ using google_camera_hal::BufferStatus;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
 
+struct JpegRGBInput {
+    uint32_t width, height;
+    uint32_t stride;
+    uint8_t *img;
+
+    JpegRGBInput() : width(0), height(0), stride(0), img(nullptr) {}
+    ~JpegRGBInput() {
+        if (img != nullptr) {
+            delete [] img;
+            img = nullptr;
+        }
+    }
+
+    JpegRGBInput(const JpegRGBInput&) = delete;
+    JpegRGBInput& operator = (const JpegRGBInput&) = delete;
+};
+
 struct JpegJob {
-    std::unique_ptr<SensorBuffer> input, output;
+    std::unique_ptr<JpegRGBInput> input;
+    std::unique_ptr<SensorBuffer> output;
     std::unique_ptr<HwlPipelineResult> result;
-    std::unique_ptr<HwlPipelineCallback> callback;
+
+    ~JpegJob() {
+        if (output->callback.process_pipeline_result != nullptr) {
+            if (result->result_metadata.get() != nullptr) {
+                result->partial_result = 1;
+            }
+            output->callback.process_pipeline_result(std::move(result));
+        }
+    }
 };
 
 class JpegCompressor {
@@ -60,10 +86,8 @@ private:
     std::queue<std::unique_ptr<JpegJob>> mPendingJobs;
 
     j_common_ptr mJpegErrorInfo;
-    jpeg_compress_struct mCInfo;
     bool checkError(const char *msg);
     void compress(std::unique_ptr<JpegJob> job);
-    void cleanUp(std::unique_ptr<JpegJob> job, BufferStatus status);
     void threadLoop();
 
     JpegCompressor(const JpegCompressor&) = delete;
@@ -71,5 +95,12 @@ private:
 };
 
 }  // namespace android
+
+template<>
+struct std::default_delete<jpeg_compress_struct> {
+    inline void operator() (jpeg_compress_struct *cinfo) const {
+        jpeg_destroy_compress(cinfo);
+    }
+};
 
 #endif

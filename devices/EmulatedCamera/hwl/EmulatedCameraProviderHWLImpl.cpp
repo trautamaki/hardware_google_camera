@@ -165,7 +165,7 @@ status_t getInt32Value(const Json::Value& value, int32_t *result/*out*/) {
     } else if (value.isInt()) {
         *result = value.asInt();
     } else {
-        ALOGE("%s: json type: %d doesn't match with byte tag type",
+        ALOGE("%s: json type: %d doesn't match with int32 tag type",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
@@ -187,7 +187,7 @@ status_t getInt64Value(const Json::Value& value, int64_t *result/*out*/) {
     } else if (value.isInt64()) {
         *result = value.asInt64();
     } else {
-        ALOGE("%s: json type: %d doesn't match with byte tag type",
+        ALOGE("%s: json type: %d doesn't match with int64 tag type",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
@@ -209,7 +209,7 @@ status_t getFloatValue(const Json::Value& value, float *result/*out*/) {
     } else if (value.isDouble()) { //JsonCPP doesn't seem to support floats.
         *result = value.asDouble();
     } else {
-        ALOGE("%s: json type: %d doesn't match with byte tag type",
+        ALOGE("%s: json type: %d doesn't match with float tag type",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
@@ -231,7 +231,7 @@ status_t getDoubleValue(const Json::Value& value, double *result/*out*/) {
     } else if (value.isDouble()) {
         *result = value.asDouble();
     } else {
-        ALOGE("%s: json type: %d doesn't match with byte tag type",
+        ALOGE("%s: json type: %d doesn't match with double tag type",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
@@ -240,7 +240,7 @@ status_t getDoubleValue(const Json::Value& value, double *result/*out*/) {
 }
 
 template<typename T, typename funcType>
-status_t insertTag(const Json::Value& value, uint32_t tagId, funcType getValFunc,
+status_t insertTag(const Json::Value& jsonValue, uint32_t tagId, funcType getValFunc,
         HalCameraMetadata *meta/*out*/) {
     if (meta == nullptr) {
         return BAD_VALUE;
@@ -249,19 +249,52 @@ status_t insertTag(const Json::Value& value, uint32_t tagId, funcType getValFunc
     std::vector<T> values;
     T result;
     status_t ret = OK;
-    if (value.isArray()) {
-        values.reserve(value.size());
-        for (const auto& val : value) {
+    if (jsonValue.isArray()) {
+        values.reserve(jsonValue.size());
+        for (const auto& val : jsonValue) {
             ret = getValFunc(val, &result);
             if (ret == OK) {
                 values.push_back(result);
             }
         }
     } else {
-        ret = getValFunc(value, &result);
+        ret = getValFunc(jsonValue, &result);
         if (ret == OK) {
             values.push_back(result);
         }
+    }
+
+    if (ret == OK) {
+        ret = meta->Set(tagId, values.data(), values.size());
+    }
+
+    return ret;
+}
+
+status_t insertRationalTag(const Json::Value& jsonValue, uint32_t tagId,
+        HalCameraMetadata *meta/*out*/) {
+    if (meta == nullptr) {
+        return BAD_VALUE;
+    }
+
+    std::vector<camera_metadata_rational_t> values;
+    status_t ret = OK;
+    if (jsonValue.isArray() && ((jsonValue.size() % 2) == 0)) {
+        values.reserve(jsonValue.size() / 2);
+        auto it = jsonValue.begin();
+        while (it != jsonValue.end()) {
+            camera_metadata_rational_t result;
+            ret = getInt32Value((*it), &result.numerator); it++;
+            ret |= getInt32Value((*it), &result.denominator); it++;
+            if (ret != OK) {
+                break;
+            }
+            values.push_back(result);
+        }
+    } else {
+        ALOGE("%s: json type: %d doesn't match with rational tag type", __FUNCTION__,
+                jsonValue.type());
+        return BAD_VALUE;
     }
 
     if (ret == OK) {
@@ -306,7 +339,7 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
                 insertTag<double>(tagValue, tagId, getDoubleValue, staticMeta.get());
                 break;
             case TYPE_RATIONAL:
-                //TODO
+                insertRationalTag(tagValue, tagId, staticMeta.get());
                 break;
             default:
                 ALOGE("%s: Unsupported tag type: %d!", __FUNCTION__, tagType);

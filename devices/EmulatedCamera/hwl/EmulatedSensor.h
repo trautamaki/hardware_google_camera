@@ -128,27 +128,18 @@ public:
      */
 
     struct SensorSettings {
-        HwlPipelineCallback notifyCallback;
         nsecs_t exposureTime, frameDuration;
-        uint32_t gain;
-        uint32_t frameNumber;
-        SensorSettings () :
-                notifyCallback {nullptr, nullptr},
-                exposureTime(0),
-                frameDuration(0),
-                gain(0),
-                frameNumber(0) {}
+        uint32_t gain; // ISO
 
-        SensorSettings (HwlPipelineCallback notifyCallback, nsecs_t exposureTime,
-                nsecs_t frameDuration, uint32_t gain, uint32_t frameNumber) :
-                notifyCallback(notifyCallback), exposureTime(exposureTime),
-                frameDuration(frameDuration), gain(gain), frameNumber(frameNumber) {}
+        SensorSettings () : exposureTime(0), frameDuration(0), gain(0) {}
+        SensorSettings (nsecs_t exposureTime, nsecs_t frameDuration, uint32_t gain) :
+            exposureTime(exposureTime), frameDuration(frameDuration), gain(gain) {}
     };
 
     void setCurrentRequest(SensorSettings settings, std::unique_ptr<HwlPipelineResult> result,
             std::unique_ptr<Buffers> outputBuffers);
 
-    status_t flush() { return OK; } // TODO
+    status_t flush();
 
     /*
      * Synchronizing with sensor operation (vertical sync)
@@ -203,7 +194,6 @@ private:
     SensorSettings mCurrentSettings;
     std::unique_ptr<HwlPipelineResult> mCurrentResult;
     std::unique_ptr<Buffers> mCurrentOutputBuffers;
-    HandleImporter mImporter;
     std::unique_ptr<JpegCompressor> mJpegCompressor;
 
     // End of control parameters
@@ -215,15 +205,16 @@ private:
     bool threadLoop() override;
 
     nsecs_t mNextCaptureTime;
-    std::unique_ptr<Buffers> mNextCapturedBuffers;
 
     std::unique_ptr<EmulatedScene> mScene;
 
-    void captureRaw(uint8_t *img, uint32_t gain, uint32_t stride);
-    void captureRGBA(uint8_t *img, uint32_t gain, uint32_t stride);
-    void captureRGB(uint8_t *img, uint32_t gain, uint32_t stride);
-    void captureNV21(YCbCrPlanes yuvLayout, uint32_t gain);
-    void captureDepth(uint8_t *img, uint32_t gain, uint32_t stride);
+    void captureRaw(uint8_t *img, uint32_t gain, uint32_t width);
+    void captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride);
+    void captureRGB(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride);
+    void captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t gain);
+    void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride);
+
+    bool waitForVSyncLocked(nsecs_t reltime);
 };
 
 }  // namespace android

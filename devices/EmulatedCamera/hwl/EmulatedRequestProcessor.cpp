@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2019 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 
 #include "HandleImporter.h"
 #include <log/log.h>
+#include <sync/sync.h>
 #include <utils/Timers.h>
 #include <utils/Trace.h>
 
@@ -32,9 +33,10 @@ using google_camera_hal::HwlPipelineResult;
 using google_camera_hal::NotifyMessage;
 using google_camera_hal::MessageType;
 
-EmulatedRequestProcessor::EmulatedRequestProcessor(uint8_t maxPipelineDepth,
+EmulatedRequestProcessor::EmulatedRequestProcessor(uint32_t cameraId, uint8_t maxPipelineDepth,
         sp<EmulatedSensor> sensor) :
     mMaxPipelineDepth(maxPipelineDepth),
+    mCameraId(cameraId),
     mSensor(sensor) {
     ATRACE_CALL();
     mRequestThread = std::thread([this] { this->requestProcessorLoop(); });
@@ -70,28 +72,29 @@ status_t EmulatedRequestProcessor::processPipelineRequests(uint32_t frameNumber,
         }
 
         while (mPendingRequests.size() >= mMaxPipelineDepth) {
-            auto result = mRequestCondition.wait_for(lock, std::chrono::milliseconds(1000));
+            auto result = mRequestCondition.wait_for(lock,
+                    std::chrono::milliseconds( EmulatedSensor::kSupportedFrameDurationRange[1]));
             if (result == std::cv_status::timeout) {
                 ALOGE("%s Timed out waiting for a pending request slot", __FUNCTION__);
                 return TIMED_OUT;
             }
         }
 
-        std::unordered_map<int32_t, EmulatedStream> streamMap;
-        for (const auto &halStream : pipelines[request.pipeline_id].streams) {
-            streamMap.emplace(halStream.id, halStream);
+        const auto& streams = pipelines[request.pipeline_id].streams;
+        auto sensorBuffers = std::make_unique<Buffers>();
+        sensorBuffers->reserve(request.output_buffers.size());
+        for (const auto& outputBuffer : request.output_buffers) {
+            auto sensorBuffer = createSensorBuffer(frameNumber, streams.at(outputBuffer.stream_id),
+                    request, pipelines[request.pipeline_id].cb, outputBuffer);
+            if (sensorBuffer.get() != nullptr) {
+                sensorBuffers->push_back(std::move(sensorBuffer));
+            }
         }
 
         mPendingRequests.push({
-                .frameNumber = frameNumber,
-                .callback = pipelines[request.pipeline_id].cb,
-                .pipelineId = request.pipeline_id,
                 .settings = HalCameraMetadata::Clone(request.settings.get()),
                 .inputBuffers = request.input_buffers,
-                .outputBuffers = request.output_buffers,
-                .streamMap = std::move(streamMap) });
-
-        //TODO duplicate fences
+                .outputBuffers = std::move(sensorBuffers)});
     }
 
     return OK;
@@ -106,16 +109,21 @@ status_t EmulatedRequestProcessor::flush() {
     while (!mPendingRequests.empty()) {
         const auto& request = mPendingRequests.front();
 
-        if (request.callback.notify != nullptr) {
+        if (request.outputBuffers->at(0)->callback.notify != nullptr) {
             NotifyMessage msg = {
                 .type = MessageType::kError,
                 .message.error = {
-                    .frame_number = request.frameNumber,
+                    .frame_number = request.outputBuffers->at(0)->frameNumber,
                     .error_stream_id = -1,
                     .error_code = ErrorCode::kErrorRequest
                 }
             };
-            request.callback.notify(request.pipelineId, msg);
+            request.outputBuffers->at(0)->callback.notify(
+                    request.outputBuffers->at(0)->pipelineId, msg);
+        }
+
+        for (const auto& buffer : (*request.outputBuffers)) {
+            buffer->streamBuffer.status = BufferStatus::kError;
         }
 
         mPendingRequests.pop();
@@ -124,13 +132,8 @@ status_t EmulatedRequestProcessor::flush() {
     return ret;
 }
 
-inline uint32_t alignTo(uint32_t value, uint32_t alignment) {
-    uint32_t delta = value % alignment;
-    return (delta == 0) ? value : (value + (alignment - delta));
-}
-
-status_t getBufferSizeAndStride(const EmulatedStream& stream, uint32_t *size /*out*/,
-        uint32_t *stride /*out*/) {
+status_t EmulatedRequestProcessor::getBufferSizeAndStride(const EmulatedStream& stream,
+        uint32_t *size /*out*/, uint32_t *stride /*out*/) {
     if (size == nullptr) {
         return BAD_VALUE;
     }
@@ -171,8 +174,9 @@ status_t getBufferSizeAndStride(const EmulatedStream& stream, uint32_t *size /*o
     return OK;
 }
 
-status_t lockSensorBuffer(const EmulatedStream& stream, HandleImporter& importer /*in*/,
-        buffer_handle_t buffer, SensorBuffer *sensorBuffer /*out*/) {
+status_t EmulatedRequestProcessor::lockSensorBuffer(const EmulatedStream& stream,
+        HandleImporter& importer /*in*/, buffer_handle_t buffer,
+        SensorBuffer *sensorBuffer /*out*/) {
     if (sensorBuffer == nullptr) {
         return BAD_VALUE;
     }
@@ -205,9 +209,8 @@ status_t lockSensorBuffer(const EmulatedStream& stream, HandleImporter& importer
                 sensorBuffer->plane.img.bufferSize = bufferSize;
             } else {
                 ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
-                return BAD_VALUE;
+                return ret;
             }
-            ALOGE("%s: Mapped address: %p", __func__, sensorBuffer->plane.img.img);
         } else {
             ALOGE("%s: Unsupported pixel format: 0x%x", __FUNCTION__,
                     stream.override_format);
@@ -218,66 +221,114 @@ status_t lockSensorBuffer(const EmulatedStream& stream, HandleImporter& importer
     return OK;
 }
 
+std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::createSensorBuffer(uint32_t frameNumber,
+        const EmulatedStream& stream, const HwlPipelineRequest& request,
+        HwlPipelineCallback callback, StreamBuffer streamBuffer) {
+    auto buffer = std::make_unique<SensorBuffer>();
+
+    buffer->width = stream.width;
+    buffer->height = stream.height;
+    buffer->format = stream.override_format;
+    buffer->dataSpace = stream.override_data_space;
+    buffer->streamBuffer = streamBuffer;
+    buffer->pipelineId = request.pipeline_id;
+    buffer->callback = callback;
+    buffer->frameNumber = frameNumber;
+    buffer->cameraId = mCameraId;
+
+    auto ret = lockSensorBuffer(stream, buffer->importer, streamBuffer.buffer, buffer.get());
+    if (ret != OK) {
+        buffer->streamBuffer.status = BufferStatus::kError;
+        buffer.release();
+        buffer = nullptr;
+    }
+
+    if (streamBuffer.acquire_fence != nullptr) {
+        auto fenceStatus = buffer->importer.importFence(streamBuffer.acquire_fence,
+                buffer->acquireFenceFd);
+        if (!fenceStatus) {
+            ALOGE("%s: Failed importing acquire fence!", __FUNCTION__);
+            buffer->streamBuffer.status = BufferStatus::kError;
+            buffer.release();
+            buffer = nullptr;
+        }
+    }
+
+    return buffer;
+}
+
+std::unique_ptr<Buffers> EmulatedRequestProcessor::initializeOutputBuffers(
+        const PendingRequest& request) {
+    auto outputBuffers = std::make_unique<Buffers>();
+
+    outputBuffers->reserve(request.outputBuffers->size());
+    auto outputBuffer = request.outputBuffers->begin();
+    while (outputBuffer != request.outputBuffers->end()) {
+        if((*outputBuffer)->acquireFenceFd >= 0) {
+            auto ret = sync_wait((*outputBuffer)->acquireFenceFd,
+                    ns2ms(EmulatedSensor::kSupportedFrameDurationRange[1]));
+            if (ret != OK) {
+                ALOGE("%s: Fence sync failed: %s, (%d)", __FUNCTION__, strerror(-ret),
+                        ret);
+                (*outputBuffer)->streamBuffer.status = BufferStatus::kError;
+            }
+        }
+
+        if ((*outputBuffer)->streamBuffer.status == BufferStatus::kOk) {
+            outputBuffers->push_back(std::move(*outputBuffer));
+        }
+
+        outputBuffer = request.outputBuffers->erase(outputBuffer);
+    }
+
+    return outputBuffers;
+}
+
+std::unique_ptr<HwlPipelineResult> EmulatedRequestProcessor::initializeResult(
+        const PendingRequest& request, uint32_t pipelineId, uint32_t frameNumber) {
+    auto result = std::make_unique<HwlPipelineResult>();
+    result->camera_id = mCameraId;
+    result->pipeline_id = pipelineId;
+    result->frame_number = frameNumber;
+    result->result_metadata = request.settings != nullptr ?
+            HalCameraMetadata::Clone(request.settings.get()) : HalCameraMetadata::Create(1, 10);
+    result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH, &mMaxPipelineDepth,
+            1);
+    result->input_buffers = request.inputBuffers;
+    result->partial_result = 1; //TODO: Change in case of partial result support
+    return result;
+}
+
 void EmulatedRequestProcessor::requestProcessorLoop() {
     ATRACE_CALL();
 
-    nsecs_t maxFrameDurationNs = s2ns(1); // TODO: set accordingly
     HandleImporter importer;
     while (!mProcessorDone) {
         {
             std::lock_guard<std::mutex> lock(mProcessMutex);
             if (!mPendingRequests.empty()) {
                 const auto& request = mPendingRequests.front();
-                std::vector<StreamBuffer> outputBuffers;
-                std::unique_ptr<Buffers> sensorBuffers = std::make_unique<Buffers>();
+                auto outputBuffers = initializeOutputBuffers(request);
 
-                sensorBuffers->reserve(outputBuffers.size());
-                outputBuffers.reserve(outputBuffers.size());
+                if (!outputBuffers->empty()) {
+                    auto result = initializeResult(request, outputBuffers->at(0)->pipelineId,
+                            outputBuffers->at(0)->frameNumber);
 
-                outputBuffers.insert(outputBuffers.end(), request.outputBuffers.begin(),
-                        request.outputBuffers.end());
-                //TODO take care of the fences
-                for (auto& outputBuffer : outputBuffers) {
-                    const auto& stream = request.streamMap.at(outputBuffer.stream_id);
-                    SensorBuffer sensorBuffer = {
-                            .width = stream.width,
-                            .height = stream.height,
-                            .format = stream.override_format,
-                            .dataSpace = stream.override_data_space,
-                            .streamBuffer = outputBuffer,
-                    };
+                    // TODO: The settings should be generated by the incoming request.
+                    EmulatedSensor::SensorSettings settings(ms2ns(10), ms2ns(33), 100 /*ISO*/);
 
-                    auto ret = lockSensorBuffer(stream, importer, outputBuffer.buffer,
-                            &sensorBuffer);
-                    if (ret == OK) {
-                        sensorBuffers->push_back(sensorBuffer);
-                    } else {
-                        //TODO: return failed buffers immediately
-                        outputBuffer.status = google_camera_hal::BufferStatus::kError;
-                    }
+                    mSensor->setCurrentRequest(settings, std::move(result),
+                            std::move(outputBuffers));
+                } else {
+                    //TODO: Notify about error request
                 }
 
-                auto result = std::make_unique<HwlPipelineResult>();
-                result->camera_id = 0; //TODO
-                result->pipeline_id = request.pipelineId;
-                result->frame_number = request.frameNumber;
-                result->result_metadata = request.settings != nullptr ?
-                    HalCameraMetadata::Clone(request.settings.get()) :
-                    HalCameraMetadata::Create(1, 10);
-                result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH, &mMaxPipelineDepth, 1);
-                result->input_buffers = request.inputBuffers;
-                result->partial_result = 1; //TODO: Change in case of partial result support
-
-                EmulatedSensor::SensorSettings settings(request.callback, us2ns(33), ms2ns(33),
-                        100 /*ISO*/, request.frameNumber);
-
-                mSensor->setCurrentRequest(settings, std::move(result), std::move(sensorBuffers));
                 mPendingRequests.pop();
                 mRequestCondition.notify_one();
             }
         }
 
-        mSensor->waitForVSync(maxFrameDurationNs);
+        mSensor->waitForVSync(EmulatedSensor::kSupportedFrameDurationRange[1]);
     }
 }
 

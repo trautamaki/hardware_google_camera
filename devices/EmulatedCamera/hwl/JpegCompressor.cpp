@@ -38,14 +38,12 @@ JpegCompressor::~JpegCompressor() {
     ATRACE_CALL();
 
     // Abort the ongoing compression and flush any pending jobs
-    {
-        std::lock_guard<std::mutex> l(mMutex);
-        mJpegDone = true;
-    }
+    mJpegDone = true;
     mCondition.notify_one();
     mJpegProcessingThread.join();
     while (!mPendingJobs.empty()) {
-        cleanUp(std::move(mPendingJobs.front()), BufferStatus::kError);
+        auto job = std::move(mPendingJobs.front());
+        job->output->streamBuffer.status = BufferStatus::kError;
         mPendingJobs.pop();
     }
 }
@@ -53,8 +51,7 @@ JpegCompressor::~JpegCompressor() {
 status_t JpegCompressor::queue(std::unique_ptr<JpegJob> job) {
     ATRACE_CALL();
 
-    if ((job.get() == nullptr) || (job->result.get() == nullptr) ||
-            (job->callback.get() == nullptr)) {
+    if ((job.get() == nullptr) || (job->result.get() == nullptr)) {
         return BAD_VALUE;
     }
 
@@ -103,36 +100,6 @@ void JpegCompressor::threadLoop() {
     }
 }
 
-void JpegCompressor::cleanUp(std::unique_ptr<JpegJob> job, BufferStatus status) {
-    if (job->input->plane.img.img != nullptr) {
-        delete [] job->input->plane.img.img;
-    }
-
-    if ((status != BufferStatus::kOk) && (job->callback->notify != nullptr)) {
-        NotifyMessage msg = {
-            .type = MessageType::kError,
-            .message.error = {
-                .frame_number = job->result->frame_number,
-                .error_stream_id = job->output->streamBuffer.stream_id,
-                .error_code = ErrorCode::kErrorBuffer
-            }
-        };
-        job->callback->notify(job->result->pipeline_id, msg);
-    }
-
-    mImporter.unlock(job->output->streamBuffer.buffer);
-    //TODO: handle fences
-
-    if (job->callback->process_pipeline_result != nullptr) {
-        if (job->result->result_metadata.get() != nullptr) {
-            job->result->partial_result = 1;
-        }
-        job->result->output_buffers.push_back(job->output->streamBuffer);
-        job->result->output_buffers[0].status = status;
-        job->callback->process_pipeline_result(std::move(job->result));
-    }
-}
-
 void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
     ATRACE_CALL();
 
@@ -147,8 +114,9 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
     mJpegErrorInfo = NULL;
     jpeg_error_mgr jerr;
 
-    mCInfo.err = jpeg_std_error(&jerr);
-    mCInfo.err->error_exit = [](j_common_ptr cinfo) {
+    auto cinfo = std::make_unique<jpeg_compress_struct>();
+    cinfo->err = jpeg_std_error(&jerr);
+    cinfo->err->error_exit = [](j_common_ptr cinfo) {
         (*cinfo->err->output_message)(cinfo);
         if(cinfo->client_data) {
             auto & dmgr = *static_cast<CustomJpegDestMgr*>(cinfo->client_data);
@@ -156,9 +124,9 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
         }
     };
 
-    jpeg_create_compress(&mCInfo);
+    jpeg_create_compress(cinfo.get());
     if (checkError("Error initializing compression")) {
-        cleanUp(std::move(job), BufferStatus::kError);
+        job->output->streamBuffer.status = BufferStatus::kError;
         return;
     }
 
@@ -166,7 +134,7 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
     dmgr.bufferSize = job->output->plane.img.bufferSize;
     dmgr.encodedSize = 0;
     dmgr.success = true;
-    mCInfo.client_data = static_cast<void*>(&dmgr);
+    cinfo->client_data = static_cast<void*>(&dmgr);
     dmgr.init_destination = [](j_compress_ptr cinfo) {
         auto & dmgr = static_cast<CustomJpegDestMgr&>(*cinfo->dest);
         dmgr.next_output_byte = dmgr.buffer;
@@ -185,53 +153,52 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
         ALOGV("%s:%d Done with jpeg: %zu", __FUNCTION__, __LINE__, dmgr.encodedSize);
     };
 
-    mCInfo.dest = reinterpret_cast<struct jpeg_destination_mgr*>(&dmgr);
+    cinfo->dest = reinterpret_cast<struct jpeg_destination_mgr*>(&dmgr);
 
     // Set up compression parameters
-    mCInfo.image_width = job->input->width;
-    mCInfo.image_height = job->input->height;
-    mCInfo.input_components = 3;
-    mCInfo.in_color_space = JCS_RGB;
+    cinfo->image_width = job->input->width;
+    cinfo->image_height = job->input->height;
+    cinfo->input_components = 3;
+    cinfo->in_color_space = JCS_RGB;
 
-    jpeg_set_defaults(&mCInfo);
+    jpeg_set_defaults(cinfo.get());
     if (checkError("Error configuring defaults")) {
-        cleanUp(std::move(job), BufferStatus::kError);
+        job->output->streamBuffer.status = BufferStatus::kError;
         return;
     }
 
     // Do compression
-    jpeg_start_compress(&mCInfo, TRUE);
+    jpeg_start_compress(cinfo.get(), TRUE);
     if (checkError("Error starting compression")) {
-        cleanUp(std::move(job), BufferStatus::kError);
+        job->output->streamBuffer.status = BufferStatus::kError;
         return;
     }
 
-    size_t rowStride = job->input->plane.img.stride;
+    size_t rowStride = job->input->stride;
     const size_t kChunkSize = 32;
-    while (mCInfo.next_scanline < mCInfo.image_height) {
+    while (cinfo->next_scanline < cinfo->image_height) {
         JSAMPROW chunk[kChunkSize];
         for (size_t i = 0; i < kChunkSize; i++) {
-            chunk[i] = (JSAMPROW)(job->input->plane.img.img +
-                    (i + mCInfo.next_scanline) * rowStride);
+            chunk[i] = (JSAMPROW)(job->input->img +
+                    (i + cinfo->next_scanline) * rowStride);
         }
-        jpeg_write_scanlines(&mCInfo, chunk, kChunkSize);
+        jpeg_write_scanlines(cinfo.get(), chunk, kChunkSize);
         if (checkError("Error while compressing")) {
-            jpeg_finish_compress(&mCInfo);
-            cleanUp(std::move(job), BufferStatus::kError);
+            job->output->streamBuffer.status = BufferStatus::kError;
             return;
         }
 
         if (mJpegDone) {
             ALOGV("%s: Cancel called, exiting early", __FUNCTION__);
-            jpeg_finish_compress(&mCInfo);
-            cleanUp(std::move(job), BufferStatus::kError);
+            jpeg_finish_compress(cinfo.get());
+            job->output->streamBuffer.status = BufferStatus::kError;
             return;
         }
     }
 
-    jpeg_finish_compress(&mCInfo);
+    jpeg_finish_compress(cinfo.get());
     if (checkError("Error while finishing compression")) {
-        cleanUp(std::move(job), BufferStatus::kError);
+        job->output->streamBuffer.status = BufferStatus::kError;
         return;
     }
 
@@ -247,7 +214,7 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
     }
 
     // All done
-    cleanUp(std::move(job), dmgr.success ? BufferStatus::kOk : BufferStatus::kError);
+    job->output->streamBuffer.status = dmgr.success ? BufferStatus::kOk : BufferStatus::kError;
 }
 
 bool JpegCompressor::checkError(const char *msg) {

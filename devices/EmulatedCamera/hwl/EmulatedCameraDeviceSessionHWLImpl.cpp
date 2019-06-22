@@ -155,7 +155,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::initialize(uint32_t cameraId,
         return ret;
     }
 
-    mRequestProcessor = std::make_unique<EmulatedRequestProcessor> (mMaxPipelineDepth,
+    mRequestProcessor = std::make_unique<EmulatedRequestProcessor> (mCameraId, mMaxPipelineDepth,
             emulatedSensor);
 
     return OK;
@@ -235,22 +235,21 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
 
     emulatedPipeline.streams.reserve(request_config.streams.size());
     for (const auto& stream : request_config.streams) {
-        emulatedPipeline.streams.push_back({{
+        // Implementation defined pixel format is mapped to YUV_420_888.
+        emulatedPipeline.streams.emplace(std::make_pair<uint32_t, EmulatedStream>(stream.id, {{
                 .id = stream.id,
-                .override_format = stream.format,
+                .override_format = (stream.format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) ?
+                        HAL_PIXEL_FORMAT_YCBCR_420_888 : stream.format,
                 .producer_usage = GRALLOC_USAGE_SW_WRITE_OFTEN,
                 .consumer_usage = 0,
                 .max_buffers = mMaxPipelineDepth,
                 .override_data_space = stream.data_space,
                 .is_physical_camera_stream = stream.is_physical_camera_stream,
-                .physical_camera_id = stream.physical_camera_id
-            },
+                .physical_camera_id = stream.physical_camera_id},
             .width = stream.width,
             .height = stream.height,
-            .bufferSize = stream.buffer_size});
+            .bufferSize = stream.buffer_size}));
     }
-
-    // TODO: configure pipeline
 
     mPipelines.push_back(emulatedPipeline);
 
@@ -276,8 +275,10 @@ status_t EmulatedCameraDeviceSessionHwlImpl::GetConfiguredHalStream(
         return NAME_NOT_FOUND;
     }
 
-    for (const auto& pipeline : mPipelines) {
-        hal_streams->insert(hal_streams->begin(), pipeline.streams.begin(), pipeline.streams.end());
+    const auto& streams = mPipelines[pipeline_id].streams;
+    hal_streams->reserve(streams.size());
+    for (const auto& it : streams) {
+        hal_streams->push_back(it.second);
     }
 
     return OK;
@@ -294,9 +295,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::BuildPipelines() {
         return NO_INIT;
     }
 
-    //TODO: build pipelines
-
     mPipelinesBuilt = true;
+
     return OK;
 }
 
@@ -311,7 +311,6 @@ void EmulatedCameraDeviceSessionHwlImpl::DestroyPipelines() {
 
     mPipelinesBuilt = false;
     mPipelines.clear();
-    // TODO
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(uint32_t frame_number,

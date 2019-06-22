@@ -30,6 +30,7 @@ cc_library_shared {
         "libjpeg",
         "libjsoncpp",
         "liblog",
+        "libsync",
         "libutils",
     ],
     static_libs: [

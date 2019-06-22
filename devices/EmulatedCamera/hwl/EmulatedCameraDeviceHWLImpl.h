@@ -22,12 +22,13 @@
 
 namespace android {
 
+using google_camera_hal::CameraBufferAllocatorHwl;
 using google_camera_hal::CameraDeviceHwl;
 using google_camera_hal::CameraDeviceSessionHwl;
 using google_camera_hal::CameraResourceCost;
 using google_camera_hal::HalCameraMetadata;
+using google_camera_hal::StreamConfiguration;
 using google_camera_hal::TorchMode;
-using google_camera_hal::CameraBufferAllocatorHwl;
 
 class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
     public:
@@ -55,6 +56,10 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
         status_t CreateCameraDeviceSessionHwl(
                 CameraBufferAllocatorHwl* camera_allocator_hwl,
                 std::unique_ptr<CameraDeviceSessionHwl>* session) override;
+
+        bool IsStreamCombinationSupported(const StreamConfiguration& /*stream_config*/) override {
+            return true; } //TODO implement this using the static metadata
+
         // End of override functions in CameraDeviceHwl.
 
     private:

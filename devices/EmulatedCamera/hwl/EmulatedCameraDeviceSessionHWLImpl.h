@@ -29,8 +29,10 @@ using google_camera_hal::CameraDeviceHwl;
 using google_camera_hal::CameraDeviceSessionHwl;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineRequest;
+using google_camera_hal::HwlSessionCallback;
 using google_camera_hal::StreamConfiguration;
 using google_camera_hal::RequestTemplate;
+using google_camera_hal::SessionDataKey;
 using google_camera_hal::HalStream;
 
 // Implementation of CameraDeviceSessionHwl interface
@@ -48,11 +50,17 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
       RequestTemplate type,
       std::unique_ptr<HalCameraMetadata>* default_settings) override;
 
+  status_t PrepareConfigureStreams(
+      const StreamConfiguration& /*request_config*/) override { return OK; } // Noop for now
+
   status_t ConfigurePipeline(uint32_t physical_camera_id, HwlPipelineCallback hwl_pipeline_callback,
           const StreamConfiguration& request_config, const StreamConfiguration& overall_config,
           uint32_t* pipeline_id) override;
 
   status_t BuildPipelines() override;
+
+  status_t PreparePipeline(uint32_t /*pipeline_id*/, uint32_t /*frame_number*/) override {
+      return OK; } // Noop for now
 
   status_t GetConfiguredHalStream(uint32_t pipeline_id,
           std::vector<HalStream>* hal_streams) const override;
@@ -74,6 +82,16 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   status_t GetPhysicalCameraCharacteristics(uint32_t physical_camera_id,
           std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
+  status_t SetSessionData(SessionDataKey /*key*/, void* /*value*/) override {
+      return OK; } // Noop for now
+
+  status_t GetSessionData(SessionDataKey /*key*/, void** /*value*/) const override {
+      return OK; } // Noop for now
+
+  void SetSessionCallback(const HwlSessionCallback& /*hwl_session_callback*/) override {}
+
+  status_t FilterResultMetadata(HalCameraMetadata* /*metadata*/) const override {
+      return OK; } // Noop for now
   // End override functions in CameraDeviceSessionHwl
 
  private:
