@@ -21,6 +21,7 @@
 #include "camera_common.h"
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
+#include "utils/HWLUtils.h"
 
 namespace android {
 
@@ -56,7 +57,15 @@ uint32_t EmulatedCameraDeviceHwlImpl::GetCameraId() const {
 }
 
 status_t EmulatedCameraDeviceHwlImpl::initialize() {
-    // TODO: initialization
+    auto ret = getSensorCharacteristics(mStaticMetadata.get(), &mSensorChars);
+    if (ret != OK) {
+        ALOGE("%s: Unable to extract sensor characteristics %s (%d)", __FUNCTION__, strerror(-ret),
+                ret);
+        return ret;
+    }
+
+    mStreamConigurationMap = std::make_unique<StreamConfigurationMap>(*mStaticMetadata);
+
     return OK;
 }
 
@@ -116,6 +125,12 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
     }
 
     return OK;
+}
+
+bool EmulatedCameraDeviceHwlImpl::IsStreamCombinationSupported(
+        const StreamConfiguration& stream_config) {
+    return EmulatedSensor::isStreamCombinationSupported(stream_config, *mStreamConigurationMap,
+            mSensorChars);
 }
 
 }  // namespace android

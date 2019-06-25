@@ -18,7 +18,9 @@
 #define EMULATOR_CAMERA_HAL_HWL_CAMERA_DEVICE_HWL_H
 
 #include <camera_device_hwl.h>
+#include "EmulatedSensor.h"
 #include <hal_types.h>
+#include "utils/StreamConfigurationMap.h"
 
 namespace android {
 
@@ -57,8 +59,7 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
                 CameraBufferAllocatorHwl* camera_allocator_hwl,
                 std::unique_ptr<CameraDeviceSessionHwl>* session) override;
 
-        bool IsStreamCombinationSupported(const StreamConfiguration& /*stream_config*/) override {
-            return true; } //TODO implement this using the static metadata
+        bool IsStreamCombinationSupported(const StreamConfiguration& stream_config) override;
 
         // End of override functions in CameraDeviceHwl.
 
@@ -71,6 +72,8 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
         status_t initialize();
 
         std::unique_ptr<HalCameraMetadata> mStaticMetadata;
+        std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
+        EmulatedSensor::SensorCharacteristics mSensorChars;
 };
 
 }  // namespace android

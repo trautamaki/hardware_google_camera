@@ -59,6 +59,16 @@ status_t getSensorCharacteristics(const HalCameraMetadata* metadata,
     sensorChars->width = entry.data.i32[0];
     sensorChars->height = entry.data.i32[1];
 
+    ret = metadata->Get(ANDROID_REQUEST_MAX_NUM_OUTPUT_STREAMS, &entry);
+    if ((ret != OK) || (entry.count != 3)) {
+        ALOGE("%s: Invalid ANDROID_REQUEST_MAX_NUM_OUTPUT_STREAMS!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    sensorChars->maxRawStreams = entry.data.i32[0];
+    sensorChars->maxProcessedStreams = entry.data.i32[1];
+    sensorChars->maxStallingStreams = entry.data.i32[2];
+
     if (hasCapability(metadata, ANDROID_REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR)) {
         ret = metadata->Get(ANDROID_SENSOR_INFO_EXPOSURE_TIME_RANGE, &entry);
         if ((ret != OK) || (entry.count != ARRAY_SIZE(sensorChars->exposureTimeRange))) {

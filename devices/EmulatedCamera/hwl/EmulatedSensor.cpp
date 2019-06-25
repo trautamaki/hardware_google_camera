@@ -70,6 +70,9 @@ const float EmulatedSensor::kReadNoiseVarBeforeGain =
 const float EmulatedSensor::kReadNoiseVarAfterGain =
         EmulatedSensor::kReadNoiseStddevAfterGain * EmulatedSensor::kReadNoiseStddevAfterGain;
 
+const uint32_t EmulatedSensor::kMaxRAWStreams = 1;
+const uint32_t EmulatedSensor::kMaxProcessedStreams = 3;
+const uint32_t EmulatedSensor::kMaxStallingStreams = 1;
 
 /** A few utility functions for math, normal distributions */
 
@@ -140,6 +143,92 @@ bool EmulatedSensor::areCharacteristicsSupported(const SensorCharacteristics& ch
 
     if ((characteristics.frameDurationRange[0] / characteristics.height) == 0) {
         ALOGE("%s: Zero row readout time!", __FUNCTION__);
+        return false;
+    }
+
+    if (characteristics.maxRawStreams > kMaxRAWStreams) {
+        ALOGE("%s: RAW streams maximum %u exceeds supported maximum %u", __FUNCTION__,
+                characteristics.maxRawStreams, kMaxRAWStreams);
+        return false;
+    }
+
+    if (characteristics.maxProcessedStreams > kMaxProcessedStreams) {
+        ALOGE("%s: Processed streams maximum %u exceeds supported maximum %u", __FUNCTION__,
+                characteristics.maxProcessedStreams, kMaxProcessedStreams);
+        return false;
+    }
+
+    if (characteristics.maxStallingStreams > kMaxStallingStreams) {
+        ALOGE("%s: Stalling streams maximum %u exceeds supported maximum %u", __FUNCTION__,
+                characteristics.maxStallingStreams, kMaxStallingStreams);
+        return false;
+    }
+
+    return true;
+}
+
+bool EmulatedSensor::isStreamCombinationSupported(const StreamConfiguration& config,
+        StreamConfigurationMap& map, const SensorCharacteristics& sensorChars) {
+    uint32_t rawStreamCount = 0;
+    uint32_t processedStreamCount = 0;
+    uint32_t stallingStreamCount = 0;
+
+    for (const auto& stream : config.streams) {
+        if (stream.rotation != google_camera_hal::StreamRotation::kRotation0) {
+            ALOGE("%s: Stream rotation: 0x%x not supported!", __FUNCTION__, stream.rotation);
+            return false;
+        }
+
+        if (stream.stream_type != google_camera_hal::StreamType::kOutput) {
+            ALOGE("%s: Stream type: 0x%x not supported!", __FUNCTION__, stream.stream_type);
+            return false;
+        }
+
+        auto format = overrideFormat(stream.format);
+        switch (format) {
+            case HAL_PIXEL_FORMAT_BLOB:
+                if (stream.data_space != HAL_DATASPACE_V0_JFIF) {
+                    ALOGE("%s: Unsupported Blob dataspace 0x%x", __FUNCTION__, stream.data_space);
+                    return false;
+                }
+                stallingStreamCount++;
+                break;
+            case HAL_PIXEL_FORMAT_RAW16:
+                rawStreamCount++;
+                break;
+            default:
+                processedStreamCount++;
+        }
+
+        auto outputSizes = map.getOutputSizes(format);
+        if (outputSizes.empty()) {
+            ALOGE("%s: Unsupported format: 0x%x", __FUNCTION__, stream.format);
+            return false;
+        }
+
+        auto streamSize = std::make_pair(stream.width, stream.height);
+        if (outputSizes.find(streamSize) == outputSizes.end()) {
+            ALOGE("%s: Stream with size %dx%d and format 0x%x is not supported!", __FUNCTION__,
+                    stream.width, stream.height, stream.format);
+            return false;
+        }
+    }
+
+    if (rawStreamCount > sensorChars.maxRawStreams) {
+        ALOGE("%s: RAW streams maximum %u exceeds supported maximum %u", __FUNCTION__,
+                rawStreamCount, sensorChars.maxRawStreams);
+        return false;
+    }
+
+    if (processedStreamCount > sensorChars.maxProcessedStreams) {
+        ALOGE("%s: Processed streams maximum %u exceeds supported maximum %u", __FUNCTION__,
+                processedStreamCount, sensorChars.maxProcessedStreams);
+        return false;
+    }
+
+    if (stallingStreamCount > sensorChars.maxStallingStreams) {
+        ALOGE("%s: Stalling streams maximum %u exceeds supported maximum %u", __FUNCTION__,
+                stallingStreamCount, sensorChars.maxStallingStreams);
         return false;
     }
 

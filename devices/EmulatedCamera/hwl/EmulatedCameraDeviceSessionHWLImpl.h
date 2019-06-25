@@ -22,6 +22,7 @@
 #include <camera_device_session_hwl.h>
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedRequestProcessor.h"
+#include "utils/StreamConfigurationMap.h"
 
 namespace android {
 
@@ -120,6 +121,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   std::unique_ptr<HalCameraMetadata> mStaticMetadata;
   std::vector<EmulatedPipeline> mPipelines;
   std::unique_ptr<EmulatedRequestProcessor> mRequestProcessor;
+  std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
+  EmulatedSensor::SensorCharacteristics mSensorChars;
 };
 
 }  // namespace android

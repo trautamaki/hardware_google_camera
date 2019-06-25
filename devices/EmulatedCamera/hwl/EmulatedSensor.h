@@ -88,11 +88,14 @@
 
 #include <functional>
 
+#include "utils/StreamConfigurationMap.h"
+
 namespace android {
 
 using android::hardware::camera::common::V1_0::helper::HandleImporter;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
+using google_camera_hal::StreamConfiguration;
 
 class EmulatedSensor : private Thread, public virtual RefBase {
 public:
@@ -107,14 +110,25 @@ public:
         camera_metadata_enum_android_sensor_info_color_filter_arrangement colorArangement;
         uint32_t maxRawValue;
         uint32_t blackLevelPattern[4];
+        uint32_t maxRawStreams, maxProcessedStreams, maxStallingStreams;
 
         SensorCharacteristics() : width(0), height(0), exposureTimeRange{0},
                 frameDurationRange{0}, sensitivityRange{0},
                 colorArangement(ANDROID_SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB), maxRawValue(0),
-                blackLevelPattern{0} {}
+                blackLevelPattern{0}, maxRawStreams(0), maxProcessedStreams(0),
+                maxStallingStreams(0) {}
     };
 
+    static android_pixel_format_t overrideFormat(android_pixel_format_t format) {
+        if (format ==  HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+            return HAL_PIXEL_FORMAT_YCBCR_420_888;
+        }
+
+        return format;
+    }
     static bool areCharacteristicsSupported(const SensorCharacteristics& characteristics);
+    static bool isStreamCombinationSupported(const StreamConfiguration& config,
+            StreamConfigurationMap& map, const SensorCharacteristics& sensorChars);
 
     /*
      * Power control
@@ -187,6 +201,11 @@ private:
     static const float kReadNoiseVarAfterGain;
 
     static const int32_t kDefaultSensitivity;
+
+    static const uint32_t kMaxRAWStreams;
+    static const uint32_t kMaxProcessedStreams;
+    static const uint32_t kMaxStallingStreams;
+
     Mutex mControlMutex;  // Lock before accessing control parameters
     // Start of control parameters
     Condition mVSync;

@@ -25,7 +25,7 @@
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
 #include "EmulatedSensor.h"
-#include "HWLUtils.h"
+#include "utils/HWLUtils.h"
 
 namespace android {
 

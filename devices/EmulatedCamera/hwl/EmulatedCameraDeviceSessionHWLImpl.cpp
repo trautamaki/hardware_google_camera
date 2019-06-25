@@ -25,7 +25,7 @@
 
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
 #include "EmulatedSensor.h"
-#include "HWLUtils.h"
+#include "utils/HWLUtils.h"
 
 namespace android {
 
@@ -140,8 +140,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::initialize(uint32_t cameraId,
 
     mStaticMetadata->Get(ANDROID_REQUEST_AVAILABLE_CAPABILITIES, &entry);
     mAvailableCapabilites.insert(entry.data.u8, entry.data.u8 + entry.count);
-    EmulatedSensor::SensorCharacteristics sensorCharacteristics;
-    auto ret = getSensorCharacteristics(mStaticMetadata.get(), &sensorCharacteristics);
+    auto ret = getSensorCharacteristics(mStaticMetadata.get(), &mSensorChars);
     if (ret != OK) {
         ALOGE("%s: Unable to extract sensor characteristics %s (%d)", __FUNCTION__, strerror(-ret),
                 ret);
@@ -149,7 +148,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::initialize(uint32_t cameraId,
     }
 
     sp<EmulatedSensor> emulatedSensor = new EmulatedSensor();
-    ret = emulatedSensor->startUp(sensorCharacteristics);
+    ret = emulatedSensor->startUp(mSensorChars);
     if (ret != OK) {
         ALOGE("%s: Failed on sensor start up %s (%d)", __FUNCTION__, strerror(-ret), ret);
         return ret;
@@ -157,6 +156,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::initialize(uint32_t cameraId,
 
     mRequestProcessor = std::make_unique<EmulatedRequestProcessor> (mCameraId, mMaxPipelineDepth,
             emulatedSensor);
+
+    mStreamConigurationMap = std::make_unique<StreamConfigurationMap>(*mStaticMetadata);
 
     return OK;
 }
@@ -224,7 +225,11 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
         return ALREADY_EXISTS;
     }
 
-    // TODO: check input pipeline
+    if (!EmulatedSensor::isStreamCombinationSupported(request_config, *mStreamConigurationMap,
+                mSensorChars)) {
+        ALOGE("%s: Stream combination not supported!", __FUNCTION__);
+        return BAD_VALUE;
+    }
 
     *pipeline_id = mPipelines.size();
     EmulatedPipeline emulatedPipeline {
@@ -235,11 +240,9 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
 
     emulatedPipeline.streams.reserve(request_config.streams.size());
     for (const auto& stream : request_config.streams) {
-        // Implementation defined pixel format is mapped to YUV_420_888.
         emulatedPipeline.streams.emplace(std::make_pair<uint32_t, EmulatedStream>(stream.id, {{
                 .id = stream.id,
-                .override_format = (stream.format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) ?
-                        HAL_PIXEL_FORMAT_YCBCR_420_888 : stream.format,
+                .override_format = EmulatedSensor::overrideFormat(stream.format),
                 .producer_usage = GRALLOC_USAGE_SW_WRITE_OFTEN,
                 .consumer_usage = 0,
                 .max_buffers = mMaxPipelineDepth,
