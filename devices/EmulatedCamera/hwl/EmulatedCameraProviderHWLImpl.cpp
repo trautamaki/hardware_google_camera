@@ -346,14 +346,6 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
         }
     }
 
-    if (!mSupportsFlash) {
-        camera_metadata_ro_entry_t entry;
-        auto ret = staticMeta->Get(ANDROID_FLASH_INFO_AVAILABLE_FALSE, &entry);
-        if ((ret == OK) && (entry.count > 0)) {
-            mSupportsFlash = entry.data.u8[0];
-        }
-    }
-
     EmulatedSensor::SensorCharacteristics sensorCharacteristics;
     auto ret = getSensorCharacteristics(staticMeta.get(), &sensorCharacteristics);
     if (ret != OK) {
@@ -363,11 +355,6 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
 
     if (!EmulatedSensor::areCharacteristicsSupported(sensorCharacteristics)) {
         ALOGE("%s: Sensor characteristics not supported!", __FUNCTION__);
-        return BAD_VALUE;
-    }
-
-    if (!EmulatedCameraDeviceSessionHwlImpl::areCharacteristicsSupported(*staticMeta)) {
-        ALOGE("%s: Camera device characteristics not supported!", __FUNCTION__);
         return BAD_VALUE;
     }
 
@@ -424,10 +411,6 @@ status_t EmulatedCameraProviderHwlImpl::GetVisibleCameraIds(
     }
 
     return OK;
-}
-
-bool EmulatedCameraProviderHwlImpl::IsSetTorchModeSupported() {
-    return mSupportsFlash;
 }
 
 status_t EmulatedCameraProviderHwlImpl::CreateCameraDeviceHwl(

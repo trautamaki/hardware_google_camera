@@ -38,91 +38,80 @@ using google_camera_hal::HalStream;
 
 // Implementation of CameraDeviceSessionHwl interface
 class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
- public:
-  static std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> Create(uint32_t cameraId,
-          std::unique_ptr<HalCameraMetadata> staticMeta);
+public:
+    static std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> Create(uint32_t cameraId,
+            std::unique_ptr<HalCameraMetadata> staticMeta);
 
-  virtual ~EmulatedCameraDeviceSessionHwlImpl();
+    virtual ~EmulatedCameraDeviceSessionHwlImpl();
 
-  static bool areCharacteristicsSupported(const HalCameraMetadata& characteristics);
+    // Override functions in CameraDeviceSessionHwl
+    status_t ConstructDefaultRequestSettings(
+            RequestTemplate type,
+            std::unique_ptr<HalCameraMetadata>* default_settings) override;
 
-  // Override functions in CameraDeviceSessionHwl
-  status_t ConstructDefaultRequestSettings(
-      RequestTemplate type,
-      std::unique_ptr<HalCameraMetadata>* default_settings) override;
+    status_t PrepareConfigureStreams(
+            const StreamConfiguration& /*request_config*/) override { return OK; } // Noop for now
 
-  status_t PrepareConfigureStreams(
-      const StreamConfiguration& /*request_config*/) override { return OK; } // Noop for now
+    status_t ConfigurePipeline(uint32_t physical_camera_id,
+            HwlPipelineCallback hwl_pipeline_callback, const StreamConfiguration& request_config,
+            const StreamConfiguration& overall_config, uint32_t* pipeline_id) override;
 
-  status_t ConfigurePipeline(uint32_t physical_camera_id, HwlPipelineCallback hwl_pipeline_callback,
-          const StreamConfiguration& request_config, const StreamConfiguration& overall_config,
-          uint32_t* pipeline_id) override;
+    status_t BuildPipelines() override;
 
-  status_t BuildPipelines() override;
+    status_t PreparePipeline(uint32_t /*pipeline_id*/, uint32_t /*frame_number*/) override {
+        return OK; } // Noop for now
 
-  status_t PreparePipeline(uint32_t /*pipeline_id*/, uint32_t /*frame_number*/) override {
-      return OK; } // Noop for now
+    status_t GetConfiguredHalStream(uint32_t pipeline_id,
+            std::vector<HalStream>* hal_streams) const override;
 
-  status_t GetConfiguredHalStream(uint32_t pipeline_id,
-          std::vector<HalStream>* hal_streams) const override;
+    void DestroyPipelines() override;
 
-  void DestroyPipelines() override;
+    status_t SubmitRequests(uint32_t frame_number,
+            const std::vector<HwlPipelineRequest>& requests) override;
 
-  status_t SubmitRequests(uint32_t frame_number,
-          const std::vector<HwlPipelineRequest>& requests) override;
+    status_t Flush() override;
 
-  status_t Flush() override;
+    uint32_t GetCameraId() const override;
 
-  uint32_t GetCameraId() const override;
+    std::vector<uint32_t> GetPhysicalCameraIds() const override;
 
-  std::vector<uint32_t> GetPhysicalCameraIds() const override;
+    status_t GetCameraCharacteristics(
+            std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
-  status_t GetCameraCharacteristics(
-          std::unique_ptr<HalCameraMetadata>* characteristics) const override;
+    status_t GetPhysicalCameraCharacteristics(uint32_t physical_camera_id,
+            std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
-  status_t GetPhysicalCameraCharacteristics(uint32_t physical_camera_id,
-          std::unique_ptr<HalCameraMetadata>* characteristics) const override;
+    status_t SetSessionData(SessionDataKey /*key*/, void* /*value*/) override {
+        return OK; } // Noop for now
 
-  status_t SetSessionData(SessionDataKey /*key*/, void* /*value*/) override {
-      return OK; } // Noop for now
+    status_t GetSessionData(SessionDataKey /*key*/, void** /*value*/) const override {
+        return OK; } // Noop for now
 
-  status_t GetSessionData(SessionDataKey /*key*/, void** /*value*/) const override {
-      return OK; } // Noop for now
+    void SetSessionCallback(const HwlSessionCallback& /*hwl_session_callback*/) override {}
 
-  void SetSessionCallback(const HwlSessionCallback& /*hwl_session_callback*/) override {}
+    status_t FilterResultMetadata(HalCameraMetadata* /*metadata*/) const override {
+        return OK; } // Noop for now
+    // End override functions in CameraDeviceSessionHwl
 
-  status_t FilterResultMetadata(HalCameraMetadata* /*metadata*/) const override {
-      return OK; } // Noop for now
-  // End override functions in CameraDeviceSessionHwl
+private:
 
- private:
+    status_t initialize(uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta);
 
-  status_t initialize(uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta);
+    EmulatedCameraDeviceSessionHwlImpl() :
+        mMaxPipelineDepth(0) {}
 
-  // helper methods
-  bool supportsCapability(uint8_t cap);
+    uint8_t mMaxPipelineDepth;
 
-  EmulatedCameraDeviceSessionHwlImpl() :
-      mMaxPipelineDepth(0) {}
-
-  // Supported capabilities and features
-  static const std::set<uint8_t> kSupportedCapabilites;
-  std::set<uint8_t> mAvailableCapabilites;
-  std::set<int32_t> mAvailableCharacteritics;
-  std::set<int32_t> mAvailableResults;
-  std::set<int32_t> mAvailableRequests;
-  uint8_t mMaxPipelineDepth;
-
-  // Protects the API entry points
-  mutable std::mutex mAPIMutex;
-  uint32_t mCameraId = 0;
-  bool mErrorState = false;
-  bool mPipelinesBuilt = false;
-  std::unique_ptr<HalCameraMetadata> mStaticMetadata;
-  std::vector<EmulatedPipeline> mPipelines;
-  std::unique_ptr<EmulatedRequestProcessor> mRequestProcessor;
-  std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
-  EmulatedSensor::SensorCharacteristics mSensorChars;
+    // Protects the API entry points
+    mutable std::mutex mAPIMutex;
+    uint32_t mCameraId = 0;
+    bool mErrorState = false;
+    bool mPipelinesBuilt = false;
+    std::unique_ptr<HalCameraMetadata> mStaticMetadata;
+    std::vector<EmulatedPipeline> mPipelines;
+    std::unique_ptr<EmulatedRequestProcessor> mRequestProcessor;
+    std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
+    EmulatedSensor::SensorCharacteristics mSensorChars;
 };
 
 }  // namespace android

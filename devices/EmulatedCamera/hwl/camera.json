@@ -43,7 +43,7 @@
       "android.lens.facing":
         "1",
       "android.flash.info.available":
-        "1",
+        "0",
       "android.tonemap.maxCurvePoints":
         "128",
       "android.tonemap.availableToneMapModes":
@@ -169,7 +169,7 @@
       "android.request.partialResultCount":
         "1",
       "android.request.availableCapabilities":
-        ["0", "1", "2"],
+        ["0", "1", "2", "5"],
       "android.request.availableRequestKeys":
         ["786435", "786433", "786432", "524290",
         "524291", "524288", "524289", "524292",

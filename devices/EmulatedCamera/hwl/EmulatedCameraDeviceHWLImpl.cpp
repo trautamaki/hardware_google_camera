@@ -91,18 +91,13 @@ status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
     uint32_t /*physical_camera_id*/,
     std::unique_ptr<HalCameraMetadata>* /*characteristics*/) const {
 
-    // TODO: impl
+    // TODO: Logical camera support
     return OK;
 }
 
-status_t EmulatedCameraDeviceHwlImpl::SetTorchMode(TorchMode mode) {
-    if (mode != TorchMode::kOn && mode != TorchMode::kOff) {
-        ALOGE("%s: CameraId %u set invalid mode %u.", __FUNCTION__, mCameraId, mode);
-        return INVALID_OPERATION;
-    }
-
+status_t EmulatedCameraDeviceHwlImpl::SetTorchMode(TorchMode /*mode*/) {
     // TODO: impl
-    return OK;
+    return INVALID_OPERATION;
 }
 
 status_t EmulatedCameraDeviceHwlImpl::DumpState(int /*fd*/) {

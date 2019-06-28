@@ -33,43 +33,40 @@ using google_camera_hal::CameraBufferAllocatorHwl;
 using google_camera_hal::HalCameraMetadata;
 
 class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
-    public:
-        // Return a unique pointer to EmulatedCameraProviderHwlImpl. Calling Create()
-        // again before the previous one is destroyed will fail.
-        static std::unique_ptr<EmulatedCameraProviderHwlImpl> Create();
+public:
+    // Return a unique pointer to EmulatedCameraProviderHwlImpl. Calling Create()
+    // again before the previous one is destroyed will fail.
+    static std::unique_ptr<EmulatedCameraProviderHwlImpl> Create();
 
-        virtual ~EmulatedCameraProviderHwlImpl() = default;
+    virtual ~EmulatedCameraProviderHwlImpl() = default;
 
-        // Override functions in CameraProviderHwl.
-        status_t SetCallback(const HwlCameraProviderCallback& callback) override;
+    // Override functions in CameraProviderHwl.
+    status_t SetCallback(const HwlCameraProviderCallback& callback) override;
 
-        status_t GetVendorTags(
-                std::vector<VendorTagSection>* vendor_tag_sections) override;
+    status_t GetVendorTags(
+            std::vector<VendorTagSection>* vendor_tag_sections) override;
 
-        status_t GetVisibleCameraIds(std::vector<std::uint32_t>* camera_ids) override;
+    status_t GetVisibleCameraIds(std::vector<std::uint32_t>* camera_ids) override;
 
-        bool IsSetTorchModeSupported() override;
+    bool IsSetTorchModeSupported() override { return true; }
 
-        status_t CreateCameraDeviceHwl(
-                uint32_t cameraId,
-                std::unique_ptr<CameraDeviceHwl>* camera_device_hwl) override;
+    status_t CreateCameraDeviceHwl(
+            uint32_t cameraId,
+            std::unique_ptr<CameraDeviceHwl>* camera_device_hwl) override;
 
-        status_t CreateBufferAllocatorHwl(std::unique_ptr<CameraBufferAllocatorHwl>*
-                camera_buffer_allocator_hwl) override;
-        // End of override functions in CameraProviderHwl.
+    status_t CreateBufferAllocatorHwl(std::unique_ptr<CameraBufferAllocatorHwl>*
+            camera_buffer_allocator_hwl) override;
+    // End of override functions in CameraProviderHwl.
 
-    private:
-        EmulatedCameraProviderHwlImpl() : mSupportsFlash (false) {}
+private:
+    status_t initialize();
+    status_t parseCharacteristics(const Json::Value& root);
+    status_t getTagFromName(const char *name, uint32_t *tag);
 
-        status_t initialize();
-        status_t parseCharacteristics(const Json::Value& root);
-        status_t getTagFromName(const char *name, uint32_t *tag);
+    static const char* kConfigurationFileLocation;
+    static const char* kCameraDefinitionsKey;
 
-        static const char* kConfigurationFileLocation;
-        static const char* kCameraDefinitionsKey;
-
-        std::vector<std::unique_ptr<HalCameraMetadata>> mStaticMetadata;
-        bool mSupportsFlash;
+    std::vector<std::unique_ptr<HalCameraMetadata>> mStaticMetadata;
 };
 
 extern "C" CameraProviderHwl* CreateCameraProviderHwl() {

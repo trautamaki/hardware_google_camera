@@ -45,7 +45,9 @@ const nsecs_t EmulatedSensor::kSupportedExposureTimeRange[2] = {1000LL, 30000000
 const nsecs_t EmulatedSensor::kSupportedFrameDurationRange[2] = {33331760LL, 30000000000LL};
 
 const int32_t EmulatedSensor::kSupportedSensitivityRange[2] = {100, 1600};
-const int32_t EmulatedSensor::kDefaultSensitivity = 100;
+const int32_t EmulatedSensor::kDefaultSensitivity = 100; // ISO
+const nsecs_t EmulatedSensor::kDefaultExposureTime = ms2ns(15);
+const nsecs_t EmulatedSensor::kDefaultFrameDuration = ms2ns(33);
 
 // Sensor defaults
 const uint8_t EmulatedSensor::kSupportedColorFilterArrangement =

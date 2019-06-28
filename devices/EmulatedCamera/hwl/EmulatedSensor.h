@@ -169,6 +169,9 @@ public:
     static const int32_t kSupportedSensitivityRange[2];
     static const uint8_t kSupportedColorFilterArrangement;
     static const uint32_t kDefaultMaxRawValue;
+    static const nsecs_t kDefaultExposureTime;
+    static const int32_t kDefaultSensitivity;
+    static const nsecs_t kDefaultFrameDuration;
     static const uint32_t kDefaultBlackLevelPattern[4];
 
 private:
@@ -199,8 +202,6 @@ private:
     static const float kReadNoiseStddevAfterGain;   // In raw digital units
     static const float kReadNoiseVarBeforeGain;
     static const float kReadNoiseVarAfterGain;
-
-    static const int32_t kDefaultSensitivity;
 
     static const uint32_t kMaxRAWStreams;
     static const uint32_t kMaxProcessedStreams;
