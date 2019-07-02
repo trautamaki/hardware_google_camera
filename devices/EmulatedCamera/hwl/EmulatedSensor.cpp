@@ -93,9 +93,7 @@ float sqrtf_approx(float r) {
     return *(float *)(&r_i);
 }
 
-EmulatedSensor::EmulatedSensor() : Thread(false),
-        mGotVSync(false) {
-}
+EmulatedSensor::EmulatedSensor() : Thread(false), mGotVSync(false) {}
 
 EmulatedSensor::~EmulatedSensor() {
     shutDown();
@@ -264,14 +262,11 @@ status_t EmulatedSensor::startUp(SensorCharacteristics characteristics) {
 }
 
 status_t EmulatedSensor::shutDown() {
-    ALOGV("%s: E", __FUNCTION__);
-
     int res;
     res = requestExitAndWait();
     if (res != OK) {
         ALOGE("Unable to shut down sensor capture thread: %d", res);
     }
-    mJpegCompressor.release();
     return res;
 }
 

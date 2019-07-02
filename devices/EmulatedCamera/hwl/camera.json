@@ -127,6 +127,8 @@
         ["0", "1", "2"],
       "android.control.availableSceneModes":
         "1",
+      "android.control.sceneModeOverrides":
+       ["1", "1", "1"],
       "android.control.availableEffects":
         "0",
       "android.control.maxRegions":

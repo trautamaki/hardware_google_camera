@@ -82,8 +82,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::initialize(uint32_t cameraId,
         return ret;
     }
 
-    mRequestProcessor = std::make_unique<EmulatedRequestProcessor> (mCameraId, mMaxPipelineDepth,
-            emulatedSensor);
+    mRequestProcessor = std::make_unique<EmulatedRequestProcessor> (mCameraId, emulatedSensor);
 
     return mRequestProcessor->initialize(HalCameraMetadata::Clone(mStaticMetadata.get()));
 }
@@ -95,7 +94,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConstructDefaultRequestSettings(
     ATRACE_CALL();
     std::lock_guard<std::mutex> lock(mAPIMutex);
 
-    return mRequestProcessor->retrieveDefaultRequest(type, default_settings);
+    return mRequestProcessor->getDefaultRequest(type, default_settings);
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical_camera_id,

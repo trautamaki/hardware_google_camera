@@ -21,6 +21,10 @@
 #include "EmulatedSensor.h"
 #include "system/camera_metadata.h"
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
+#endif
+
 namespace android {
 
 using google_camera_hal::HalCameraMetadata;

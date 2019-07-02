@@ -7,6 +7,7 @@ cc_library_shared {
         "EmulatedCameraDeviceHWLImpl.cpp",
         "EmulatedCameraDeviceSessionHWLImpl.cpp",
         "EmulatedRequestProcessor.cpp",
+        "EmulatedRequestState.cpp",
         "EmulatedScene.cpp",
         "EmulatedSensor.cpp",
         "HWLUtils.cpp",

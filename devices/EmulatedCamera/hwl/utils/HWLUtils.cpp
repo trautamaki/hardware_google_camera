@@ -20,8 +20,6 @@
 
 #include "HWLUtils.h"
 
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
-
 namespace android {
 
 bool hasCapability(const HalCameraMetadata* metadata, uint8_t capability) {
