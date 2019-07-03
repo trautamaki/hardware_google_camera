@@ -65,8 +65,11 @@ private:
     status_t initializeControlSceneDefaults();
     status_t initializeControlefaults();
     status_t initializeInfoDefaults();
+    status_t initializeLensDefaults();
 
     status_t processAE();
+    status_t processAF();
+    status_t processAWB();
     status_t doFakeAE();
 
     std::mutex mRequestStateMutex;
@@ -116,7 +119,9 @@ private:
     uint8_t mAELock = ANDROID_CONTROL_AE_LOCK_OFF;
     uint8_t mAEState = ANDROID_CONTROL_AE_STATE_INACTIVE;
     uint8_t mAWBState = ANDROID_CONTROL_AWB_STATE_INACTIVE;
+    uint8_t mAWBLock = ANDROID_CONTROL_AWB_LOCK_OFF;
     uint8_t mAFState = ANDROID_CONTROL_AF_STATE_INACTIVE;
+    uint8_t mAFTrigger = ANDROID_CONTROL_AF_TRIGGER_IDLE;
     uint8_t mAETrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
     FPSRange mAETargetFPS;
     bool mAELockAvailable = false;
@@ -129,6 +134,10 @@ private:
     const float kExposureWanderMin = -2;
     const float kExposureWanderMax = 1;
     nsecs_t mAETargetExposureTime = EmulatedSensor::kDefaultExposureTime;
+    bool mAWBLockAvailable = false;
+    bool mReportAWBLock = false;
+    bool mAFModeChanged = false;
+    bool mAFSupported = false;
 
     // android.flash.*
     bool mIsFlashSupported = false;
@@ -148,6 +157,9 @@ private:
     uint8_t mSupportedHWLevel = 0;
     static const size_t kTemplateCount = static_cast<size_t>(RequestTemplate::kManual) + 1;
     std::unique_ptr<HalCameraMetadata> mDefaultRequests[kTemplateCount];
+
+    // android.lens.*
+    float mMinimumFocusDistance = 0.f;
 
     uint32_t mCameraId;
 

@@ -33,6 +33,7 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_MANUAL_POST_PROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_RAW,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_READ_SENSOR_SETTINGS,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BURST_CAPTURE,
     //TODO: Support more capabilities out-of-the box
 };
 
@@ -92,9 +93,9 @@ status_t EmulatedRequestState::doFakeAE() {
         mAETrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
     }
 
-    nsecs_t minFrameDuration = getClosestValue(s2ns(1.f / fpsRange.maxFPS),
+    nsecs_t minFrameDuration = getClosestValue(ms2ns(1000 / fpsRange.maxFPS),
             EmulatedSensor::kSupportedFrameDurationRange[0], mSensorMaxFrameDuration);
-    nsecs_t maxFrameDuration = getClosestValue(s2ns(1.f / fpsRange.minFPS),
+    nsecs_t maxFrameDuration = getClosestValue(ms2ns(1000 / fpsRange.minFPS),
             EmulatedSensor::kSupportedFrameDurationRange[0], mSensorMaxFrameDuration);
     mSensorFrameDuration = (maxFrameDuration + minFrameDuration) / 2;
     // Use a different AE target exposure for face priority mode
@@ -166,6 +167,187 @@ status_t EmulatedRequestState::doFakeAE() {
     return OK;
 }
 
+status_t EmulatedRequestState::processAWB() {
+    if (((mAWBMode == ANDROID_CONTROL_AWB_MODE_OFF) ||
+                (mControlMode == ANDROID_CONTROL_MODE_OFF)) && mSupportsManualSensor) {
+        //TODO: Add actual manual support
+    } else if (mIsBackwardCompatible) {
+        camera_metadata_ro_entry_t entry;
+        auto ret = mRequestSettings->Get(ANDROID_CONTROL_AWB_LOCK, &entry);
+        if ((ret == OK) && (entry.count == 1)) {
+            mAWBLock = entry.data.u8[0];
+        } else {
+            mAWBLock = ANDROID_CONTROL_AWB_LOCK_OFF;
+        }
+
+        if (mAELock == ANDROID_CONTROL_AE_LOCK_ON) {
+            mAWBState = ANDROID_CONTROL_AWB_STATE_LOCKED;
+        } else {
+            mAWBState = ANDROID_CONTROL_AWB_STATE_CONVERGED;
+        }
+    } else {
+        // No color output support no need for AWB
+    }
+
+    return OK;
+}
+
+status_t EmulatedRequestState::processAF() {
+    camera_metadata_ro_entry entry;
+
+    if (mAFMode == ANDROID_CONTROL_AF_MODE_OFF) {
+        // TODO: Manual lens control
+        mAFState = ANDROID_CONTROL_AF_STATE_INACTIVE;
+        return OK;
+    }
+
+    auto ret = mRequestSettings->Get(ANDROID_CONTROL_AF_TRIGGER, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+        mAFTrigger = entry.data.u8[0];
+    } else {
+        mAFTrigger = ANDROID_CONTROL_AF_TRIGGER_IDLE;
+    }
+
+    /**
+     * Simulate AF triggers. Transition at most 1 state per frame.
+     * - Focusing always succeeds (goes into locked, or PASSIVE_SCAN).
+     */
+
+    bool afTriggerStart = false;
+    switch (mAFTrigger) {
+        case ANDROID_CONTROL_AF_TRIGGER_IDLE:
+            break;
+        case ANDROID_CONTROL_AF_TRIGGER_START:
+            afTriggerStart = true;
+            break;
+        case ANDROID_CONTROL_AF_TRIGGER_CANCEL:
+            // Cancel trigger always transitions into INACTIVE
+            mAFState = ANDROID_CONTROL_AF_STATE_INACTIVE;
+
+            // Stay in 'inactive' until at least next frame
+            return OK;
+        default:
+            ALOGE("%s: Unknown af trigger value %d", __FUNCTION__, mAFTrigger);
+            return BAD_VALUE;
+    }
+
+    // If we get down here, we're either in an autofocus mode
+    //  or in a continuous focus mode (and no other modes)
+    switch (mAFState) {
+        case ANDROID_CONTROL_AF_STATE_INACTIVE:
+            if (afTriggerStart) {
+                switch (mAFMode) {
+                    case ANDROID_CONTROL_AF_MODE_AUTO:
+                        // fall-through
+                    case ANDROID_CONTROL_AF_MODE_MACRO:
+                        mAFState = ANDROID_CONTROL_AF_STATE_ACTIVE_SCAN;
+                        break;
+                    case ANDROID_CONTROL_AF_MODE_CONTINUOUS_VIDEO:
+                        // fall-through
+                    case ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE:
+                        mAFState = ANDROID_CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
+                        break;
+                }
+            } else {
+                // At least one frame stays in INACTIVE
+                if (!mAFModeChanged) {
+                    switch (mAFMode) {
+                        case ANDROID_CONTROL_AF_MODE_CONTINUOUS_VIDEO:
+                            // fall-through
+                        case ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE:
+                            mAFState = ANDROID_CONTROL_AF_STATE_PASSIVE_SCAN;
+                            break;
+                    }
+                }
+            }
+            break;
+        case ANDROID_CONTROL_AF_STATE_PASSIVE_SCAN:
+            /**
+             * When the AF trigger is activated, the algorithm should finish
+             * its PASSIVE_SCAN if active, and then transition into AF_FOCUSED
+             * or AF_NOT_FOCUSED as appropriate
+             */
+            if (afTriggerStart) {
+                // Randomly transition to focused or not focused
+                if (rand() % 3) {
+                    mAFState = ANDROID_CONTROL_AF_STATE_FOCUSED_LOCKED;
+                } else {
+                    mAFState = ANDROID_CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
+                }
+            }
+            /**
+             * When the AF trigger is not involved, the AF algorithm should
+             * start in INACTIVE state, and then transition into PASSIVE_SCAN
+             * and PASSIVE_FOCUSED states
+             */
+            else {
+               // Randomly transition to passive focus
+                if (rand() % 3 == 0) {
+                    mAFState = ANDROID_CONTROL_AF_STATE_PASSIVE_FOCUSED;
+                }
+            }
+
+            break;
+        case ANDROID_CONTROL_AF_STATE_PASSIVE_FOCUSED:
+            if (afTriggerStart) {
+                // Randomly transition to focused or not focused
+                if (rand() % 3) {
+                    mAFState = ANDROID_CONTROL_AF_STATE_FOCUSED_LOCKED;
+                } else {
+                    mAFState = ANDROID_CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
+                }
+            }
+            // TODO: initiate passive scan (PASSIVE_SCAN)
+            break;
+        case ANDROID_CONTROL_AF_STATE_ACTIVE_SCAN:
+            // Simulate AF sweep completing instantaneously
+
+            // Randomly transition to focused or not focused
+            if (rand() % 3) {
+                mAFState = ANDROID_CONTROL_AF_STATE_FOCUSED_LOCKED;
+            } else {
+                mAFState = ANDROID_CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
+            }
+            break;
+        case ANDROID_CONTROL_AF_STATE_FOCUSED_LOCKED:
+            if (afTriggerStart) {
+                switch (mAFMode) {
+                    case ANDROID_CONTROL_AF_MODE_AUTO:
+                        // fall-through
+                    case ANDROID_CONTROL_AF_MODE_MACRO:
+                        mAFState = ANDROID_CONTROL_AF_STATE_ACTIVE_SCAN;
+                        break;
+                    case ANDROID_CONTROL_AF_MODE_CONTINUOUS_VIDEO:
+                        // fall-through
+                    case ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE:
+                        // continuous autofocus => trigger start has no effect
+                        break;
+                }
+            }
+            break;
+        case ANDROID_CONTROL_AF_STATE_NOT_FOCUSED_LOCKED:
+            if (afTriggerStart) {
+                switch (mAFMode) {
+                    case ANDROID_CONTROL_AF_MODE_AUTO:
+                        // fall-through
+                    case ANDROID_CONTROL_AF_MODE_MACRO:
+                        mAFState = ANDROID_CONTROL_AF_STATE_ACTIVE_SCAN;
+                        break;
+                    case ANDROID_CONTROL_AF_MODE_CONTINUOUS_VIDEO:
+                        // fall-through
+                    case ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE:
+                        // continuous autofocus => trigger start has no effect
+                        break;
+                }
+            }
+            break;
+        default:
+            ALOGE("%s: Bad af state %d", __FUNCTION__, mAFState);
+    }
+
+    return OK;
+}
+
 status_t EmulatedRequestState::processAE() {
     camera_metadata_ro_entry_t entry;
     if (((mAEMode == ANDROID_CONTROL_AE_MODE_OFF) || (mControlMode == ANDROID_CONTROL_MODE_OFF)) &&
@@ -179,7 +361,7 @@ status_t EmulatedRequestState::processAE() {
                 ALOGE("%s: Sensor exposure time: %" PRId64 " not within supported range[%"
                         PRId64 ", %" PRId64 "]", __FUNCTION__, entry.data.i64[0],
                             mSensorExposureTimeRange.first, mSensorExposureTimeRange.second);
-                return BAD_VALUE;
+                // Use last valid value
             }
         }
 
@@ -193,8 +375,12 @@ status_t EmulatedRequestState::processAE() {
                         PRId64 ", %" PRId64 "]", __FUNCTION__, entry.data.i64[0],
                             EmulatedSensor::kSupportedFrameDurationRange[0],
                             mSensorMaxFrameDuration);
-                return BAD_VALUE;
+                // Use last valid value
             }
+        }
+
+        if (mSensorFrameDuration < mSensorExposureTime) {
+            mSensorFrameDuration = mSensorExposureTime;
         }
 
         ret = mRequestSettings->Get(ANDROID_SENSOR_SENSITIVITY, &entry);
@@ -206,7 +392,7 @@ status_t EmulatedRequestState::processAE() {
                 ALOGE("%s: Sensor sensitivity: %d not within supported range[%d, %d]", __FUNCTION__,
                         entry.data.i32[0], mSensorSensitivityRange.first,
                         mSensorSensitivityRange.second);
-                return BAD_VALUE;
+                // Use last valid value
             }
         }
         mAEState = ANDROID_CONTROL_AE_STATE_INACTIVE;
@@ -280,6 +466,7 @@ status_t EmulatedRequestState::initializeSensorSettings(
         ret = mRequestSettings->Get(ANDROID_CONTROL_AF_MODE, &entry);
         if ((ret == OK) && (entry.count == 1)) {
             if (mAvailableAFModes.find(entry.data.u8[0]) != mAvailableAFModes.end()) {
+                mAFModeChanged = mAFMode != entry.data.u8[0];
                 mAFMode = entry.data.u8[0];
             } else {
                 ALOGE("%s: AF mode: %d not supported!", __FUNCTION__, entry.data.u8[0]);
@@ -291,6 +478,7 @@ status_t EmulatedRequestState::initializeSensorSettings(
         if (it != mSceneOverrides.end()) {
             mAEMode = it->second.aeMode;
             mAWBMode = it->second.awbMode;
+            mAFModeChanged = mAFMode != entry.data.u8[0];
             mAFMode = it->second.afMode;
         } else {
             ALOGW("%s: Scene %d has no scene overrides using the currently active 3A modes!",
@@ -299,6 +487,16 @@ status_t EmulatedRequestState::initializeSensorSettings(
     }
 
     ret = processAE();
+    if (ret != OK) {
+        return ret;
+    }
+
+    ret = processAWB();
+    if (ret != OK) {
+        return ret;
+    }
+
+    ret = processAF();
     if (ret != OK) {
         return ret;
     }
@@ -317,8 +515,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(
     result->camera_id = mCameraId;
     result->pipeline_id = pipelineId;
     result->frame_number = frameNumber;
-    result->result_metadata = request.settings != nullptr ?
-            HalCameraMetadata::Clone(request.settings.get()) : HalCameraMetadata::Create(1, 10);
+    result->result_metadata = HalCameraMetadata::Clone(mRequestSettings.get());
+
+    // Results supported on all emulated devices
     result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH, &mMaxPipelineDepth, 1);
     result->result_metadata->Set(ANDROID_CONTROL_MODE, &mControlMode, 1);
     result->result_metadata->Set(ANDROID_CONTROL_AF_MODE, &mAFMode, 1);
@@ -327,12 +526,20 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(
     result->result_metadata->Set(ANDROID_CONTROL_AWB_STATE, &mAWBState, 1);
     result->result_metadata->Set(ANDROID_CONTROL_AE_MODE, &mAEMode, 1);
     result->result_metadata->Set(ANDROID_CONTROL_AE_STATE, &mAEState, 1);
-    result->result_metadata->Set(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER, &mAETrigger, 1);
     int32_t fpsRange[] = {mAETargetFPS.minFPS, mAETargetFPS.maxFPS};
     result->result_metadata->Set(ANDROID_CONTROL_AE_TARGET_FPS_RANGE, fpsRange,
             ARRAY_SIZE(fpsRange));
+
+    // Results depending on device capability and features
+    if (mIsBackwardCompatible) {
+        result->result_metadata->Set(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER, &mAETrigger, 1);
+        result->result_metadata->Set(ANDROID_CONTROL_AF_TRIGGER, &mAFTrigger, 1);
+    }
     if (mAELockAvailable && mReportAELock) {
         result->result_metadata->Set(ANDROID_CONTROL_AE_LOCK, &mAELock, 1);
+    }
+    if (mAWBLockAvailable && mReportAWBLock) {
+        result->result_metadata->Set(ANDROID_CONTROL_AWB_LOCK, &mAWBLock, 1);
     }
     if (mScenesSupported) {
         result->result_metadata->Set(ANDROID_CONTROL_SCENE_MODE, &mSceneMode, 1);
@@ -524,6 +731,22 @@ status_t EmulatedRequestState::initializeControlAFDefaults() {
         return BAD_VALUE;
     }
 
+    if (mAvailableRequests.find(ANDROID_CONTROL_AF_MODE) == mAvailableRequests.end()) {
+        ALOGE("%s: Clients must be able to set AF mode!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    if (mIsBackwardCompatible) {
+        if (mAvailableRequests.find(ANDROID_CONTROL_AF_TRIGGER) == mAvailableRequests.end()) {
+            ALOGE("%s: Clients must be able to set AF trigger!", __FUNCTION__);
+            return BAD_VALUE;
+        }
+        if (mAvailableResults.find(ANDROID_CONTROL_AF_TRIGGER) == mAvailableResults.end()) {
+            ALOGE("%s: AF trigger must be reported!", __FUNCTION__);
+            return BAD_VALUE;
+        }
+    }
+
     if (mAvailableResults.find(ANDROID_CONTROL_AF_MODE) == mAvailableResults.end()) {
         ALOGE("%s: AF mode must be reported!", __FUNCTION__);
         return BAD_VALUE;
@@ -533,6 +756,10 @@ status_t EmulatedRequestState::initializeControlAFDefaults() {
         ALOGE("%s: AF state must be reported!", __FUNCTION__);
         return BAD_VALUE;
     }
+
+    bool autoModePresent = mAvailableAFModes.find(ANDROID_CONTROL_AF_MODE_AUTO) !=
+            mAvailableAFModes.end();
+    mAFSupported = autoModePresent && (mMinimumFocusDistance > .0f);
 
     return OK;
 }
@@ -560,6 +787,15 @@ status_t EmulatedRequestState::initializeControlAWBDefaults() {
         ALOGE("%s: AWB state must be reported!", __FUNCTION__);
         return BAD_VALUE;
     }
+
+    ret = mStaticMetadata->Get(ANDROID_CONTROL_AWB_LOCK_AVAILABLE, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+        mAWBLockAvailable = entry.data.u8[0] == ANDROID_CONTROL_AWB_LOCK_AVAILABLE_TRUE;
+    } else {
+        ALOGV("%s: No available AWB lock!", __FUNCTION__);
+        mAWBLockAvailable = false;
+    }
+    mReportAWBLock = mAvailableResults.find(ANDROID_CONTROL_AWB_LOCK) != mAvailableResults.end();
 
     return OK;
 }
@@ -617,15 +853,18 @@ status_t EmulatedRequestState::initializeControlAEDefaults() {
         }
     }
 
-    if (mAvailableRequests.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) ==
-            mAvailableRequests.end()) {
-        ALOGE("%s: Clients must be able to set AE pre-capture trigger!", __FUNCTION__);
-        return BAD_VALUE;
-    }
+    if (mIsBackwardCompatible) {
+        if (mAvailableRequests.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) ==
+                mAvailableRequests.end()) {
+            ALOGE("%s: Clients must be able to set AE pre-capture trigger!", __FUNCTION__);
+            return BAD_VALUE;
+        }
 
-    if (mAvailableResults.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) == mAvailableResults.end()) {
-        ALOGE("%s: AE pre-capture trigger must be reported!", __FUNCTION__);
-        return BAD_VALUE;
+        if (mAvailableResults.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) ==
+                mAvailableResults.end()) {
+            ALOGE("%s: AE pre-capture trigger must be reported!", __FUNCTION__);
+            return BAD_VALUE;
+        }
     }
 
     ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES, &entry);
@@ -711,11 +950,11 @@ status_t EmulatedRequestState::initializeControlDefaults() {
         controlMode = ANDROID_CONTROL_MODE_AUTO;
         aeMode = ANDROID_CONTROL_AE_MODE_ON;
         awbMode = ANDROID_CONTROL_AWB_MODE_AUTO;
-        afMode = ANDROID_CONTROL_AF_MODE_OFF;
+        afMode = mAFSupported ? ANDROID_CONTROL_AF_MODE_AUTO : ANDROID_CONTROL_AF_MODE_OFF;
         sceneMode = ANDROID_CONTROL_SCENE_MODE_DISABLED;
         uint8_t aeLock = ANDROID_CONTROL_AE_LOCK_OFF;
+        uint8_t awbLock = ANDROID_CONTROL_AWB_LOCK_OFF;
         int32_t aeTargetFPS [] = {mAvailableFPSRanges[0].minFPS, mAvailableFPSRanges[0].maxFPS};
-        uint8_t aeTrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
         switch(templateIdx) {
             case RequestTemplate::kManual:
                 intent = ANDROID_CONTROL_CAPTURE_INTENT_MANUAL;
@@ -747,14 +986,22 @@ status_t EmulatedRequestState::initializeControlDefaults() {
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_MODE, &aeMode, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AWB_MODE, &awbMode, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AF_MODE, &afMode, 1);
-            mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER, &aeTrigger, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_TARGET_FPS_RANGE, aeTargetFPS,
                     ARRAY_SIZE(aeTargetFPS));
             if (mAELockAvailable) {
                 mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_LOCK, &aeLock, 1);
             }
+            if (mAWBLockAvailable) {
+                mDefaultRequests[idx]->Set(ANDROID_CONTROL_AWB_LOCK, &awbLock, 1);
+            }
             if (mScenesSupported) {
                 mDefaultRequests[idx]->Set(ANDROID_CONTROL_SCENE_MODE, &sceneMode, 1);
+            }
+            if (mIsBackwardCompatible) {
+                uint8_t aeTrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
+                mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER, &aeTrigger, 1);
+                uint8_t afTrigger = ANDROID_CONTROL_AF_TRIGGER_IDLE;
+                mDefaultRequests[idx]->Set(ANDROID_CONTROL_AF_TRIGGER, &afTrigger, 1);
             }
         }
     }
@@ -776,6 +1023,19 @@ status_t EmulatedRequestState::initializeFlashDefaults() {
     return initializeControlDefaults();
 }
 
+status_t EmulatedRequestState::initializeLensDefaults() {
+    camera_metadata_ro_entry_t entry;
+    auto ret = mStaticMetadata->Get(ANDROID_LENS_INFO_MINIMUM_FOCUS_DISTANCE, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+        mMinimumFocusDistance = entry.data.f[0];
+    } else {
+        ALOGW("%s: No available minimum focus distance assuming fixed focus!", __FUNCTION__);
+        mMinimumFocusDistance = .0f;
+    }
+
+    return initializeFlashDefaults();
+}
+
 status_t EmulatedRequestState::initializeInfoDefaults() {
     camera_metadata_ro_entry_t entry;
     auto ret = mStaticMetadata->Get(ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL, &entry);
@@ -791,7 +1051,7 @@ status_t EmulatedRequestState::initializeInfoDefaults() {
 
     mSupportedHWLevel = entry.data.u8[0];
 
-    return initializeFlashDefaults();
+    return initializeLensDefaults();
 }
 
 status_t EmulatedRequestState::initializeRequestDefaults() {
