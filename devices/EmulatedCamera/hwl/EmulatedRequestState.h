@@ -133,6 +133,7 @@ private:
     const size_t kStableAeMaxFrames = 100;
     const float kExposureWanderMin = -2;
     const float kExposureWanderMax = 1;
+    int32_t mPostRawBoost = 100;
     nsecs_t mAETargetExposureTime = EmulatedSensor::kDefaultExposureTime;
     bool mAWBLockAvailable = false;
     bool mReportAWBLock = false;
@@ -142,7 +143,6 @@ private:
     // android.flash.*
     bool mIsFlashSupported = false;
     uint8_t mFlashState = ANDROID_FLASH_STATE_UNAVAILABLE;
-    bool mReportFlashState = false;
 
     // android.sensor.*
     std::pair<int32_t, int32_t> mSensorSensitivityRange;
@@ -160,6 +160,9 @@ private:
 
     // android.lens.*
     float mMinimumFocusDistance = 0.f;
+    float mAperture = 0.f;
+    float mFocalLength = 0.f;
+    uint8_t mLensState = ANDROID_LENS_STATE_STATIONARY;
 
     uint32_t mCameraId;
 

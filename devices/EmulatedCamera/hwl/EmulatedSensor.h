@@ -97,27 +97,29 @@ using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
 using google_camera_hal::StreamConfiguration;
 
+struct SensorCharacteristics {
+    size_t width, height;
+    nsecs_t exposureTimeRange[2];
+    nsecs_t frameDurationRange[2];
+    int32_t sensitivityRange[2];
+    camera_metadata_enum_android_sensor_info_color_filter_arrangement colorArangement;
+    uint32_t maxRawValue;
+    uint32_t blackLevelPattern[4];
+    uint32_t maxRawStreams, maxProcessedStreams, maxStallingStreams;
+    uint32_t physicalSize[2];
+    bool isFlashSupported;
+
+    SensorCharacteristics() : width(0), height(0), exposureTimeRange{0},
+        frameDurationRange{0}, sensitivityRange{0},
+        colorArangement(ANDROID_SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB), maxRawValue(0),
+        blackLevelPattern{0}, maxRawStreams(0), maxProcessedStreams(0),
+        maxStallingStreams(0), physicalSize{0}, isFlashSupported(false) {}
+};
+
 class EmulatedSensor : private Thread, public virtual RefBase {
 public:
     EmulatedSensor();
     ~EmulatedSensor();
-
-    struct SensorCharacteristics {
-        size_t width, height;
-        nsecs_t exposureTimeRange[2];
-        nsecs_t frameDurationRange[2];
-        int32_t sensitivityRange[2];
-        camera_metadata_enum_android_sensor_info_color_filter_arrangement colorArangement;
-        uint32_t maxRawValue;
-        uint32_t blackLevelPattern[4];
-        uint32_t maxRawStreams, maxProcessedStreams, maxStallingStreams;
-
-        SensorCharacteristics() : width(0), height(0), exposureTimeRange{0},
-                frameDurationRange{0}, sensitivityRange{0},
-                colorArangement(ANDROID_SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB), maxRawValue(0),
-                blackLevelPattern{0}, maxRawStreams(0), maxProcessedStreams(0),
-                maxStallingStreams(0) {}
-    };
 
     static android_pixel_format_t overrideFormat(android_pixel_format_t format) {
         if (format ==  HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
@@ -229,8 +231,9 @@ private:
     std::unique_ptr<EmulatedScene> mScene;
 
     void captureRaw(uint8_t *img, uint32_t gain, uint32_t width);
-    void captureRGBA(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride, uint32_t gain);
-    void captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride, uint32_t gain);
+    enum RGBLayout { RGB, RGBA, ARGB };
+    void captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
+            RGBLayout layout, uint32_t gain);
     void captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height, uint32_t gain);
     void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride);
 

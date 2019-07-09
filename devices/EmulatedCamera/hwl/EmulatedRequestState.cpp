@@ -112,9 +112,14 @@ status_t EmulatedRequestState::doFakeAE() {
         if (mAEState != ANDROID_CONTROL_AE_STATE_PRECAPTURE) {
             mAEFrameCounter = 0;
         }
-        if (((mAEFrameCounter > kAEPrecaptureMinFrames) &&
-                    (mAETargetExposureTime - mSensorExposureTime) < mAETargetExposureTime / 10) ||
-                (mAETrigger == ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL)) {
+
+        if (mAETrigger == ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL) {
+            // Done with precapture
+            mAEFrameCounter = 0;
+            mAEState = ANDROID_CONTROL_AE_STATE_CONVERGED;
+            mAETrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL;
+        } else if (((mAEFrameCounter > kAEPrecaptureMinFrames) &&
+                    (mAETargetExposureTime - mSensorExposureTime) < mAETargetExposureTime / 10)) {
             // Done with precapture
             mAEFrameCounter = 0;
             mAEState = ANDROID_CONTROL_AE_STATE_CONVERGED;
@@ -448,8 +453,8 @@ status_t EmulatedRequestState::initializeSensorSettings(
             if (mAvailableAEModes.find(entry.data.u8[0]) != mAvailableAEModes.end()) {
                 mAEMode = entry.data.u8[0];
             } else {
-                ALOGE("%s: AE mode: %d not supported!", __FUNCTION__, entry.data.u8[0]);
-                return BAD_VALUE;
+                ALOGE("%s: AE mode: %d not supported using last valid mode!", __FUNCTION__,
+                        entry.data.u8[0]);
             }
         }
 
@@ -458,8 +463,8 @@ status_t EmulatedRequestState::initializeSensorSettings(
             if (mAvailableAWBModes.find(entry.data.u8[0]) != mAvailableAWBModes.end()) {
                 mAWBMode = entry.data.u8[0];
             } else {
-                ALOGE("%s: AWB mode: %d not supported!", __FUNCTION__, entry.data.u8[0]);
-                return BAD_VALUE;
+                ALOGE("%s: AWB mode: %d not supported using last valid mode!", __FUNCTION__,
+                        entry.data.u8[0]);
             }
         }
 
@@ -469,8 +474,8 @@ status_t EmulatedRequestState::initializeSensorSettings(
                 mAFModeChanged = mAFMode != entry.data.u8[0];
                 mAFMode = entry.data.u8[0];
             } else {
-                ALOGE("%s: AF mode: %d not supported!", __FUNCTION__, entry.data.u8[0]);
-                return BAD_VALUE;
+                ALOGE("%s: AF mode: %d not supported using last valid mode!", __FUNCTION__,
+                        entry.data.u8[0]);
             }
         }
     } else {
@@ -529,6 +534,8 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(
     int32_t fpsRange[] = {mAETargetFPS.minFPS, mAETargetFPS.maxFPS};
     result->result_metadata->Set(ANDROID_CONTROL_AE_TARGET_FPS_RANGE, fpsRange,
             ARRAY_SIZE(fpsRange));
+    result->result_metadata->Set(ANDROID_FLASH_STATE, &mFlashState, 1);
+    result->result_metadata->Set(ANDROID_LENS_STATE, &mLensState, 1);
 
     // Results depending on device capability and features
     if (mIsBackwardCompatible) {
@@ -549,8 +556,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(
         result->result_metadata->Set(ANDROID_SENSOR_FRAME_DURATION, &mSensorFrameDuration, 1);
         result->result_metadata->Set(ANDROID_SENSOR_SENSITIVITY, &mSensorSensitivity, 1);
     }
-    if (mReportFlashState) {
-        result->result_metadata->Set(ANDROID_FLASH_STATE, &mFlashState, 1);
+    if (mAvailableResults.find(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST) !=
+            mAvailableResults.end()) {
+        result->result_metadata->Set(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST, &mPostRawBoost, 1);
     }
     result->input_buffers = request.inputBuffers;
     result->partial_result = mPartialResultCount;
@@ -648,11 +656,14 @@ status_t EmulatedRequestState::initializeSensorDefaults() {
     mSensorSensitivity = getClosestValue(EmulatedSensor::kDefaultSensitivity,
             mSensorSensitivityRange.first, mSensorSensitivityRange.second);
 
-    auto manualIdx = static_cast<size_t>(RequestTemplate::kManual);
-    if (mDefaultRequests[manualIdx].get() != nullptr) {
-        mDefaultRequests[manualIdx]->Set(ANDROID_SENSOR_EXPOSURE_TIME, &mSensorExposureTime, 1);
-        mDefaultRequests[manualIdx]->Set(ANDROID_SENSOR_FRAME_DURATION, &mSensorFrameDuration, 1);
-        mDefaultRequests[manualIdx]->Set(ANDROID_SENSOR_SENSITIVITY, &mSensorSensitivity, 1);
+    for (size_t idx = 0; idx < kTemplateCount; idx++) {
+        if (mDefaultRequests[idx].get() == nullptr) {
+            continue;
+        }
+
+        mDefaultRequests[idx]->Set(ANDROID_SENSOR_EXPOSURE_TIME, &mSensorExposureTime, 1);
+        mDefaultRequests[idx]->Set(ANDROID_SENSOR_FRAME_DURATION, &mSensorFrameDuration, 1);
+        mDefaultRequests[idx]->Set(ANDROID_SENSOR_SENSITIVITY, &mSensorSensitivity, 1);
     }
 
     return OK;
@@ -919,6 +930,14 @@ status_t EmulatedRequestState::initializeControlDefaults() {
         return BAD_VALUE;
     }
 
+    ret = mStaticMetadata->Get(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST, &entry);
+    if (ret == OK) {
+        mPostRawBoost = entry.data.i32[0];
+    } else {
+        ALOGW("%s: No available post RAW boost! Setting default!", __FUNCTION__);
+        mPostRawBoost = 100;
+    }
+
     ret = initializeControlAEDefaults();
     if (ret != OK) {
         return ret;
@@ -988,6 +1007,8 @@ status_t EmulatedRequestState::initializeControlDefaults() {
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AF_MODE, &afMode, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_TARGET_FPS_RANGE, aeTargetFPS,
                     ARRAY_SIZE(aeTargetFPS));
+            mDefaultRequests[idx]->Set(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST, &mPostRawBoost,
+                    1);
             if (mAELockAvailable) {
                 mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_LOCK, &aeLock, 1);
             }
@@ -1018,7 +1039,6 @@ status_t EmulatedRequestState::initializeFlashDefaults() {
         ALOGE("%s: No available flash info defaulting to false!", __FUNCTION__);
         mIsFlashSupported = false;
     }
-    mReportFlashState = mAvailableResults.find(ANDROID_FLASH_STATE) != mAvailableResults.end();
 
     return initializeControlDefaults();
 }
@@ -1031,6 +1051,33 @@ status_t EmulatedRequestState::initializeLensDefaults() {
     } else {
         ALOGW("%s: No available minimum focus distance assuming fixed focus!", __FUNCTION__);
         mMinimumFocusDistance = .0f;
+    }
+
+    ret = mStaticMetadata->Get(ANDROID_LENS_INFO_AVAILABLE_APERTURES, &entry);
+    if ((ret == OK) && (entry.count > 0)) {
+        // TODO: add support for multiple apertures
+        mAperture = entry.data.f[0];
+    } else {
+        ALOGE("%s: No available aperture!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    ret = mStaticMetadata->Get(ANDROID_LENS_INFO_AVAILABLE_FOCAL_LENGTHS, &entry);
+    if ((ret == OK) && (entry.count > 0)) {
+        // TODO: add support for multiple focal lengths
+        mFocalLength = entry.data.f[0];
+    } else {
+        ALOGE("%s: No available focal length!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    for (size_t idx = 0; idx < kTemplateCount; idx++) {
+        if (mDefaultRequests[idx].get() == nullptr) {
+            continue;
+        }
+
+        mDefaultRequests[idx]->Set(ANDROID_LENS_APERTURE, &mAperture, 1);
+        mDefaultRequests[idx]->Set(ANDROID_LENS_FOCAL_LENGTH, &mFocalLength, 1);
     }
 
     return initializeFlashDefaults();

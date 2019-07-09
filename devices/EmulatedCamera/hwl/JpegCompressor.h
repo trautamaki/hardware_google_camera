@@ -31,6 +31,8 @@ extern "C" {
 #include <jpeglib.h>
 }
 
+#include "utils/ExifUtils.h"
+
 namespace android {
 
 using android::hardware::camera::common::V1_0::helper::HandleImporter;
@@ -38,41 +40,32 @@ using google_camera_hal::BufferStatus;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
 
-struct JpegRGBInput {
+struct JpegARGBInput {
     uint32_t width, height;
     uint32_t stride;
     uint8_t *img;
 
-    JpegRGBInput() : width(0), height(0), stride(0), img(nullptr) {}
-    ~JpegRGBInput() {
+    JpegARGBInput() : width(0), height(0), stride(0), img(nullptr) {}
+    ~JpegARGBInput() {
         if (img != nullptr) {
             delete [] img;
             img = nullptr;
         }
     }
 
-    JpegRGBInput(const JpegRGBInput&) = delete;
-    JpegRGBInput& operator = (const JpegRGBInput&) = delete;
+    JpegARGBInput(const JpegARGBInput&) = delete;
+    JpegARGBInput& operator = (const JpegARGBInput&) = delete;
 };
 
 struct JpegJob {
-    std::unique_ptr<JpegRGBInput> input;
+    std::unique_ptr<JpegARGBInput> input;
     std::unique_ptr<SensorBuffer> output;
-    std::unique_ptr<HwlPipelineResult> result;
-
-    ~JpegJob() {
-        if (output->callback.process_pipeline_result != nullptr) {
-            if (result->result_metadata.get() != nullptr) {
-                result->partial_result = 1;
-            }
-            output->callback.process_pipeline_result(std::move(result));
-        }
-    }
+    std::unique_ptr<HalCameraMetadata> resultMetadata;
 };
 
 class JpegCompressor {
 public:
-    JpegCompressor();
+    JpegCompressor(std::unique_ptr<ExifUtils> exifUtils);
     virtual ~JpegCompressor();
 
     status_t queue(std::unique_ptr<JpegJob> job);
@@ -84,10 +77,22 @@ private:
     std::thread mJpegProcessingThread;
     HandleImporter mImporter;
     std::queue<std::unique_ptr<JpegJob>> mPendingJobs;
+    std::unique_ptr<ExifUtils> mExifUtils;
 
     j_common_ptr mJpegErrorInfo;
     bool checkError(const char *msg);
     void compress(std::unique_ptr<JpegJob> job);
+    struct ARGBFrame {
+        uint8_t *outputBuffer;
+        size_t outputBufferSize;
+        uint8_t *inputBuffer;
+        size_t inputBufferStride;
+        size_t width;
+        size_t height;
+        const uint8_t *app1Buffer;
+        size_t app1BufferSize;
+    };
+    size_t compressARGBFrame(ARGBFrame frame);
     void threadLoop();
 
     JpegCompressor(const JpegCompressor&) = delete;

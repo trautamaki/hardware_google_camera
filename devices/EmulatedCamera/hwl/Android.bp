@@ -10,8 +10,10 @@ cc_library_shared {
         "EmulatedRequestState.cpp",
         "EmulatedScene.cpp",
         "EmulatedSensor.cpp",
-        "HWLUtils.cpp",
-        "JpegCompressor.cpp"
+        "JpegCompressor.cpp",
+        "utils/ExifUtils.cpp",
+        "utils/HWLUtils.cpp",
+        "utils/StreamConfigurationMap.cpp",
     ],
     cflags: [
         "-Werror",
@@ -25,6 +27,7 @@ cc_library_shared {
         "libbase",
         "libcamera_metadata",
         "libcutils",
+        "libexif",
         "libhardware",
         "libhidlbase",
         "libgooglecamerahalutils",

@@ -73,7 +73,7 @@ private:
 
     std::unique_ptr<HalCameraMetadata> mStaticMetadata;
     std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
-    EmulatedSensor::SensorCharacteristics mSensorChars;
+    SensorCharacteristics mSensorChars;
 };
 
 }  // namespace android

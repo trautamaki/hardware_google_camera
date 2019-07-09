@@ -111,7 +111,7 @@ private:
     std::vector<EmulatedPipeline> mPipelines;
     std::unique_ptr<EmulatedRequestProcessor> mRequestProcessor;
     std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
-    EmulatedSensor::SensorCharacteristics mSensorChars;
+    SensorCharacteristics mSensorChars;
 };
 
 }  // namespace android

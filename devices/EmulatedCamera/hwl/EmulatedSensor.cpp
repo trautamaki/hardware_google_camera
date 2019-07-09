@@ -34,6 +34,7 @@
 #include <inttypes.h>
 #include <libyuv.h>
 #include <system/camera_metadata.h>
+#include "utils/ExifUtils.h"
 
 namespace android {
 
@@ -246,6 +247,8 @@ status_t EmulatedSensor::startUp(SensorCharacteristics characteristics) {
         return BAD_VALUE;
     }
 
+    std::unique_ptr<ExifUtils> exifUtils(ExifUtils::create(characteristics));
+
     if (isRunning()) {
         return OK;
     }
@@ -254,7 +257,7 @@ status_t EmulatedSensor::startUp(SensorCharacteristics characteristics) {
     mScene = std::make_unique<EmulatedScene>(mChars.width, mChars.height, kElectronsPerLuxSecond);
     mRowReadoutTime = mChars.frameDurationRange[0] / mChars.height;
     kBaseGainFactor = (float)mChars.maxRawValue / EmulatedSensor::kSaturationElectrons;
-    mJpegCompressor = std::make_unique<JpegCompressor>();
+    mJpegCompressor = std::make_unique<JpegCompressor>(std::move(exifUtils));
 
     int res;
     res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);
@@ -304,7 +307,8 @@ status_t EmulatedSensor::flush() {
 
     // First recreate the jpeg compressor. This will abort any ongoing processing and
     // flush any pending jobs.
-    mJpegCompressor = std::make_unique<JpegCompressor>();
+    std::unique_ptr<ExifUtils> exifUtils(ExifUtils::create(mChars));
+    mJpegCompressor = std::make_unique<JpegCompressor>(std::move(exifUtils));
 
     // Then return any pending frames here
     if ((mCurrentOutputBuffers.get() != nullptr) && (!mCurrentOutputBuffers->empty())) {
@@ -347,6 +351,7 @@ bool EmulatedSensor::threadLoop() {
     std::unique_ptr<Buffers> nextBuffers;
     std::unique_ptr<HwlPipelineResult> nextResult;
     SensorSettings settings;
+    HwlPipelineCallback callback = {nullptr, nullptr};
     {
         Mutex::Autolock lock(mControlMutex);
         settings = mCurrentSettings;
@@ -370,7 +375,8 @@ bool EmulatedSensor::threadLoop() {
     mNextCaptureTime = frameEndRealTime;
 
     if (nextBuffers != nullptr) {
-        if (nextBuffers->at(0)->callback.notify != nullptr) {
+        callback = nextBuffers->at(0)->callback;
+        if (callback.notify != nullptr) {
             NotifyMessage msg {
                 .type = MessageType::kShutter,
                 .message.shutter = {
@@ -378,7 +384,7 @@ bool EmulatedSensor::threadLoop() {
                     .timestamp_ns = static_cast<uint64_t>(mNextCaptureTime)
                 }
             };
-            nextBuffers->at(0)->callback.notify(nextResult->pipeline_id, msg);
+            callback.notify(nextResult->pipeline_id, msg);
         }
         ALOGVV("Starting next capture: Exposure: %f ms, gain: %d", ns2ms(settings.exposureTime),
                 gain);
@@ -395,28 +401,26 @@ bool EmulatedSensor::threadLoop() {
                     break;
                 case HAL_PIXEL_FORMAT_RGB_888:
                     captureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
-                            (*b)->plane.img.stride, settings.gain);
+                            (*b)->plane.img.stride, RGBLayout::RGB, settings.gain);
                     break;
                 case HAL_PIXEL_FORMAT_RGBA_8888:
-                    captureRGBA((*b)->plane.img.img, (*b)->width, (*b)->height,
-                            (*b)->plane.img.stride, settings.gain);
+                    captureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
+                            (*b)->plane.img.stride, RGBLayout::RGBA, settings.gain);
                     break;
                 case HAL_PIXEL_FORMAT_BLOB:
                     if ((*b)->dataSpace == HAL_DATASPACE_V0_JFIF) {
-                        auto jpegInput = std::make_unique<JpegRGBInput>();
+                        auto jpegInput = std::make_unique<JpegARGBInput>();
                         jpegInput->width = (*b)->width;
                         jpegInput->height = (*b)->height;
-                        jpegInput->stride = (*b)->width * 3;
+                        jpegInput->stride = (*b)->width * 4;
                         jpegInput->img = new uint8_t[jpegInput->stride * (*b)->height];
                         captureRGB(jpegInput->img, (*b)->width, (*b)->height, jpegInput->stride,
-                                settings.gain);
+                                RGBLayout::ARGB, settings.gain);
 
                         auto jpegResult = std::make_unique<HwlPipelineResult>();
                         jpegResult->camera_id = nextResult->camera_id;
                         jpegResult->pipeline_id = nextResult->pipeline_id;
                         jpegResult->frame_number = nextResult->frame_number;
-                        jpegResult->result_metadata = HalCameraMetadata::Clone(
-                                nextResult->result_metadata.get());
 
                         auto jpegJob = std::make_unique<JpegJob>();
                         jpegJob->input = std::move(jpegInput);
@@ -424,14 +428,11 @@ bool EmulatedSensor::threadLoop() {
                         // must set the corresponding status.
                         (*b)->streamBuffer.status = BufferStatus::kError;
                         std::swap(jpegJob->output, *b);
-                        jpegJob->result = std::move(jpegResult);
+                        jpegJob->resultMetadata = HalCameraMetadata::Clone(
+                                nextResult->result_metadata.get());
 
                         Mutex::Autolock lock(mControlMutex);
-                        auto ret = mJpegCompressor->queue(std::move(jpegJob));
-                        if (ret == OK) {
-                            nextResult->partial_result = 0;
-                            nextResult->result_metadata.release();
-                        }
+                        mJpegCompressor->queue(std::move(jpegJob));
                     } else {
                         ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__, (*b)->format,
                                 (*b)->dataSpace);
@@ -513,9 +514,9 @@ bool EmulatedSensor::threadLoop() {
     ALOGVV("Frame cycle took %" PRIu64 "  ms, target %" PRIu64 " ms",
             ns2ms(endRealTime - startRealTime), ns2ms(settings.frameDuration));
 
-    if ((nextBuffers.get() != nullptr) && !nextBuffers->empty() &&
-            (nextResult.get() != nullptr) && (nextResult->result_metadata.get() != nullptr)) {
-        nextBuffers->at(0)->callback.process_pipeline_result(std::move(nextResult));
+    if ((callback.process_pipeline_result != nullptr) && (nextResult.get() != nullptr) &&
+            (nextResult->result_metadata.get() != nullptr)) {
+        callback.process_pipeline_result(std::move(nextResult));
     }
 
     return true;
@@ -565,40 +566,8 @@ void EmulatedSensor::captureRaw(uint8_t *img, uint32_t gain, uint32_t width) {
     ALOGVV("Raw sensor image captured");
 }
 
-void EmulatedSensor::captureRGBA(uint8_t *img, uint32_t width, uint32_t height,  uint32_t stride,
-        uint32_t gain) {
-    ATRACE_CALL();
-    float totalGain = gain / 100.0 * kBaseGainFactor;
-    // In fixed-point math, calculate total scaling from electrons to 8bpp
-    int scale64x = 64 * totalGain * 255 / mChars.maxRawValue;
-    uint32_t incH = ceil((float)mChars.width / width);
-    uint32_t incV = ceil((float)mChars.height / height);
-
-    for (unsigned int y = 0, outY = 0; y < mChars.height; y += incV, outY++) {
-        uint8_t *px = img + outY * stride;
-        mScene->setReadoutPixel(0, y);
-        for (unsigned int x = 0; x < mChars.width; x += incH) {
-            uint32_t rCount, gCount, bCount;
-            // TODO: Perfect demosaicing is a cheat
-            const uint32_t *pixel = mScene->getPixelElectrons();
-            rCount = pixel[EmulatedScene::R] * scale64x;
-            gCount = pixel[EmulatedScene::Gr] * scale64x;
-            bCount = pixel[EmulatedScene::B] * scale64x;
-
-            *px++ = rCount < 255 * 64 ? rCount / 64 : 255;
-            *px++ = gCount < 255 * 64 ? gCount / 64 : 255;
-            *px++ = bCount < 255 * 64 ? bCount / 64 : 255;
-            *px++ = 255;
-            for (unsigned int j = 1; j < incH; j++) mScene->getPixelElectrons();
-        }
-        // TODO: Handle this better
-        // simulatedTime += mRowReadoutTime;
-    }
-    ALOGVV("RGBA sensor image captured");
-}
-
 void EmulatedSensor::captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
-        uint32_t gain) {
+        RGBLayout layout, uint32_t gain) {
     ATRACE_CALL();
     float totalGain = gain / 100.0 * kBaseGainFactor;
     // In fixed-point math, calculate total scaling from electrons to 8bpp
@@ -617,13 +586,33 @@ void EmulatedSensor::captureRGB(uint8_t *img, uint32_t width, uint32_t height, u
             gCount = pixel[EmulatedScene::Gr] * scale64x;
             bCount = pixel[EmulatedScene::B] * scale64x;
 
-            *px++ = rCount < 255 * 64 ? rCount / 64 : 255;
-            *px++ = gCount < 255 * 64 ? gCount / 64 : 255;
-            *px++ = bCount < 255 * 64 ? bCount / 64 : 255;
+            uint8_t r = rCount < 255 * 64 ? rCount / 64 : 255;
+            uint8_t g = gCount < 255 * 64 ? gCount / 64 : 255;
+            uint8_t b = bCount < 255 * 64 ? bCount / 64 : 255;
+            switch (layout) {
+                case RGB:
+                    *px++ = r;
+                    *px++ = g;
+                    *px++ = b;
+                    break;
+                case RGBA:
+                    *px++ = r;
+                    *px++ = g;
+                    *px++ = b;
+                    *px++ = 255;
+                    break;
+                case ARGB:
+                    *px++ = 255;
+                    *px++ = r;
+                    *px++ = g;
+                    *px++ = b;
+                    break;
+                default:
+                    ALOGE("%s: RGB layout: %d not supported", __FUNCTION__, layout);
+                    return;
+            }
             for (unsigned int j = 1; j < incH; j++) mScene->getPixelElectrons();
         }
-        // TODO: Handle this better
-        // simulatedTime += mRowReadoutTime;
     }
     ALOGVV("RGB sensor image captured");
 }

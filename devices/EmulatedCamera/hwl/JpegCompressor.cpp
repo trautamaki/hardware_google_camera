@@ -18,6 +18,8 @@
 #define LOG_TAG "JpegCompressor"
 
 #include <camera3.h>
+#include <cutils/properties.h>
+#include <libyuv.h>
 #include <utils/Log.h>
 #include <utils/Trace.h>
 
@@ -29,7 +31,9 @@ using google_camera_hal::ErrorCode;
 using google_camera_hal::NotifyMessage;
 using google_camera_hal::MessageType;
 
-JpegCompressor::JpegCompressor() {
+JpegCompressor::JpegCompressor(std::unique_ptr<ExifUtils> exifUtils) :
+    mExifUtils(std::move(exifUtils)) {
+
     ATRACE_CALL();
     mJpegProcessingThread = std::thread([this] { this->threadLoop(); });
 }
@@ -51,20 +55,10 @@ JpegCompressor::~JpegCompressor() {
 status_t JpegCompressor::queue(std::unique_ptr<JpegJob> job) {
     ATRACE_CALL();
 
-    if ((job.get() == nullptr) || (job->result.get() == nullptr)) {
-        return BAD_VALUE;
-    }
-
     if ((job->input.get() == nullptr) || (job->output.get() == nullptr) ||
             (job->output->format != HAL_PIXEL_FORMAT_BLOB) ||
             (job->output->dataSpace != HAL_DATASPACE_V0_JFIF)) {
         ALOGE("%s: Unable to find buffers for JPEG source/destination", __FUNCTION__);
-        return BAD_VALUE;
-    }
-
-    if (!job->result->output_buffers.empty()) {
-        ALOGE("%s: Jpeg compressor doesn't not support %zu parallel outputs!", __FUNCTION__,
-                job->result->output_buffers.size());
         return BAD_VALUE;
     }
 
@@ -101,6 +95,120 @@ void JpegCompressor::threadLoop() {
 }
 
 void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
+    const uint8_t *app1Buffer = nullptr;
+    size_t app1BufferSize = 0;
+    std::vector<uint8_t> thumbnailJpegBuffer;
+    size_t encodedThumbnailSize = 0;
+    if ((mExifUtils.get() != nullptr) && (job->resultMetadata.get() != nullptr)) {
+        if (mExifUtils->initialize()) {
+            camera_metadata_ro_entry_t entry;
+            size_t thumbnailWidth = 0;
+            size_t thumbnailHeight = 0;
+            size_t thumbnailStride = 0;
+            std::vector<uint8_t> thumbARGBFrame;
+            auto ret = job->resultMetadata->Get(ANDROID_JPEG_THUMBNAIL_SIZE, &entry);
+            if ((ret == OK) && (entry.count == 2)) {
+                thumbnailWidth = entry.data.i32[0];
+                thumbnailHeight = entry.data.i32[1];
+                if ((thumbnailWidth > 0) && (thumbnailHeight > 0)) {
+                    thumbnailStride = thumbnailWidth * 4;
+                    thumbARGBFrame.resize(thumbnailStride * thumbnailHeight);
+                    // TODO: Crop thumbnail according to documentation
+                    auto stat = ARGBScale(
+                            job->input->img,
+                            job->input->stride,
+                            job->input->width,
+                            job->input->height,
+                            thumbARGBFrame.data(),
+                            thumbnailStride,
+                            thumbnailWidth,
+                            thumbnailHeight,
+                            libyuv::kFilterNone);
+                    if (stat != 0) {
+                        ALOGE("%s: Failed during thumbnail scaling: %d", __FUNCTION__, stat);
+                        thumbARGBFrame.clear();
+                    }
+                }
+            }
+
+            if (mExifUtils->setFromMetadata(*job->resultMetadata, job->input->width,
+                        job->input->height)) {
+                if (!thumbARGBFrame.empty()) {
+                    thumbnailJpegBuffer.resize(64*1024); //APP1 is limited by 64k
+                    encodedThumbnailSize = compressARGBFrame({
+                            .outputBuffer = thumbnailJpegBuffer.data(),
+                            .outputBufferSize = thumbnailJpegBuffer.size(),
+                            .inputBuffer = thumbARGBFrame.data(),
+                            .inputBufferStride = thumbnailStride,
+                            .width = thumbnailWidth,
+                            .height = thumbnailHeight,
+                            .app1Buffer = nullptr,
+                            .app1BufferSize = 0});
+                    if (encodedThumbnailSize > 0) {
+                        job->output->streamBuffer.status = BufferStatus::kOk;
+                    } else {
+                        ALOGE("%s: Failed encoding thumbail!", __FUNCTION__);
+                        thumbnailJpegBuffer.clear();
+                    }
+                }
+
+                char value[PROPERTY_VALUE_MAX];
+                if (property_get("ro.product.vendor.manufacturer", value, "unknown") > 0) {
+                    mExifUtils->setMake(std::string(value));
+                } else {
+                    ALOGW("%s: No Exif make data!", __FUNCTION__);
+                }
+
+                if (property_get("ro.product.vendor.model", value, "unknown") > 0) {
+                    mExifUtils->setModel(std::string(value));
+                } else {
+                    ALOGW("%s: No Exif model data!", __FUNCTION__);
+                }
+
+                if (mExifUtils->generateApp1(thumbnailJpegBuffer.empty() ?
+                            nullptr : thumbnailJpegBuffer.data(), encodedThumbnailSize)) {
+                    app1Buffer = mExifUtils->getApp1Buffer();
+                    app1BufferSize = mExifUtils->getApp1Length();
+                } else {
+                    ALOGE("%s: Unable to generate App1 buffer", __FUNCTION__);
+                }
+            } else {
+                ALOGE("%s: Unable to generate EXIF section!", __FUNCTION__);
+            }
+        } else {
+            ALOGE("%s: Unable to initialize Exif generator!", __FUNCTION__);
+        }
+    }
+
+    auto encodedSize = compressARGBFrame({
+            .outputBuffer = job->output->plane.img.img,
+            .outputBufferSize = job->output->plane.img.bufferSize,
+            .inputBuffer = job->input->img,
+            .inputBufferStride = job->input->stride,
+            .width = job->input->width,
+            .height = job->input->height,
+            .app1Buffer = app1Buffer,
+            .app1BufferSize = app1BufferSize});
+    if (encodedSize > 0) {
+        job->output->streamBuffer.status = BufferStatus::kOk;
+    } else {
+        job->output->streamBuffer.status = BufferStatus::kError;
+        return;
+    }
+
+    auto jpegHeaderOffset = job->output->plane.img.bufferSize - sizeof(struct camera3_jpeg_blob);
+    if (jpegHeaderOffset > encodedSize) {
+        struct camera3_jpeg_blob *blob = reinterpret_cast<struct camera3_jpeg_blob*> (
+                job->output->plane.img.img + jpegHeaderOffset);
+        blob->jpeg_blob_id = CAMERA3_JPEG_BLOB_ID;
+        blob->jpeg_size = encodedSize;
+    } else {
+        ALOGW("%s: No space for jpeg header at offset: %u and jpeg size: %u", __FUNCTION__,
+                jpegHeaderOffset, encodedSize);
+    }
+}
+
+size_t JpegCompressor::compressARGBFrame(ARGBFrame frame) {
     ATRACE_CALL();
 
     struct CustomJpegDestMgr : public jpeg_destination_mgr {
@@ -126,12 +234,11 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
 
     jpeg_create_compress(cinfo.get());
     if (checkError("Error initializing compression")) {
-        job->output->streamBuffer.status = BufferStatus::kError;
-        return;
+        return 0;
     }
 
-    dmgr.buffer = static_cast<JOCTET*>(job->output->plane.img.img);
-    dmgr.bufferSize = job->output->plane.img.bufferSize;
+    dmgr.buffer = static_cast<JOCTET*>(frame.outputBuffer);
+    dmgr.bufferSize = frame.outputBufferSize;
     dmgr.encodedSize = 0;
     dmgr.success = true;
     cinfo->client_data = static_cast<void*>(&dmgr);
@@ -156,65 +263,52 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
     cinfo->dest = reinterpret_cast<struct jpeg_destination_mgr*>(&dmgr);
 
     // Set up compression parameters
-    cinfo->image_width = job->input->width;
-    cinfo->image_height = job->input->height;
-    cinfo->input_components = 3;
-    cinfo->in_color_space = JCS_RGB;
+    cinfo->image_width = frame.width;
+    cinfo->image_height = frame.height;
+    cinfo->input_components = 4;
+    cinfo->in_color_space = JCS_EXT_ARGB;
 
     jpeg_set_defaults(cinfo.get());
     if (checkError("Error configuring defaults")) {
-        job->output->streamBuffer.status = BufferStatus::kError;
-        return;
+        return 0;
     }
 
     // Do compression
     jpeg_start_compress(cinfo.get(), TRUE);
     if (checkError("Error starting compression")) {
-        job->output->streamBuffer.status = BufferStatus::kError;
-        return;
+        return 0;
     }
 
-    size_t rowStride = job->input->stride;
+    if ((frame.app1Buffer != nullptr) && (frame.app1BufferSize > 0)) {
+        jpeg_write_marker(cinfo.get(), JPEG_APP0 + 1, static_cast<const JOCTET*>(frame.app1Buffer),
+                frame.app1BufferSize);
+    }
+
+    size_t rowStride = frame.inputBufferStride;
     const size_t kChunkSize = 32;
     while (cinfo->next_scanline < cinfo->image_height) {
         JSAMPROW chunk[kChunkSize];
         for (size_t i = 0; i < kChunkSize; i++) {
-            chunk[i] = (JSAMPROW)(job->input->img +
-                    (i + cinfo->next_scanline) * rowStride);
+            chunk[i] = (JSAMPROW)(frame.inputBuffer + (i + cinfo->next_scanline) * rowStride);
         }
         jpeg_write_scanlines(cinfo.get(), chunk, kChunkSize);
         if (checkError("Error while compressing")) {
-            job->output->streamBuffer.status = BufferStatus::kError;
-            return;
+            return 0;
         }
 
         if (mJpegDone) {
             ALOGV("%s: Cancel called, exiting early", __FUNCTION__);
             jpeg_finish_compress(cinfo.get());
-            job->output->streamBuffer.status = BufferStatus::kError;
-            return;
+            return 0;
         }
     }
 
     jpeg_finish_compress(cinfo.get());
     if (checkError("Error while finishing compression")) {
-        job->output->streamBuffer.status = BufferStatus::kError;
-        return;
+        return 0;
     }
 
-    auto jpegHeaderOffset = job->output->plane.img.bufferSize - sizeof(struct camera3_jpeg_blob);
-    if (jpegHeaderOffset > dmgr.encodedSize) {
-        struct camera3_jpeg_blob *blob = reinterpret_cast<struct camera3_jpeg_blob*> (
-                job->output->plane.img.img + jpegHeaderOffset);
-        blob->jpeg_blob_id = CAMERA3_JPEG_BLOB_ID;
-        blob->jpeg_size = dmgr.encodedSize;
-    } else {
-        ALOGW("%s: No space for jpeg header at offset: %u and jpeg size: %u", __FUNCTION__,
-                jpegHeaderOffset, dmgr.encodedSize);
-    }
-
-    // All done
-    job->output->streamBuffer.status = dmgr.success ? BufferStatus::kOk : BufferStatus::kError;
+    return dmgr.encodedSize;
 }
 
 bool JpegCompressor::checkError(const char *msg) {

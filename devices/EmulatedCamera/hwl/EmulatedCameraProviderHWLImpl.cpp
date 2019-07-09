@@ -26,6 +26,7 @@
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
 #include "EmulatedSensor.h"
 #include "utils/HWLUtils.h"
+#include "vendor_tag_defs.h"
 
 namespace android {
 
@@ -346,7 +347,7 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
         }
     }
 
-    EmulatedSensor::SensorCharacteristics sensorCharacteristics;
+    SensorCharacteristics sensorCharacteristics;
     auto ret = getSensorCharacteristics(staticMeta.get(), &sensorCharacteristics);
     if (ret != OK) {
         ALOGE("%s: Unable to extract sensor characteristics!", __FUNCTION__);
@@ -357,6 +358,11 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
         ALOGE("%s: Sensor characteristics not supported!", __FUNCTION__);
         return BAD_VALUE;
     }
+
+    // TODO: This probably should not be expected by GCH from every HWL impl.
+    //       Adding anyhow to pass CTS
+    int32_t payloadFrames = 0;
+    staticMeta->Set(google_camera_hal::kHdrplusPayloadFrames, &payloadFrames, 1);
 
     mStaticMetadata.push_back(std::move(staticMeta));
 

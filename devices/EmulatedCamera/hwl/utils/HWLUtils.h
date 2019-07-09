@@ -32,7 +32,7 @@ using google_camera_hal::HalCameraMetadata;
 // Metadata utility functions start
 bool hasCapability(const HalCameraMetadata* metadata, uint8_t capability);
 status_t getSensorCharacteristics(const HalCameraMetadata* metadata,
-        EmulatedSensor::SensorCharacteristics* sensorChars /*out*/);
+        SensorCharacteristics* sensorChars /*out*/);
 // Metadata utility functions end
 
 } // namespace android ends here

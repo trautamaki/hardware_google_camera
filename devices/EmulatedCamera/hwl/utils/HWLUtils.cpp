@@ -42,7 +42,7 @@ bool hasCapability(const HalCameraMetadata* metadata, uint8_t capability) {
 }
 
 status_t getSensorCharacteristics(const HalCameraMetadata* metadata,
-        EmulatedSensor::SensorCharacteristics* sensorChars /*out*/) {
+        SensorCharacteristics* sensorChars /*out*/) {
     if ((metadata == nullptr) || (sensorChars == nullptr)) {
         return BAD_VALUE;
     }
