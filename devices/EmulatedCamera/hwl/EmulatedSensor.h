@@ -229,9 +229,9 @@ private:
     std::unique_ptr<EmulatedScene> mScene;
 
     void captureRaw(uint8_t *img, uint32_t gain, uint32_t width);
-    void captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride);
-    void captureRGB(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride);
-    void captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t gain);
+    void captureRGBA(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride, uint32_t gain);
+    void captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride, uint32_t gain);
+    void captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height, uint32_t gain);
     void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride);
 
     bool waitForVSyncLocked(nsecs_t reltime);

@@ -32,7 +32,8 @@
 #include <cstdlib>
 #include "EmulatedSensor.h"
 #include <inttypes.h>
-#include "system/camera_metadata.h"
+#include <libyuv.h>
+#include <system/camera_metadata.h>
 
 namespace android {
 
@@ -393,12 +394,12 @@ bool EmulatedSensor::threadLoop() {
                     captureRaw((*b)->plane.img.img, settings.gain, (*b)->width);
                     break;
                 case HAL_PIXEL_FORMAT_RGB_888:
-                    captureRGB((*b)->plane.img.img, settings.gain, (*b)->width,
-                            (*b)->plane.img.stride);
+                    captureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
+                            (*b)->plane.img.stride, settings.gain);
                     break;
                 case HAL_PIXEL_FORMAT_RGBA_8888:
-                    captureRGBA((*b)->plane.img.img, settings.gain, (*b)->width,
-                            (*b)->plane.img.stride);
+                    captureRGBA((*b)->plane.img.img, (*b)->width, (*b)->height,
+                            (*b)->plane.img.stride, settings.gain);
                     break;
                 case HAL_PIXEL_FORMAT_BLOB:
                     if ((*b)->dataSpace == HAL_DATASPACE_V0_JFIF) {
@@ -407,7 +408,8 @@ bool EmulatedSensor::threadLoop() {
                         jpegInput->height = (*b)->height;
                         jpegInput->stride = (*b)->width * 3;
                         jpegInput->img = new uint8_t[jpegInput->stride * (*b)->height];
-                        captureRGB(jpegInput->img, settings.gain, (*b)->width, jpegInput->stride);
+                        captureRGB(jpegInput->img, (*b)->width, (*b)->height, jpegInput->stride,
+                                settings.gain);
 
                         auto jpegResult = std::make_unique<HwlPipelineResult>();
                         jpegResult->camera_id = nextResult->camera_id;
@@ -438,7 +440,43 @@ bool EmulatedSensor::threadLoop() {
                     break;
                 case HAL_PIXEL_FORMAT_YCrCb_420_SP:
                 case HAL_PIXEL_FORMAT_YCbCr_420_888:
-                    captureNV21((*b)->plane.imgYCrCb, settings.gain, (*b)->width);
+                    {
+                        // Generate the smallest possible frame with the expected AR and
+                        // then scale using libyuv.
+                        float aspectRatio = static_cast<float>((*b)->width) / (*b)->height;
+                        size_t tempWidth = EmulatedScene::kSceneWidth * aspectRatio;
+                        size_t tempHeight = EmulatedScene::kSceneHeight;
+                        auto tempYUVBuffer = new uint8_t[(tempWidth * tempHeight * 3) / 2];
+                        YCbCrPlanes yuvPlanes = {.imgY = tempYUVBuffer,
+                                .imgCb = tempYUVBuffer + tempWidth * tempHeight,
+                                .imgCr = tempYUVBuffer + (tempWidth * tempHeight * 5) / 4,
+                                .yStride = tempWidth, .CbCrStride = tempWidth / 2,
+                                .CbCrStep = 1 };
+                        captureNV21(yuvPlanes, tempWidth, tempHeight, settings.gain);
+                        auto ret = I420Scale(
+                                yuvPlanes.imgY,
+                                yuvPlanes.yStride,
+                                yuvPlanes.imgCb,
+                                yuvPlanes.CbCrStride,
+                                yuvPlanes.imgCr,
+                                yuvPlanes.CbCrStride,
+                                tempWidth,
+                                tempHeight,
+                                (*b)->plane.imgYCrCb.imgY,
+                                (*b)->plane.imgYCrCb.yStride,
+                                (*b)->plane.imgYCrCb.imgCb,
+                                (*b)->plane.imgYCrCb.CbCrStride,
+                                (*b)->plane.imgYCrCb.imgCr,
+                                (*b)->plane.imgYCrCb.CbCrStride,
+                                (*b)->width,
+                                (*b)->height,
+                                libyuv::kFilterNone);
+                        if (ret != 0) {
+                            ALOGE("%s: Failed during YUV scaling: %d", __FUNCTION__, ret);
+                            (*b)->streamBuffer.status = BufferStatus::kError;
+                        }
+                        delete [] tempYUVBuffer;
+                    }
                     break;
                 case HAL_PIXEL_FORMAT_Y16:
                     captureDepth((*b)->plane.img.img, settings.gain, (*b)->width,
@@ -527,17 +565,19 @@ void EmulatedSensor::captureRaw(uint8_t *img, uint32_t gain, uint32_t width) {
     ALOGVV("Raw sensor image captured");
 }
 
-void EmulatedSensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,  uint32_t stride) {
+void EmulatedSensor::captureRGBA(uint8_t *img, uint32_t width, uint32_t height,  uint32_t stride,
+        uint32_t gain) {
     ATRACE_CALL();
     float totalGain = gain / 100.0 * kBaseGainFactor;
     // In fixed-point math, calculate total scaling from electrons to 8bpp
     int scale64x = 64 * totalGain * 255 / mChars.maxRawValue;
-    uint32_t inc = ceil((float)mChars.width / width);
+    uint32_t incH = ceil((float)mChars.width / width);
+    uint32_t incV = ceil((float)mChars.height / height);
 
-    for (unsigned int y = 0, outY = 0; y < mChars.height; y += inc, outY++) {
+    for (unsigned int y = 0, outY = 0; y < mChars.height; y += incV, outY++) {
         uint8_t *px = img + outY * stride;
         mScene->setReadoutPixel(0, y);
-        for (unsigned int x = 0; x < mChars.width; x += inc) {
+        for (unsigned int x = 0; x < mChars.width; x += incH) {
             uint32_t rCount, gCount, bCount;
             // TODO: Perfect demosaicing is a cheat
             const uint32_t *pixel = mScene->getPixelElectrons();
@@ -549,7 +589,7 @@ void EmulatedSensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,  u
             *px++ = gCount < 255 * 64 ? gCount / 64 : 255;
             *px++ = bCount < 255 * 64 ? bCount / 64 : 255;
             *px++ = 255;
-            for (unsigned int j = 1; j < inc; j++) mScene->getPixelElectrons();
+            for (unsigned int j = 1; j < incH; j++) mScene->getPixelElectrons();
         }
         // TODO: Handle this better
         // simulatedTime += mRowReadoutTime;
@@ -557,17 +597,19 @@ void EmulatedSensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,  u
     ALOGVV("RGBA sensor image captured");
 }
 
-void EmulatedSensor::captureRGB(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride) {
+void EmulatedSensor::captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
+        uint32_t gain) {
     ATRACE_CALL();
     float totalGain = gain / 100.0 * kBaseGainFactor;
     // In fixed-point math, calculate total scaling from electrons to 8bpp
     int scale64x = 64 * totalGain * 255 / mChars.maxRawValue;
-    uint32_t inc = ceil((float)mChars.width / width);
+    uint32_t incH = ceil((float)mChars.width / width);
+    uint32_t incV = ceil((float)mChars.height / height);
 
-    for (unsigned int y = 0, outY = 0; y < mChars.height; y += inc, outY++) {
+    for (unsigned int y = 0, outY = 0; y < mChars.height; y += incV, outY++) {
         mScene->setReadoutPixel(0, y);
         uint8_t *px = img + outY * stride;
-        for (unsigned int x = 0; x < mChars.width; x += inc) {
+        for (unsigned int x = 0; x < mChars.width; x += incH) {
             uint32_t rCount, gCount, bCount;
             // TODO: Perfect demosaicing is a cheat
             const uint32_t *pixel = mScene->getPixelElectrons();
@@ -578,7 +620,7 @@ void EmulatedSensor::captureRGB(uint8_t *img, uint32_t gain, uint32_t width, uin
             *px++ = rCount < 255 * 64 ? rCount / 64 : 255;
             *px++ = gCount < 255 * 64 ? gCount / 64 : 255;
             *px++ = bCount < 255 * 64 ? bCount / 64 : 255;
-            for (unsigned int j = 1; j < inc; j++) mScene->getPixelElectrons();
+            for (unsigned int j = 1; j < incH; j++) mScene->getPixelElectrons();
         }
         // TODO: Handle this better
         // simulatedTime += mRowReadoutTime;
@@ -586,7 +628,8 @@ void EmulatedSensor::captureRGB(uint8_t *img, uint32_t gain, uint32_t width, uin
     ALOGVV("RGB sensor image captured");
 }
 
-void EmulatedSensor::captureNV21(YCbCrPlanes yuvLayout, uint32_t gain, uint32_t width) {
+void EmulatedSensor::captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height,
+        uint32_t gain) {
     ATRACE_CALL();
     float totalGain = gain / 100.0 * kBaseGainFactor;
     // Using fixed-point math with 6 bits of fractional precision.
@@ -605,9 +648,9 @@ void EmulatedSensor::captureNV21(YCbCrPlanes yuvLayout, uint32_t gain, uint32_t 
     const int scaleOutSq = scaleOut * scaleOut;  // after multiplies
 
     // inc = how many pixels to skip while reading every next pixel
-    // horizontally.
-    uint32_t inc = ceil((float)mChars.width / width);
-    for (unsigned int y = 0, outY = 0; y < mChars.height; y += inc, outY++) {
+    uint32_t incH = ceil((float)mChars.width / width);
+    uint32_t incV = ceil((float)mChars.height / height);
+    for (unsigned int y = 0, outY = 0; y < mChars.height; y += incV, outY++) {
         uint8_t *pxY = yuvLayout.imgY + outY * yuvLayout.yStride;
         uint8_t *pxCb = yuvLayout.imgCb + (outY / 2) * yuvLayout.CbCrStride;
         uint8_t *pxCr = yuvLayout.imgCr + (outY / 2) * yuvLayout.CbCrStride;
@@ -635,7 +678,7 @@ void EmulatedSensor::captureNV21(YCbCrPlanes yuvLayout, uint32_t gain, uint32_t 
             }
 
             // Skip unprocessed pixels from sensor.
-            for (unsigned int j = 1; j < inc; j++) mScene->getPixelElectrons();
+            for (unsigned int j = 1; j < incH; j++) mScene->getPixelElectrons();
         }
     }
     ALOGVV("NV21 sensor image captured");

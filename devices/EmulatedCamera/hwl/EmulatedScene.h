@@ -70,6 +70,9 @@ public:
 
     enum ColorChannels { R = 0, Gr, Gb, B, Y, Cb, Cr, NUM_CHANNELS };
 
+    static const int kSceneWidth;
+    static const int kSceneHeight;
+
 private:
     // Sensor color filtering coefficients in XYZ
     float mFilterR[3];
@@ -165,8 +168,6 @@ private:
     static const float kMaterials_xyY[NUM_MATERIALS][3];
     static const uint8_t kMaterialsFlags[NUM_MATERIALS];
 
-    static const int kSceneWidth;
-    static const int kSceneHeight;
     static const uint8_t kScene[];
 };
 

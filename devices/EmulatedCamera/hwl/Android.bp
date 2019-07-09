@@ -33,6 +33,7 @@ cc_library_shared {
         "liblog",
         "libsync",
         "libutils",
+        "libyuv",
     ],
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
