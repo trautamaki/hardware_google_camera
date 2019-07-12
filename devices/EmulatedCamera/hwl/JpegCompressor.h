@@ -104,7 +104,10 @@ private:
 template<>
 struct std::default_delete<jpeg_compress_struct> {
     inline void operator() (jpeg_compress_struct *cinfo) const {
-        jpeg_destroy_compress(cinfo);
+        if (cinfo != nullptr) {
+            jpeg_destroy_compress(cinfo);
+            delete cinfo;
+        }
     }
 };
 

@@ -45,21 +45,6 @@ enum ExifOrientation : uint16_t {
 
 // This is based on the camera HIDL shim implementation, which was in turned
 // based on original ChromeOS ARC implementation of a V4L2 HAL
-
-// ExifUtils can override APP1 segment with tags which caller set. ExifUtils can
-// also add a thumbnail in the APP1 segment if thumbnail size is specified.
-// ExifUtils can be reused with different images by calling initialize().
-//
-// Example of using this class :
-//  std::unique_ptr<ExifUtils> utils(ExifUtils::Create());
-//  utils->initialize(const unsigned char* app1Segment, size_t app1SegmentSize);
-//  ...
-//  // Call ExifUtils functions to set Exif tags.
-//  ...
-//  utils->GenerateApp1();
-//  unsigned int app1Length = utils->GetApp1Length();
-//  uint8_t* app1Buffer = new uint8_t[app1Length];
-//  memcpy(app1Buffer, utils->GetApp1Buffer(), app1Length);
 class ExifUtils {
 
 public:

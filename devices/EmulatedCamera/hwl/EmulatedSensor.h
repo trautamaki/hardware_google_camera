@@ -175,6 +175,11 @@ public:
     static const int32_t kDefaultSensitivity;
     static const nsecs_t kDefaultFrameDuration;
     static const uint32_t kDefaultBlackLevelPattern[4];
+    static const camera_metadata_rational kDefaultColorTransform[9];
+    static const float kDefaultColorCorrectionGains[4];
+    static const float kDefaultToneMapCurveRed[4];
+    static const float kDefaultToneMapCurveGreen[4];
+    static const float kDefaultToneMapCurveBlue[4];
 
 private:
     /**

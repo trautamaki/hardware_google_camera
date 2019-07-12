@@ -77,38 +77,40 @@ using android::google_camera_hal::MessageType;
 template<>
 struct std::default_delete<android::SensorBuffer> {
     inline void operator() (android::SensorBuffer *buffer) const {
+        if (buffer != nullptr) {
+            if (buffer->streamBuffer.buffer != nullptr) {
+                buffer->importer.unlock(buffer->streamBuffer.buffer);
+            }
 
-        if (buffer->streamBuffer.buffer != nullptr) {
-            buffer->importer.unlock(buffer->streamBuffer.buffer);
-        }
+            if (buffer->acquireFenceFd >= 0) {
+                buffer->importer.closeFence(buffer->acquireFenceFd);
+            }
 
-        if (buffer->acquireFenceFd >= 0) {
-            buffer->importer.closeFence(buffer->acquireFenceFd);
-        }
+            if ((buffer->streamBuffer.status != BufferStatus::kOk) &&
+                    (buffer->callback.notify != nullptr)) {
+                NotifyMessage msg = {
+                    .type = MessageType::kError,
+                    .message.error = {
+                        .frame_number = buffer->frameNumber,
+                        .error_stream_id = buffer->streamBuffer.stream_id,
+                        .error_code = ErrorCode::kErrorBuffer
+                    }
+                };
+                buffer->callback.notify(buffer->pipelineId, msg);
+            }
 
-        if ((buffer->streamBuffer.status != BufferStatus::kOk) &&
-                (buffer->callback.notify != nullptr)) {
-            NotifyMessage msg = {
-                .type = MessageType::kError,
-                .message.error = {
-                    .frame_number = buffer->frameNumber,
-                    .error_stream_id = buffer->streamBuffer.stream_id,
-                    .error_code = ErrorCode::kErrorBuffer
-                }
-            };
-            buffer->callback.notify(buffer->pipelineId, msg);
-        }
+            if (buffer->callback.process_pipeline_result != nullptr) {
+                auto result = std::make_unique<HwlPipelineResult>();
+                result->camera_id = buffer->cameraId;
+                result->pipeline_id = buffer->pipelineId;
+                result->frame_number = buffer->frameNumber;
+                result->partial_result = 0;
 
-        if (buffer->callback.process_pipeline_result != nullptr) {
-            auto result = std::make_unique<HwlPipelineResult>();
-            result->camera_id = buffer->cameraId;
-            result->pipeline_id = buffer->pipelineId;
-            result->frame_number = buffer->frameNumber;
-            result->partial_result = 0;
-
-            buffer->streamBuffer.acquire_fence = buffer->streamBuffer.release_fence = nullptr;
-            result->output_buffers.push_back(buffer->streamBuffer);
-            buffer->callback.process_pipeline_result(std::move(result));
+                buffer->streamBuffer.acquire_fence = buffer->streamBuffer.release_fence = nullptr;
+                result->output_buffers.push_back(buffer->streamBuffer);
+                buffer->callback.process_pipeline_result(std::move(result));
+            }
+            delete buffer;
         }
     }
 };

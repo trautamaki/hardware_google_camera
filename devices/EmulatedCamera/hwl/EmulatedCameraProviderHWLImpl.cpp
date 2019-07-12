@@ -40,7 +40,7 @@ const char* EmulatedCameraProviderHwlImpl::kCameraDefinitionsKey = "camera_defin
 
 std::unique_ptr<EmulatedCameraProviderHwlImpl> EmulatedCameraProviderHwlImpl::Create() {
     auto provider =
-        std::unique_ptr<EmulatedCameraProviderHwlImpl>(new EmulatedCameraProviderHwlImpl());
+            std::unique_ptr<EmulatedCameraProviderHwlImpl>(new EmulatedCameraProviderHwlImpl());
 
     if (provider == nullptr) {
         ALOGE("%s: Creating EmulatedCameraProviderHwlImpl failed.", __FUNCTION__);
@@ -105,25 +105,23 @@ status_t EmulatedCameraProviderHwlImpl::getTagFromName(const char *name, uint32_
 
     // Match rest of name against the tag names in that section only
     uint32_t candidateTag = 0;
-    if (sectionIndex < ANDROID_SECTION_COUNT) {
-        // Match built-in tags (typically android.*)
-        uint32_t tagBegin, tagEnd; // [tagBegin, tagEnd)
-        tagBegin = camera_metadata_section_bounds[sectionIndex][0];
-        tagEnd = camera_metadata_section_bounds[sectionIndex][1];
+    // Match built-in tags (typically android.*)
+    uint32_t tagBegin, tagEnd; // [tagBegin, tagEnd)
+    tagBegin = camera_metadata_section_bounds[sectionIndex][0];
+    tagEnd = camera_metadata_section_bounds[sectionIndex][1];
 
-        for (candidateTag = tagBegin; candidateTag < tagEnd; ++candidateTag) {
-            const char *tagName = get_camera_metadata_tag_name(candidateTag);
+    for (candidateTag = tagBegin; candidateTag < tagEnd; ++candidateTag) {
+        const char *tagName = get_camera_metadata_tag_name(candidateTag);
 
-            if (strcmp(nameTagName, tagName) == 0) {
-                ALOGV("%s: Found matched tag '%s' (%d)",
-                      __FUNCTION__, tagName, candidateTag);
-                break;
-            }
+        if (strcmp(nameTagName, tagName) == 0) {
+            ALOGV("%s: Found matched tag '%s' (%d)",
+                    __FUNCTION__, tagName, candidateTag);
+            break;
         }
+    }
 
-        if (candidateTag == tagEnd) {
-            return NAME_NOT_FOUND;
-        }
+    if (candidateTag == tagEnd) {
+        return NAME_NOT_FOUND;
     }
 
     *tag = candidateTag;

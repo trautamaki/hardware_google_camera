@@ -1,5 +1,6 @@
 {
-      "android.sensor.info.exposureTimeRange" : ["1000", "300000000"],
+      "android.sensor.info.exposureTimeRange" :
+        ["1000", "300000000"],
       "android.sensor.info.maxFrameDuration":
         "300000000",
       "android.sensor.info.sensitivityRange":
@@ -42,6 +43,8 @@
         "1",
       "android.lens.facing":
         "1",
+      "android.hotPixel.availableHotPixelModes":
+        ["0", "1", "2"],
       "android.flash.info.available":
         "0",
       "android.tonemap.maxCurvePoints":
@@ -232,7 +235,8 @@
         "65559", "65562", "4", "196610",
         "1376256", "655362", "1048578", "786438",
         "786442", "786443", "786444", "786445",
-        "786446", "786447", "65575", "983050"],
+        "786446", "786447", "65575", "983050",
+        "393217"],
       "android.control.postRawSensitivityBoostRange":
         ["100", "100"],
       "android.request.availableSessionKeys":

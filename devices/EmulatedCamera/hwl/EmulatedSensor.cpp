@@ -80,6 +80,14 @@ const uint32_t EmulatedSensor::kMaxRAWStreams = 1;
 const uint32_t EmulatedSensor::kMaxProcessedStreams = 3;
 const uint32_t EmulatedSensor::kMaxStallingStreams = 1;
 
+const camera_metadata_rational EmulatedSensor::kDefaultColorTransform[9] =
+        {{1, 1}, {0, 1}, {0, 1}, {0, 1}, {1, 1}, {0, 1}, {0, 1}, {0, 1}, {1, 1}};
+const float EmulatedSensor::kDefaultColorCorrectionGains[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+
+const float EmulatedSensor::kDefaultToneMapCurveRed[4] = {.0f, .0f, 1.f, 1.f};
+const float EmulatedSensor::kDefaultToneMapCurveGreen[4] = {.0f, .0f, 1.f, 1.f};
+const float EmulatedSensor::kDefaultToneMapCurveBlue[4] = {.0f, .0f, 1.f, 1.f};
+
 /** A few utility functions for math, normal distributions */
 
 // Take advantage of IEEE floating-point format to calculate an approximate
@@ -417,11 +425,6 @@ bool EmulatedSensor::threadLoop() {
                         captureRGB(jpegInput->img, (*b)->width, (*b)->height, jpegInput->stride,
                                 RGBLayout::ARGB, settings.gain);
 
-                        auto jpegResult = std::make_unique<HwlPipelineResult>();
-                        jpegResult->camera_id = nextResult->camera_id;
-                        jpegResult->pipeline_id = nextResult->pipeline_id;
-                        jpegResult->frame_number = nextResult->frame_number;
-
                         auto jpegJob = std::make_unique<JpegJob>();
                         jpegJob->input = std::move(jpegInput);
                         // If jpeg compression is successful, then the jpeg compressor
@@ -447,7 +450,9 @@ bool EmulatedSensor::threadLoop() {
                         float aspectRatio = static_cast<float>((*b)->width) / (*b)->height;
                         size_t tempWidth = EmulatedScene::kSceneWidth * aspectRatio;
                         size_t tempHeight = EmulatedScene::kSceneHeight;
-                        auto tempYUVBuffer = new uint8_t[(tempWidth * tempHeight * 3) / 2];
+                        std::vector<uint8_t> tempYUV;
+                        tempYUV.reserve((tempWidth * tempHeight * 3) / 2);
+                        auto tempYUVBuffer = tempYUV.data();
                         YCbCrPlanes yuvPlanes = {.imgY = tempYUVBuffer,
                                 .imgCb = tempYUVBuffer + tempWidth * tempHeight,
                                 .imgCr = tempYUVBuffer + (tempWidth * tempHeight * 5) / 4,
@@ -476,7 +481,6 @@ bool EmulatedSensor::threadLoop() {
                             ALOGE("%s: Failed during YUV scaling: %d", __FUNCTION__, ret);
                             (*b)->streamBuffer.status = BufferStatus::kError;
                         }
-                        delete [] tempYUVBuffer;
                     }
                     break;
                 case HAL_PIXEL_FORMAT_Y16:
