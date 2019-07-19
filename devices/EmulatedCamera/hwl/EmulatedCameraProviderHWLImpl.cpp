@@ -128,21 +128,56 @@ status_t EmulatedCameraProviderHwlImpl::getTagFromName(const char *name, uint32_
     return OK;
 }
 
-status_t getUInt8Value(const Json::Value& value, uint8_t *result/*out*/) {
+bool isDigit(const std::string& value) {
+    if (value.empty()) {
+        return false;
+    }
+
+    for (const auto& c : value) {
+        if (!std::isdigit(c) && (!std::ispunct(c))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template <typename T>
+status_t getEnumValue(uint32_t tagId, const char *cstring, T *result/*out*/) {
+    if ((result == nullptr) || (cstring == nullptr)) {
+        return BAD_VALUE;
+    }
+
+    uint32_t enumValue;
+    auto ret = camera_metadata_enum_value(tagId, cstring, strlen(cstring), &enumValue);
+    if (ret != OK) {
+        ALOGE("%s: Failed to match tag id: 0x%x value: %s", __FUNCTION__, tagId, cstring);
+        return ret;
+    }
+    *result = enumValue;
+
+    return OK;
+}
+
+status_t getUInt8Value(const Json::Value& value, uint32_t tagId, uint8_t *result/*out*/) {
     if (result == nullptr) {
         return BAD_VALUE;
     }
 
     if (value.isString()) {
         errno = 0;
-        auto intValue = strtol(value.asCString(), nullptr, 10);
-        if ((intValue >= 0) && (intValue <= UINT8_MAX) && (errno == 0)) {
-            *result = intValue;
+        if (isDigit(value.asString())) {
+            auto intValue = strtol(value.asCString(), nullptr, 10);
+            if ((intValue >= 0) && (intValue <= UINT8_MAX) && (errno == 0)) {
+                *result = intValue;
+            } else {
+                return BAD_VALUE;
+            }
+        } else {
+            return getEnumValue(tagId, value.asCString(), result);
         }
-    } else if (value.isUInt()) {
-        *result = value.asUInt();
     } else {
-        ALOGE("%s: json type: %d doesn't match with byte tag type",
+        ALOGE("%s: Unexpected json type: %d! All value types are expected to be strings!",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
@@ -150,21 +185,25 @@ status_t getUInt8Value(const Json::Value& value, uint8_t *result/*out*/) {
     return OK;
 }
 
-status_t getInt32Value(const Json::Value& value, int32_t *result/*out*/) {
+status_t getInt32Value(const Json::Value& value, uint32_t tagId, int32_t *result/*out*/) {
     if (result == nullptr) {
         return BAD_VALUE;
     }
 
     if (value.isString()) {
         errno = 0;
-        auto intValue = strtol(value.asCString(), nullptr, 10);
-        if ((intValue >= INT32_MIN) && (intValue <= INT32_MAX) && (errno == 0)) {
-            *result = intValue;
+        if (isDigit(value.asString())) {
+            auto intValue = strtol(value.asCString(), nullptr, 10);
+            if ((intValue >= INT32_MIN) && (intValue <= INT32_MAX) && (errno == 0)) {
+                *result = intValue;
+            } else {
+                return BAD_VALUE;
+            }
+        } else {
+            return getEnumValue(tagId, value.asCString(), result);
         }
-    } else if (value.isInt()) {
-        *result = value.asInt();
     } else {
-        ALOGE("%s: json type: %d doesn't match with int32 tag type",
+        ALOGE("%s: Unexpected json type: %d! All value types are expected to be strings!",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
@@ -172,7 +211,7 @@ status_t getInt32Value(const Json::Value& value, int32_t *result/*out*/) {
     return OK;
 }
 
-status_t getInt64Value(const Json::Value& value, int64_t *result/*out*/) {
+status_t getInt64Value(const Json::Value& value, uint32_t /*tagId*/, int64_t *result/*out*/) {
     if (result == nullptr) {
         return BAD_VALUE;
     }
@@ -183,10 +222,8 @@ status_t getInt64Value(const Json::Value& value, int64_t *result/*out*/) {
         if ((intValue >= INT64_MIN) && (intValue <= INT64_MAX) && (errno == 0)) {
             *result = intValue;
         }
-    } else if (value.isInt64()) {
-        *result = value.asInt64();
     } else {
-        ALOGE("%s: json type: %d doesn't match with int64 tag type",
+        ALOGE("%s: Unexpected json type: %d! All value types are expected to be strings!",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
@@ -194,7 +231,7 @@ status_t getInt64Value(const Json::Value& value, int64_t *result/*out*/) {
     return OK;
 }
 
-status_t getFloatValue(const Json::Value& value, float *result/*out*/) {
+status_t getFloatValue(const Json::Value& value, uint32_t /*tagId*/, float *result/*out*/) {
     if (result == nullptr) {
         return BAD_VALUE;
     }
@@ -205,10 +242,8 @@ status_t getFloatValue(const Json::Value& value, float *result/*out*/) {
         if (errno == 0) {
             *result = floatValue;
         }
-    } else if (value.isDouble()) { //JsonCPP doesn't seem to support floats.
-        *result = value.asDouble();
     } else {
-        ALOGE("%s: json type: %d doesn't match with float tag type",
+        ALOGE("%s: Unexpected json type: %d! All value types are expected to be strings!",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
@@ -216,26 +251,53 @@ status_t getFloatValue(const Json::Value& value, float *result/*out*/) {
     return OK;
 }
 
-status_t getDoubleValue(const Json::Value& value, double *result/*out*/) {
+status_t getDoubleValue(const Json::Value& value, uint32_t /*tagId*/, double *result/*out*/) {
     if (result == nullptr) {
         return BAD_VALUE;
     }
 
     if (value.isString()) {
         errno = 0;
-        auto floatValue = strtod(value.asCString(), nullptr);
+        auto doubleValue = strtod(value.asCString(), nullptr);
         if (errno == 0) {
-            *result = floatValue;
+            *result = doubleValue;
         }
-    } else if (value.isDouble()) {
-        *result = value.asDouble();
     } else {
-        ALOGE("%s: json type: %d doesn't match with double tag type",
+        ALOGE("%s: Unexpected json type: %d! All value types are expected to be strings!",
                 __FUNCTION__, value.type());
         return BAD_VALUE;
     }
 
     return OK;
+}
+
+template<typename T>
+void filterVendorKeys(uint32_t tagId, std::vector<T> *values) {
+    if ((values == nullptr) || (values->empty())) {
+        return;
+    }
+
+    switch (tagId) {
+        case ANDROID_REQUEST_AVAILABLE_REQUEST_KEYS:
+        case ANDROID_REQUEST_AVAILABLE_RESULT_KEYS:
+        case ANDROID_REQUEST_AVAILABLE_SESSION_KEYS:
+        case ANDROID_REQUEST_AVAILABLE_CHARACTERISTICS_KEYS: {
+                auto it = values->begin();
+                while (it != values->end()) {
+                    // Per spec. the tags we are handling here will be "int32_t".
+                    // In this case all vendor defined values will be negative.
+                    if (*it < 0) {
+                        it = values->erase(it);
+                    } else {
+                        it++;
+                    }
+                }
+            }
+            break;
+        default:
+            // no-op
+            break;
+    }
 }
 
 template<typename T, typename funcType>
@@ -247,23 +309,19 @@ status_t insertTag(const Json::Value& jsonValue, uint32_t tagId, funcType getVal
 
     std::vector<T> values;
     T result;
-    status_t ret = OK;
-    if (jsonValue.isArray()) {
-        values.reserve(jsonValue.size());
-        for (const auto& val : jsonValue) {
-            ret = getValFunc(val, &result);
-            if (ret == OK) {
-                values.push_back(result);
-            }
+    status_t ret = -1;
+    values.reserve(jsonValue.size());
+    for (const auto& val : jsonValue) {
+        ret = getValFunc(val, tagId, &result);
+        if (ret != OK) {
+            break;
         }
-    } else {
-        ret = getValFunc(jsonValue, &result);
-        if (ret == OK) {
-            values.push_back(result);
-        }
+
+        values.push_back(result);
     }
 
     if (ret == OK) {
+        filterVendorKeys(tagId, &values);
         ret = meta->Set(tagId, values.data(), values.size());
     }
 
@@ -283,8 +341,8 @@ status_t insertRationalTag(const Json::Value& jsonValue, uint32_t tagId,
         auto it = jsonValue.begin();
         while (it != jsonValue.end()) {
             camera_metadata_rational_t result;
-            ret = getInt32Value((*it), &result.numerator); it++;
-            ret |= getInt32Value((*it), &result.denominator); it++;
+            ret = getInt32Value((*it), tagId, &result.numerator); it++;
+            ret |= getInt32Value((*it), tagId, &result.denominator); it++;
             if (ret != OK) {
                 break;
             }
