@@ -42,7 +42,7 @@ characteristics dictionary.
 """
 def parseCameraDump(deviceId, cameraDumpPath, chars):
     with open(cameraDumpPath, "r") as file:
-        cameraSection = "== Camera HAL device \w+@[0-9]+\.[0-9]+/{0}".format(deviceId)
+        cameraSection = "== Camera HAL device \w+@[0-9]+\.[0-9]+/{0} ".format(deviceId)
         devices = re.split(cameraSection, file.read())
         if len(devices) != 3:
             print "Camera device id: {0} not found".format(deviceId)

@@ -78,7 +78,7 @@ const float EmulatedSensor::kReadNoiseVarAfterGain =
 
 const uint32_t EmulatedSensor::kMaxRAWStreams = 1;
 const uint32_t EmulatedSensor::kMaxProcessedStreams = 3;
-const uint32_t EmulatedSensor::kMaxStallingStreams = 1;
+const uint32_t EmulatedSensor::kMaxStallingStreams = 2;
 
 const camera_metadata_rational EmulatedSensor::kDefaultColorTransform[9] =
         {{1, 1}, {0, 1}, {0, 1}, {0, 1}, {1, 1}, {0, 1}, {0, 1}, {0, 1}, {1, 1}};
@@ -484,8 +484,14 @@ bool EmulatedSensor::threadLoop() {
                     }
                     break;
                 case HAL_PIXEL_FORMAT_Y16:
-                    captureDepth((*b)->plane.img.img, settings.gain, (*b)->width,
-                            (*b)->plane.img.stride);
+                    if ((*b)->dataSpace == HAL_DATASPACE_DEPTH) {
+                        captureDepth((*b)->plane.img.img, settings.gain, (*b)->width, (*b)->height,
+                                (*b)->plane.img.stride);
+                    } else {
+                        ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__, (*b)->format,
+                                (*b)->dataSpace);
+                        (*b)->streamBuffer.status = BufferStatus::kError;
+                    }
                     break;
                 default:
                     ALOGE("%s: Unknown format %x, no output", __FUNCTION__, (*b)->format);
@@ -677,17 +683,19 @@ void EmulatedSensor::captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t
     ALOGVV("NV21 sensor image captured");
 }
 
-void EmulatedSensor::captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride) {
+void EmulatedSensor::captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height,
+        uint32_t stride) {
     ATRACE_CALL();
     float totalGain = gain / 100.0 * kBaseGainFactor;
     // In fixed-point math, calculate scaling factor to 13bpp millimeters
     int scale64x = 64 * totalGain * 8191 / mChars.maxRawValue;
-    uint32_t inc = ceil((float)mChars.width / width);
+    uint32_t incH = ceil((float)mChars.width / width);
+    uint32_t incV = ceil((float)mChars.height / height);
 
-    for (unsigned int y = 0, outY = 0; y < mChars.height; y += inc, outY++) {
+    for (unsigned int y = 0, outY = 0; y < mChars.height; y += incV, outY++) {
         mScene->setReadoutPixel(0, y);
         uint16_t *px = ((uint16_t *)img) + outY * stride;
-        for (unsigned int x = 0; x < mChars.width; x += inc) {
+        for (unsigned int x = 0; x < mChars.width; x += incH) {
             uint32_t depthCount;
             // TODO: Make up real depth scene instead of using green channel
             // as depth
@@ -695,7 +703,7 @@ void EmulatedSensor::captureDepth(uint8_t *img, uint32_t gain, uint32_t width, u
             depthCount = pixel[EmulatedScene::Gr] * scale64x;
 
             *px++ = depthCount < 8191 * 64 ? depthCount / 64 : 0;
-            for (unsigned int j = 1; j < inc; j++) mScene->getPixelElectrons();
+            for (unsigned int j = 1; j < incH; j++) mScene->getPixelElectrons();
         }
         // TODO: Handle this better
         // simulatedTime += mRowReadoutTime;

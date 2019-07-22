@@ -72,6 +72,18 @@ public:
 
 private:
 
+    void appendAvailableStreamConfigurations(const camera_metadata_ro_entry& entry);
+    void appendAvailableStreamMinDurations(const camera_metadata_ro_entry_t& entry);
+    void appendAvailableStreamStallDurations(const camera_metadata_ro_entry& entry);
+
+    const size_t kStreamFormatOffset = 0;
+    const size_t kStreamWidthOffset = 1;
+    const size_t kStreamHeightOffset = 2;
+    const size_t kStreamIsInputOffset = 3;
+    const size_t kStreamMinDurationOffset = 3;
+    const size_t kStreamStallDurationOffset = 3;
+    const size_t kStreamConfigurationSize = 4;
+
     std::set<android_pixel_format_t> mStreamOutputFormats;
     std::unordered_map<android_pixel_format_t, std::set<StreamSize>> mStreamOutputSizeMap;
     std::unordered_map<StreamConfig, nsecs_t, StreamConfigurationHash> mStreamStallMap;

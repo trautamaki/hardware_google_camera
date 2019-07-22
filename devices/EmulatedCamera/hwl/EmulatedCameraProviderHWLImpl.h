@@ -63,7 +63,7 @@ private:
     status_t parseCharacteristics(const Json::Value& root);
     status_t getTagFromName(const char *name, uint32_t *tag);
 
-    static const char* kConfigurationFileLocation;
+    static const char* kConfigurationFileLocation[];
     static const char* kCameraDefinitionsKey;
 
     std::vector<std::unique_ptr<HalCameraMetadata>> mStaticMetadata;

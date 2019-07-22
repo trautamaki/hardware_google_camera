@@ -31,8 +31,10 @@
 namespace android {
 
 // Location of the camera configuration files.
-const char* EmulatedCameraProviderHwlImpl::kConfigurationFileLocation =
-        "/vendor/etc/config/camera.json";
+const char* EmulatedCameraProviderHwlImpl::kConfigurationFileLocation [] = {
+        "/vendor/etc/config/camera.json",
+        "/vendor/etc/config/camera_depth.json",
+};
 
 // Array of camera definitions for all cameras available on the device (array).
 // Top Level Key.
@@ -427,21 +429,27 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
 
 status_t EmulatedCameraProviderHwlImpl::initialize() {
     std::string config;
-    if (!android::base::ReadFileToString(kConfigurationFileLocation, &config)) {
-        ALOGE("%s: Could not open configuration file: %s", __FUNCTION__,
-                kConfigurationFileLocation);
-        return false;
+    for (const auto& configPath : kConfigurationFileLocation) {
+        if (!android::base::ReadFileToString(configPath, &config)) {
+            ALOGW("%s: Could not open configuration file: %s", __FUNCTION__, configPath);
+            continue;
+        }
+
+        Json::Reader configReader;
+        Json::Value root;
+        if (!configReader.parse(config, root)) {
+            ALOGE("Could not parse configuration file: %s",
+                    configReader.getFormattedErrorMessages().c_str());
+            return BAD_VALUE;
+        }
+
+        auto ret =  parseCharacteristics(root);
+        if (ret != OK) {
+            return ret;
+        }
     }
 
-    Json::Reader configReader;
-    Json::Value root;
-    if (!configReader.parse(config, root)) {
-        ALOGE("Could not parse configuration file: %s",
-                configReader.getFormattedErrorMessages().c_str());
-        return BAD_VALUE;
-    }
-
-    return parseCharacteristics(root);
+    return OK;
 }
 
 status_t EmulatedCameraProviderHwlImpl::SetCallback(

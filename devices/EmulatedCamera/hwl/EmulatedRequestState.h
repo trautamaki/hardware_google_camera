@@ -236,6 +236,14 @@ private:
     std::set<uint8_t> mAvailableOISModes;
     uint8_t mOISMode = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_OFF;
     bool mReportOISMode = false;
+    float mPoseRotation[5] = {.0f};
+    float mPoseTranslation[3] = {.0f};
+    float mDistortion[5] = {.0f};
+    float mIntrinsicCalibration[5] = {.0f};
+    bool mReportPoseRotation = false;
+    bool mReportPoseTranslation = false;
+    bool mReportDistortion = false;
+    bool mReportIntrinsicCalibration = false;
 
     //android.hotpixel.*
     std::set<uint8_t> mAvailableHotPixelModes;

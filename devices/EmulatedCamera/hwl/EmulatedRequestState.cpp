@@ -34,6 +34,7 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_RAW,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_READ_SENSOR_SETTINGS,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BURST_CAPTURE,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT,
     //TODO: Support more capabilities out-of-the box
 };
 
@@ -709,6 +710,22 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(
     if (mReportOISMode) {
         result->result_metadata->Set(ANDROID_LENS_OPTICAL_STABILIZATION_MODE, &mOISMode, 1);
     }
+    if (mReportPoseRotation) {
+        result->result_metadata->Set(ANDROID_LENS_POSE_ROTATION, mPoseRotation,
+                ARRAY_SIZE(mPoseRotation));
+    }
+    if (mReportPoseTranslation) {
+        result->result_metadata->Set(ANDROID_LENS_POSE_TRANSLATION, mPoseTranslation,
+                ARRAY_SIZE(mPoseTranslation));
+    }
+    if (mReportIntrinsicCalibration) {
+        result->result_metadata->Set(ANDROID_LENS_INTRINSIC_CALIBRATION, mIntrinsicCalibration,
+                ARRAY_SIZE(mIntrinsicCalibration));
+    }
+    if (mReportDistortion) {
+        result->result_metadata->Set(ANDROID_LENS_DISTORTION, mDistortion,
+                ARRAY_SIZE(mDistortion));
+    }
     if (mReportBlackLevelLock) {
         result->result_metadata->Set(ANDROID_BLACK_LEVEL_LOCK, &mBlackLevelLock, 1);
     }
@@ -964,15 +981,13 @@ status_t EmulatedRequestState::initializeControlAFDefaults() {
         return BAD_VALUE;
     }
 
-    if (mIsBackwardCompatible) {
-        if (mAvailableRequests.find(ANDROID_CONTROL_AF_TRIGGER) == mAvailableRequests.end()) {
-            ALOGE("%s: Clients must be able to set AF trigger!", __FUNCTION__);
-            return BAD_VALUE;
-        }
-        if (mAvailableResults.find(ANDROID_CONTROL_AF_TRIGGER) == mAvailableResults.end()) {
-            ALOGE("%s: AF trigger must be reported!", __FUNCTION__);
-            return BAD_VALUE;
-        }
+    if (mAvailableRequests.find(ANDROID_CONTROL_AF_TRIGGER) == mAvailableRequests.end()) {
+        ALOGE("%s: Clients must be able to set AF trigger!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+    if (mAvailableResults.find(ANDROID_CONTROL_AF_TRIGGER) == mAvailableResults.end()) {
+        ALOGE("%s: AF trigger must be reported!", __FUNCTION__);
+        return BAD_VALUE;
     }
 
     if (mAvailableResults.find(ANDROID_CONTROL_AF_MODE) == mAvailableResults.end()) {
@@ -1115,89 +1130,51 @@ status_t EmulatedRequestState::initializeControlAEDefaults() {
         }
     }
 
-    if (mIsBackwardCompatible) {
-        if (mAvailableRequests.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) ==
-                mAvailableRequests.end()) {
-            ALOGE("%s: Clients must be able to set AE pre-capture trigger!", __FUNCTION__);
-            return BAD_VALUE;
-        }
-
-        if (mAvailableResults.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) ==
-                mAvailableResults.end()) {
-            ALOGE("%s: AE pre-capture trigger must be reported!", __FUNCTION__);
-            return BAD_VALUE;
-        }
-
-        ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_AVAILABLE_ANTIBANDING_MODES, &entry);
-        if (ret == OK) {
-            mAvailableAntibandingModes.insert(entry.data.u8, entry.data.u8 + entry.count);
-        } else {
-            ALOGE("%s: No available antibanding modes!", __FUNCTION__);
-            return BAD_VALUE;
-        }
-
-        ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_COMPENSATION_RANGE, &entry);
-        if ((ret == OK) && (entry.count == 2)) {
-            mExposureCompensationRange[0] = entry.data.i32[0];
-            mExposureCompensationRange[1] = entry.data.i32[1];
-        } else {
-            ALOGE("%s: No available exposure compensation range!", __FUNCTION__);
-            return BAD_VALUE;
-        }
-
-        ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_COMPENSATION_STEP, &entry);
-        if ((ret == OK) && (entry.count == 1)) {
-            mExposureCompensationStep = entry.data.r[0];
-        } else {
-            ALOGE("%s: No available exposure compensation step!", __FUNCTION__);
-            return BAD_VALUE;
-        }
-
-        bool aeCompRequests = mAvailableRequests.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) !=
-                mAvailableRequests.end();
-        bool aeCompResults = mAvailableResults.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) !=
-                mAvailableResults.end();
-        mExposureCompensationSupported = ((mExposureCompensationRange[0] < 0) &&
-                (mExposureCompensationRange[1] > 0) &&
-                (mExposureCompensationStep.denominator > 0) &&
-                (mExposureCompensationStep.numerator > 0)) && aeCompResults && aeCompRequests;
+    if (mAvailableRequests.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) ==
+            mAvailableRequests.end()) {
+        ALOGE("%s: Clients must be able to set AE pre-capture trigger!", __FUNCTION__);
+        return BAD_VALUE;
     }
 
-    ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES, &entry);
-    if ((ret == OK) && ((entry.count % 2) == 0)) {
-        mAvailableFPSRanges.reserve(entry.count / 2);
-        for (size_t i = 0; i < entry.count; i += 2) {
-            FPSRange range(entry.data.i32[i], entry.data.i32[i+1]);
-            if (range.minFPS > range.maxFPS) {
-                ALOGE("%s: Mininum framerate: %d bigger than maximum framerate: %d", __FUNCTION__,
-                        range.minFPS, range.maxFPS);
-                return BAD_VALUE;
-            }
-            if ((range.maxFPS >= kMinimumStreamingFPS) && (range.maxFPS == range.minFPS) &&
-                    (mAETargetFPS.maxFPS == 0)) {
-                mAETargetFPS = range;
-            }
-            mAvailableFPSRanges.push_back(range);
-        }
+    if (mAvailableResults.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) ==
+            mAvailableResults.end()) {
+        ALOGE("%s: AE pre-capture trigger must be reported!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_AVAILABLE_ANTIBANDING_MODES, &entry);
+    if (ret == OK) {
+        mAvailableAntibandingModes.insert(entry.data.u8, entry.data.u8 + entry.count);
     } else {
-        ALOGE("%s: No available framerate ranges!", __FUNCTION__);
+        ALOGE("%s: No available antibanding modes!", __FUNCTION__);
         return BAD_VALUE;
     }
 
-    if (mAETargetFPS.maxFPS == 0) {
-        ALOGE("%s: No minimum streaming capable framerate range available!", __FUNCTION__);
+    ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_COMPENSATION_RANGE, &entry);
+    if ((ret == OK) && (entry.count == 2)) {
+        mExposureCompensationRange[0] = entry.data.i32[0];
+        mExposureCompensationRange[1] = entry.data.i32[1];
+    } else {
+        ALOGE("%s: No available exposure compensation range!", __FUNCTION__);
         return BAD_VALUE;
     }
 
-    if (mAvailableRequests.find(ANDROID_CONTROL_AE_TARGET_FPS_RANGE) == mAvailableRequests.end()) {
-        ALOGE("%s: Clients must be able to set the target framerate range!", __FUNCTION__);
+    ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_COMPENSATION_STEP, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+        mExposureCompensationStep = entry.data.r[0];
+    } else {
+        ALOGE("%s: No available exposure compensation step!", __FUNCTION__);
         return BAD_VALUE;
     }
 
-    if (mAvailableResults.find(ANDROID_CONTROL_AE_TARGET_FPS_RANGE) == mAvailableResults.end()) {
-        ALOGE("%s: Target framerate must be reported!", __FUNCTION__);
-        return BAD_VALUE;
-    }
+    bool aeCompRequests = mAvailableRequests.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) !=
+        mAvailableRequests.end();
+    bool aeCompResults = mAvailableResults.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) !=
+        mAvailableResults.end();
+    mExposureCompensationSupported = ((mExposureCompensationRange[0] < 0) &&
+            (mExposureCompensationRange[1] > 0) &&
+            (mExposureCompensationStep.denominator > 0) &&
+            (mExposureCompensationStep.numerator > 0)) && aeCompResults && aeCompRequests;
 
     return OK;
 }
@@ -1248,17 +1225,53 @@ status_t EmulatedRequestState::initializeControlDefaults() {
         return BAD_VALUE;
     }
 
-    ret = mStaticMetadata->Get(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST, &entry);
-    if (ret == OK) {
-        mPostRawBoost = entry.data.i32[0];
+    ret = mStaticMetadata->Get(ANDROID_CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES, &entry);
+    if ((ret == OK) && ((entry.count % 2) == 0)) {
+        mAvailableFPSRanges.reserve(entry.count / 2);
+        for (size_t i = 0; i < entry.count; i += 2) {
+            FPSRange range(entry.data.i32[i], entry.data.i32[i+1]);
+            if (range.minFPS > range.maxFPS) {
+                ALOGE("%s: Mininum framerate: %d bigger than maximum framerate: %d", __FUNCTION__,
+                        range.minFPS, range.maxFPS);
+                return BAD_VALUE;
+            }
+            if ((range.maxFPS >= kMinimumStreamingFPS) && (range.maxFPS == range.minFPS) &&
+                    (mAETargetFPS.maxFPS == 0)) {
+                mAETargetFPS = range;
+            }
+            mAvailableFPSRanges.push_back(range);
+        }
     } else {
-        ALOGW("%s: No available post RAW boost! Setting default!", __FUNCTION__);
-        mPostRawBoost = 100;
+        ALOGE("%s: No available framerate ranges!", __FUNCTION__);
+        return BAD_VALUE;
     }
-    mReportPostRawBoost = mAvailableResults.find(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST) !=
-                    mAvailableResults.end();
+
+    if (mAETargetFPS.maxFPS == 0) {
+        ALOGE("%s: No minimum streaming capable framerate range available!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    if (mAvailableRequests.find(ANDROID_CONTROL_AE_TARGET_FPS_RANGE) == mAvailableRequests.end()) {
+        ALOGE("%s: Clients must be able to set the target framerate range!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    if (mAvailableResults.find(ANDROID_CONTROL_AE_TARGET_FPS_RANGE) == mAvailableResults.end()) {
+        ALOGE("%s: Target framerate must be reported!", __FUNCTION__);
+        return BAD_VALUE;
+    }
 
     if (mIsBackwardCompatible) {
+        ret = mStaticMetadata->Get(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST, &entry);
+        if (ret == OK) {
+            mPostRawBoost = entry.data.i32[0];
+        } else {
+            ALOGW("%s: No available post RAW boost! Setting default!", __FUNCTION__);
+            mPostRawBoost = 100;
+        }
+        mReportPostRawBoost = mAvailableResults.find(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST) !=
+            mAvailableResults.end();
+
         ret = mStaticMetadata->Get(ANDROID_CONTROL_AVAILABLE_EFFECTS, &entry);
         if ((ret == OK) && (entry.count > 0)) {
             mAvailableEffects.insert(entry.data.u8, entry.data.u8 + entry.count);
@@ -1323,26 +1336,26 @@ status_t EmulatedRequestState::initializeControlDefaults() {
                 return ret;
             }
         }
-    }
 
-    ret = initializeControlAEDefaults();
-    if (ret != OK) {
-        return ret;
-    }
+        ret = initializeControlAEDefaults();
+        if (ret != OK) {
+            return ret;
+        }
 
-    ret = initializeControlAWBDefaults();
-    if (ret != OK) {
-        return ret;
-    }
+        ret = initializeControlAWBDefaults();
+        if (ret != OK) {
+            return ret;
+        }
 
-    ret = initializeControlAFDefaults();
-    if (ret != OK) {
-        return ret;
-    }
+        ret = initializeControlAFDefaults();
+        if (ret != OK) {
+            return ret;
+        }
 
-    ret = initializeControlSceneDefaults();
-    if (ret != OK) {
-        return ret;
+        ret = initializeControlSceneDefaults();
+        if (ret != OK) {
+            return ret;
+        }
     }
 
     for (size_t idx = 0; idx < kTemplateCount; idx++) {
@@ -1402,22 +1415,22 @@ status_t EmulatedRequestState::initializeControlDefaults() {
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_CAPTURE_INTENT, &intent, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_MODE, &controlMode, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_MODE, &aeMode, 1);
+            mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_TARGET_FPS_RANGE, aeTargetFPS,
+                        ARRAY_SIZE(aeTargetFPS));
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AWB_MODE, &awbMode, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AF_MODE, &afMode, 1);
-            mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_TARGET_FPS_RANGE, aeTargetFPS,
-                    ARRAY_SIZE(aeTargetFPS));
-            mDefaultRequests[idx]->Set(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST, &mPostRawBoost,
-                    1);
-            if (mAELockAvailable) {
-                mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_LOCK, &aeLock, 1);
-            }
-            if (mAWBLockAvailable) {
-                mDefaultRequests[idx]->Set(ANDROID_CONTROL_AWB_LOCK, &awbLock, 1);
-            }
-            if (mScenesSupported) {
-                mDefaultRequests[idx]->Set(ANDROID_CONTROL_SCENE_MODE, &sceneMode, 1);
-            }
             if (mIsBackwardCompatible) {
+                mDefaultRequests[idx]->Set(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST, &mPostRawBoost,
+                        1);
+                if (mAELockAvailable) {
+                    mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_LOCK, &aeLock, 1);
+                }
+                if (mAWBLockAvailable) {
+                    mDefaultRequests[idx]->Set(ANDROID_CONTROL_AWB_LOCK, &awbLock, 1);
+                }
+                if (mScenesSupported) {
+                    mDefaultRequests[idx]->Set(ANDROID_CONTROL_SCENE_MODE, &sceneMode, 1);
+                }
                 if (mMaxAERegions > 0) {
                     mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_REGIONS, meteringArea,
                             ARRAY_SIZE(meteringArea));
@@ -1454,104 +1467,108 @@ status_t EmulatedRequestState::initializeControlDefaults() {
 }
 
 status_t EmulatedRequestState::initializeTonemapDefaults() {
-    camera_metadata_ro_entry_t entry;
-    auto ret = mStaticMetadata->Get(ANDROID_TONEMAP_AVAILABLE_TONE_MAP_MODES, &entry);
-    if (ret == OK) {
-        mAvailableTonemapModes.insert(entry.data.u8, entry.data.u8 + entry.count);
-    } else {
-        ALOGE("%s: No available tonemap modes!", __FUNCTION__);
-        return BAD_VALUE;
-    }
-
-    if ((mSupportedHWLevel >= ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) &&
-            (mAvailableTonemapModes.size() < 3)){
-        ALOGE("%s: Full and higher level cameras must support at least three or more tonemap modes",
-                 __FUNCTION__);
-        return BAD_VALUE;
-    }
-
-    bool fastModeSupported = mAvailableTonemapModes.find(ANDROID_TONEMAP_MODE_FAST) !=
-            mAvailableTonemapModes.end();
-    bool hqModeSupported = mAvailableTonemapModes.find(ANDROID_TONEMAP_MODE_HIGH_QUALITY) !=
-            mAvailableTonemapModes.end();
-    uint8_t tonemapMode = *mAvailableTonemapModes.begin();
-    for (size_t idx = 0; idx < kTemplateCount; idx++) {
-        if (mDefaultRequests[idx].get() == nullptr) {
-            continue;
+    if (mIsBackwardCompatible) {
+        camera_metadata_ro_entry_t entry;
+        auto ret = mStaticMetadata->Get(ANDROID_TONEMAP_AVAILABLE_TONE_MAP_MODES, &entry);
+        if (ret == OK) {
+            mAvailableTonemapModes.insert(entry.data.u8, entry.data.u8 + entry.count);
+        } else {
+            ALOGE("%s: No available tonemap modes!", __FUNCTION__);
+            return BAD_VALUE;
         }
 
-        switch(static_cast<RequestTemplate>(idx)) {
-            case RequestTemplate::kVideoRecord: // Pass-through
-            case RequestTemplate::kPreview:
-                if (fastModeSupported) {
-                    tonemapMode = ANDROID_TONEMAP_MODE_FAST;
-                }
-                break;
-            case RequestTemplate::kVideoSnapshot: // Pass-through
-            case RequestTemplate::kStillCapture:
-                if (hqModeSupported) {
-                    tonemapMode = ANDROID_TONEMAP_MODE_HIGH_QUALITY;
-                }
-                break;
-            default:
-                //Noop
-                break;
+        if ((mSupportedHWLevel >= ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) &&
+                (mAvailableTonemapModes.size() < 3)){
+            ALOGE("%s: Full and higher level cameras must support at least three or more tonemap modes",
+                    __FUNCTION__);
+            return BAD_VALUE;
         }
 
-        mDefaultRequests[idx]->Set(ANDROID_TONEMAP_MODE, &tonemapMode, 1);
-        mDefaultRequests[idx]->Set(ANDROID_TONEMAP_CURVE_RED,
-                EmulatedSensor::kDefaultToneMapCurveRed,
-                ARRAY_SIZE(EmulatedSensor::kDefaultToneMapCurveRed));
-        mDefaultRequests[idx]->Set(ANDROID_TONEMAP_CURVE_GREEN,
-                EmulatedSensor::kDefaultToneMapCurveGreen,
-                ARRAY_SIZE(EmulatedSensor::kDefaultToneMapCurveGreen));
-        mDefaultRequests[idx]->Set(ANDROID_TONEMAP_CURVE_BLUE,
-                EmulatedSensor::kDefaultToneMapCurveBlue,
-                ARRAY_SIZE(EmulatedSensor::kDefaultToneMapCurveBlue));
+        bool fastModeSupported = mAvailableTonemapModes.find(ANDROID_TONEMAP_MODE_FAST) !=
+            mAvailableTonemapModes.end();
+        bool hqModeSupported = mAvailableTonemapModes.find(ANDROID_TONEMAP_MODE_HIGH_QUALITY) !=
+            mAvailableTonemapModes.end();
+        uint8_t tonemapMode = *mAvailableTonemapModes.begin();
+        for (size_t idx = 0; idx < kTemplateCount; idx++) {
+            if (mDefaultRequests[idx].get() == nullptr) {
+                continue;
+            }
+
+            switch(static_cast<RequestTemplate>(idx)) {
+                case RequestTemplate::kVideoRecord: // Pass-through
+                case RequestTemplate::kPreview:
+                    if (fastModeSupported) {
+                        tonemapMode = ANDROID_TONEMAP_MODE_FAST;
+                    }
+                    break;
+                case RequestTemplate::kVideoSnapshot: // Pass-through
+                case RequestTemplate::kStillCapture:
+                    if (hqModeSupported) {
+                        tonemapMode = ANDROID_TONEMAP_MODE_HIGH_QUALITY;
+                    }
+                    break;
+                default:
+                    //Noop
+                    break;
+            }
+
+            mDefaultRequests[idx]->Set(ANDROID_TONEMAP_MODE, &tonemapMode, 1);
+            mDefaultRequests[idx]->Set(ANDROID_TONEMAP_CURVE_RED,
+                    EmulatedSensor::kDefaultToneMapCurveRed,
+                    ARRAY_SIZE(EmulatedSensor::kDefaultToneMapCurveRed));
+            mDefaultRequests[idx]->Set(ANDROID_TONEMAP_CURVE_GREEN,
+                    EmulatedSensor::kDefaultToneMapCurveGreen,
+                    ARRAY_SIZE(EmulatedSensor::kDefaultToneMapCurveGreen));
+            mDefaultRequests[idx]->Set(ANDROID_TONEMAP_CURVE_BLUE,
+                    EmulatedSensor::kDefaultToneMapCurveBlue,
+                    ARRAY_SIZE(EmulatedSensor::kDefaultToneMapCurveBlue));
+        }
     }
 
     return initializeStatisticsDefaults();
 }
 
 status_t EmulatedRequestState::initializeEdgeDefaults() {
-    camera_metadata_ro_entry_t entry;
-    auto ret = mStaticMetadata->Get(ANDROID_EDGE_AVAILABLE_EDGE_MODES, &entry);
-    if (ret == OK) {
-        mAvailableEdgeModes.insert(entry.data.u8, entry.data.u8 + entry.count);
-    } else {
-        ALOGE("%s: No available edge modes!", __FUNCTION__);
-        return BAD_VALUE;
-    }
-
-    bool isFastModeSupported = mAvailableEdgeModes.find(ANDROID_EDGE_MODE_FAST) !=
-            mAvailableEdgeModes.end();
-    bool isHQModeSupported = mAvailableEdgeModes.find(ANDROID_EDGE_MODE_HIGH_QUALITY) !=
-            mAvailableEdgeModes.end();
-    uint8_t edgeMode = *mAvailableAEModes.begin();
-    for (size_t idx = 0; idx < kTemplateCount; idx++) {
-        if (mDefaultRequests[idx].get() == nullptr) {
-            continue;
+    if (mIsBackwardCompatible) {
+        camera_metadata_ro_entry_t entry;
+        auto ret = mStaticMetadata->Get(ANDROID_EDGE_AVAILABLE_EDGE_MODES, &entry);
+        if (ret == OK) {
+            mAvailableEdgeModes.insert(entry.data.u8, entry.data.u8 + entry.count);
+        } else {
+            ALOGE("%s: No available edge modes!", __FUNCTION__);
+            return BAD_VALUE;
         }
 
-        switch(static_cast<RequestTemplate>(idx)) {
-            case RequestTemplate::kVideoRecord: // Pass-through
-            case RequestTemplate::kPreview:
-                if (isFastModeSupported) {
-                    edgeMode = ANDROID_EDGE_MODE_FAST;
-                }
-                break;
-            case RequestTemplate::kVideoSnapshot: // Pass-through
-            case RequestTemplate::kStillCapture:
-                if (isHQModeSupported) {
-                    edgeMode = ANDROID_EDGE_MODE_HIGH_QUALITY;
-                }
-                break;
-            default:
-                //Noop
-                break;
-        }
+        bool isFastModeSupported = mAvailableEdgeModes.find(ANDROID_EDGE_MODE_FAST) !=
+            mAvailableEdgeModes.end();
+        bool isHQModeSupported = mAvailableEdgeModes.find(ANDROID_EDGE_MODE_HIGH_QUALITY) !=
+            mAvailableEdgeModes.end();
+        uint8_t edgeMode = *mAvailableAEModes.begin();
+        for (size_t idx = 0; idx < kTemplateCount; idx++) {
+            if (mDefaultRequests[idx].get() == nullptr) {
+                continue;
+            }
 
-        mDefaultRequests[idx]->Set(ANDROID_EDGE_MODE, &edgeMode, 1);
+            switch(static_cast<RequestTemplate>(idx)) {
+                case RequestTemplate::kVideoRecord: // Pass-through
+                case RequestTemplate::kPreview:
+                    if (isFastModeSupported) {
+                        edgeMode = ANDROID_EDGE_MODE_FAST;
+                    }
+                    break;
+                case RequestTemplate::kVideoSnapshot: // Pass-through
+                case RequestTemplate::kStillCapture:
+                    if (isHQModeSupported) {
+                        edgeMode = ANDROID_EDGE_MODE_HIGH_QUALITY;
+                    }
+                    break;
+                default:
+                    //Noop
+                    break;
+            }
+
+            mDefaultRequests[idx]->Set(ANDROID_EDGE_MODE, &edgeMode, 1);
+        }
     }
 
     return initializeShadingDefaults();
@@ -1559,7 +1576,8 @@ status_t EmulatedRequestState::initializeEdgeDefaults() {
 
 status_t EmulatedRequestState::initializeColorCorrectionDefaults() {
     camera_metadata_ro_entry_t entry;
-    auto ret = mStaticMetadata->Get(ANDROID_COLOR_CORRECTION_AVAILABLE_ABERRATION_MODES, &entry);
+    auto ret = mStaticMetadata->Get(ANDROID_COLOR_CORRECTION_AVAILABLE_ABERRATION_MODES,
+            &entry);
     if (ret == OK) {
         mAvailableColorAberrationModes.insert(entry.data.u8, entry.data.u8 + entry.count);
     } else if (mSupportsManualPostProcessing) {
@@ -1571,10 +1589,10 @@ status_t EmulatedRequestState::initializeColorCorrectionDefaults() {
     if (!mAvailableColorAberrationModes.empty()) {
         bool isFastModeSupported = mAvailableColorAberrationModes.find(
                 ANDROID_COLOR_CORRECTION_ABERRATION_MODE_FAST) !=
-                mAvailableColorAberrationModes.end();
+            mAvailableColorAberrationModes.end();
         bool isHQModeSupported = mAvailableColorAberrationModes.find(
                 ANDROID_COLOR_CORRECTION_ABERRATION_MODE_HIGH_QUALITY) !=
-                mAvailableColorAberrationModes.end();
+            mAvailableColorAberrationModes.end();
         uint8_t colorAberration = *mAvailableColorAberrationModes.begin();
         uint8_t colorCorrectionMode = ANDROID_COLOR_CORRECTION_MODE_FAST;
         for (size_t idx = 0; idx < kTemplateCount; idx++) {
@@ -1600,15 +1618,17 @@ status_t EmulatedRequestState::initializeColorCorrectionDefaults() {
                     break;
             }
 
-            mDefaultRequests[idx]->Set(ANDROID_COLOR_CORRECTION_ABERRATION_MODE, &colorAberration,
-                    1);
-            mDefaultRequests[idx]->Set(ANDROID_COLOR_CORRECTION_MODE, &colorCorrectionMode, 1);
-            mDefaultRequests[idx]->Set(ANDROID_COLOR_CORRECTION_TRANSFORM,
-                    EmulatedSensor::kDefaultColorTransform,
-                    ARRAY_SIZE(EmulatedSensor::kDefaultColorTransform));
-            mDefaultRequests[idx]->Set(ANDROID_COLOR_CORRECTION_GAINS,
-                    EmulatedSensor::kDefaultColorCorrectionGains,
-                    ARRAY_SIZE(EmulatedSensor::kDefaultColorCorrectionGains));
+            mDefaultRequests[idx]->Set(ANDROID_COLOR_CORRECTION_ABERRATION_MODE,
+                    &colorAberration, 1);
+            if (mIsBackwardCompatible) {
+                mDefaultRequests[idx]->Set(ANDROID_COLOR_CORRECTION_MODE, &colorCorrectionMode, 1);
+                mDefaultRequests[idx]->Set(ANDROID_COLOR_CORRECTION_TRANSFORM,
+                        EmulatedSensor::kDefaultColorTransform,
+                        ARRAY_SIZE(EmulatedSensor::kDefaultColorTransform));
+                mDefaultRequests[idx]->Set(ANDROID_COLOR_CORRECTION_GAINS,
+                        EmulatedSensor::kDefaultColorCorrectionGains,
+                        ARRAY_SIZE(EmulatedSensor::kDefaultColorCorrectionGains));
+            }
         }
     }
 
@@ -1883,6 +1903,24 @@ status_t EmulatedRequestState::initializeLensDefaults() {
         return BAD_VALUE;
     }
 
+    ret = mStaticMetadata->Get(ANDROID_LENS_POSE_ROTATION, &entry);
+    if ((ret == OK) && (entry.count == ARRAY_SIZE(mPoseRotation))) {
+        memcpy(mPoseRotation, entry.data.f, ARRAY_SIZE(mPoseRotation));
+    }
+    ret = mStaticMetadata->Get(ANDROID_LENS_POSE_TRANSLATION, &entry);
+    if ((ret == OK) && (entry.count == ARRAY_SIZE(mPoseTranslation))) {
+        memcpy(mPoseTranslation, entry.data.f, ARRAY_SIZE(mPoseTranslation));
+    }
+    ret = mStaticMetadata->Get(ANDROID_LENS_INTRINSIC_CALIBRATION, &entry);
+    if ((ret == OK) && (entry.count == ARRAY_SIZE(mIntrinsicCalibration))) {
+        memcpy(mIntrinsicCalibration, entry.data.f, ARRAY_SIZE(mIntrinsicCalibration));
+    }
+
+    ret = mStaticMetadata->Get(ANDROID_LENS_DISTORTION, &entry);
+    if ((ret == OK) && (entry.count == ARRAY_SIZE(mDistortion))) {
+        memcpy(mDistortion, entry.data.f, ARRAY_SIZE(mDistortion));
+    }
+
     mReportFocusDistance = mAvailableResults.find(ANDROID_LENS_FOCUS_DISTANCE) !=
             mAvailableResults.end();
     mReportFocusRange = mAvailableResults.find(ANDROID_LENS_FOCUS_RANGE) !=
@@ -1891,6 +1929,13 @@ status_t EmulatedRequestState::initializeLensDefaults() {
             mAvailableResults.end();
     mReportOISMode = mAvailableResults.find(ANDROID_LENS_OPTICAL_STABILIZATION_MODE) !=
             mAvailableResults.end();
+    mReportPoseRotation = mAvailableResults.find(ANDROID_LENS_POSE_ROTATION) !=
+            mAvailableResults.end();
+    mReportPoseTranslation = mAvailableResults.find(ANDROID_LENS_POSE_TRANSLATION) !=
+            mAvailableResults.end();
+    mReportIntrinsicCalibration = mAvailableResults.find(ANDROID_LENS_INTRINSIC_CALIBRATION) !=
+            mAvailableResults.end();
+    mReportDistortion = mAvailableResults.find(ANDROID_LENS_DISTORTION) != mAvailableResults.end();
 
     mFocusDistance = mMinimumFocusDistance;
     for (size_t idx = 0; idx < kTemplateCount; idx++) {
@@ -1996,19 +2041,17 @@ status_t EmulatedRequestState::initializeRequestDefaults() {
         mDefaultRequests[templateIdx] = HalCameraMetadata::Create(1, 10);
     }
 
-    if (mIsBackwardCompatible) {
-        for (size_t templateIdx = 0; templateIdx < kTemplateCount; templateIdx++) {
-            switch(static_cast<RequestTemplate> (templateIdx)) {
-                case RequestTemplate::kPreview:
-                case RequestTemplate::kStillCapture:
-                case RequestTemplate::kVideoRecord:
-                case RequestTemplate::kVideoSnapshot:
-                    mDefaultRequests[templateIdx] = HalCameraMetadata::Create(1, 10);
-                    break;
-                default:
-                    //Noop
-                    break;
-            }
+    for (size_t templateIdx = 0; templateIdx < kTemplateCount; templateIdx++) {
+        switch(static_cast<RequestTemplate> (templateIdx)) {
+            case RequestTemplate::kPreview:
+            case RequestTemplate::kStillCapture:
+            case RequestTemplate::kVideoRecord:
+            case RequestTemplate::kVideoSnapshot:
+                mDefaultRequests[templateIdx] = HalCameraMetadata::Create(1, 10);
+                break;
+            default:
+                //Noop
+                break;
         }
     }
 

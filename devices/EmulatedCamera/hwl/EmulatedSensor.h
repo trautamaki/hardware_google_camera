@@ -240,7 +240,8 @@ private:
     void captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
             RGBLayout layout, uint32_t gain);
     void captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height, uint32_t gain);
-    void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t stride);
+    void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height,
+            uint32_t stride);
 
     bool waitForVSyncLocked(nsecs_t reltime);
 };

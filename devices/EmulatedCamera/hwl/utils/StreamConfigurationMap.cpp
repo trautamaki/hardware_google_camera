@@ -20,33 +20,59 @@
 #include "StreamConfigurationMap.h"
 
 namespace android {
+void StreamConfigurationMap::appendAvailableStreamConfigurations(
+        const camera_metadata_ro_entry& entry) {
+    for (size_t i = 0; i < entry.count; i+= kStreamConfigurationSize) {
+        int32_t width = entry.data.i32[i + kStreamWidthOffset];
+        int32_t height = entry.data.i32[i + kStreamHeightOffset];
+        auto format = static_cast<android_pixel_format_t> (
+                entry.data.i32[i + kStreamFormatOffset]);
+        int32_t isInput = entry.data.i32[i + kStreamIsInputOffset];
+        if (!isInput) {
+            mStreamOutputFormats.insert(format);
+            mStreamOutputSizeMap[format].insert(std::make_pair(width, height));
+        }
+    }
+}
+
+void StreamConfigurationMap::appendAvailableStreamMinDurations(
+        const camera_metadata_ro_entry_t& entry) {
+    for (size_t i = 0; i < entry.count; i+= kStreamConfigurationSize) {
+        auto format = static_cast<android_pixel_format_t> (
+                entry.data.i64[i + kStreamFormatOffset]);
+        uint32_t width = entry.data.i64[i + kStreamWidthOffset];
+        uint32_t height = entry.data.i64[i + kStreamHeightOffset];
+        nsecs_t duration = entry.data.i64[i + kStreamMinDurationOffset];
+        auto streamConfiguration = std::make_pair(format, std::make_pair(width, height));
+        mStreamMinDurationMap[streamConfiguration] = duration;
+    }
+}
+
+void StreamConfigurationMap::appendAvailableStreamStallDurations(
+        const camera_metadata_ro_entry& entry) {
+    for (size_t i = 0; i < entry.count; i+= kStreamConfigurationSize) {
+        auto format = static_cast<android_pixel_format_t> (
+                entry.data.i64[i + kStreamFormatOffset]);
+        uint32_t width = entry.data.i64[i + kStreamWidthOffset];
+        uint32_t height = entry.data.i64[i + kStreamHeightOffset];
+        nsecs_t duration = entry.data.i64[i + kStreamStallDurationOffset];
+        auto streamConfiguration = std::make_pair(format, std::make_pair(width, height));
+        mStreamStallMap[streamConfiguration] = duration;
+    }
+}
 
 StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars) {
-    const size_t STREAM_FORMAT_OFFSET = 0;
-    const size_t STREAM_WIDTH_OFFSET = 1;
-    const size_t STREAM_HEIGHT_OFFSET = 2;
-    const size_t STREAM_IS_INPUT_OFFSET = 3;
-    const size_t STREAM_MIN_DURATION_OFFSET = 3;
-    const size_t STREAM_STALL_DURATION_OFFSET = 3;
-    const size_t STREAM_CONFIGURATION_SIZE = 4;
-
     camera_metadata_ro_entry_t entry;
     auto ret = chars.Get(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS, &entry);
     if (ret != OK) {
         ALOGW("%s: ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS missing!", __FUNCTION__);
         entry.count = 0;
     }
+    appendAvailableStreamConfigurations(entry);
 
-    for (size_t i = 0; i < entry.count; i+= STREAM_CONFIGURATION_SIZE) {
-        int32_t width = entry.data.i32[i + STREAM_WIDTH_OFFSET];
-        int32_t height = entry.data.i32[i + STREAM_HEIGHT_OFFSET];
-        auto format = static_cast<android_pixel_format_t> (
-                entry.data.i32[i + STREAM_FORMAT_OFFSET]);
-        int32_t isInput = entry.data.i32[i + STREAM_IS_INPUT_OFFSET];
-        if (!isInput) {
-            mStreamOutputFormats.insert(format);
-            mStreamOutputSizeMap[format].insert(std::make_pair(width, height));
-        }
+    ret = chars.Get(ANDROID_DEPTH_AVAILABLE_DEPTH_STREAM_CONFIGURATIONS, &entry);
+    if (ret == OK) {
+        appendAvailableStreamConfigurations(entry);
     }
 
     ret = chars.Get(ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS, &entry);
@@ -54,15 +80,11 @@ StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars) {
         ALOGW("%s: ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS missing!", __FUNCTION__);
         entry.count = 0;
     }
+    appendAvailableStreamMinDurations(entry);
 
-    for (size_t i = 0; i < entry.count; i+= STREAM_CONFIGURATION_SIZE) {
-        auto format = static_cast<android_pixel_format_t> (
-                entry.data.i64[i + STREAM_FORMAT_OFFSET]);
-        uint32_t width = entry.data.i64[i + STREAM_WIDTH_OFFSET];
-        uint32_t height = entry.data.i64[i + STREAM_HEIGHT_OFFSET];
-        nsecs_t duration = entry.data.i64[i + STREAM_MIN_DURATION_OFFSET];
-        auto streamConfiguration = std::make_pair(format, std::make_pair(width, height));
-        mStreamMinDurationMap[streamConfiguration] = duration;
+    ret = chars.Get(ANDROID_DEPTH_AVAILABLE_DEPTH_MIN_FRAME_DURATIONS, &entry);
+    if (ret == OK) {
+        appendAvailableStreamMinDurations(entry);
     }
 
     ret = chars.Get(ANDROID_SCALER_AVAILABLE_STALL_DURATIONS, &entry);
@@ -70,16 +92,13 @@ StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars) {
         ALOGW("%s: ANDROID_SCALER_AVAILABLE_STALL_DURATIONS missing!", __FUNCTION__);
         entry.count = 0;
     }
+    appendAvailableStreamStallDurations(entry);
 
-    for (size_t i = 0; i < entry.count; i+= STREAM_CONFIGURATION_SIZE) {
-        auto format = static_cast<android_pixel_format_t> (
-                entry.data.i64[i + STREAM_FORMAT_OFFSET]);
-        uint32_t width = entry.data.i64[i + STREAM_WIDTH_OFFSET];
-        uint32_t height = entry.data.i64[i + STREAM_HEIGHT_OFFSET];
-        nsecs_t duration = entry.data.i64[i + STREAM_STALL_DURATION_OFFSET];
-        auto streamConfiguration = std::make_pair(format, std::make_pair(width, height));
-        mStreamStallMap[streamConfiguration] = duration;
+    ret = chars.Get(ANDROID_DEPTH_AVAILABLE_DEPTH_STALL_DURATIONS, &entry);
+    if (ret == OK) {
+        appendAvailableStreamStallDurations(entry);
     }
+
 }
 
 }  // namespace android
