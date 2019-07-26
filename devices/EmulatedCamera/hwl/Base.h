@@ -23,8 +23,11 @@
 #define HW_EMULATOR_CAMERA2_BASE_H
 
 #include <utils/Vector.h>
+#include "hwl_types.h"
 
 namespace android {
+
+using google_camera_hal::StreamBuffer;
 
 struct YCbCrPlanes {
     uint8_t *imgY, *imgCb, *imgCr;
@@ -34,18 +37,15 @@ struct YCbCrPlanes {
 struct SinglePlane {
     uint8_t *img;
     uint32_t stride;
+    uint32_t bufferSize;
 };
 
 /* Internal structure for passing buffers across threads */
 struct SensorBuffer {
-    // Positive numbers are output streams
-    // Negative numbers are input reprocess streams
-    // Zero is an auxillary buffer
-    int streamId;
     uint32_t width, height;
-    uint32_t format;
-    uint32_t dataSpace;
-    buffer_handle_t *buffer;
+    android_pixel_format_t format;
+    android_dataspace_t dataSpace;
+    StreamBuffer streamBuffer;
 
     union Plane {
         SinglePlane img;

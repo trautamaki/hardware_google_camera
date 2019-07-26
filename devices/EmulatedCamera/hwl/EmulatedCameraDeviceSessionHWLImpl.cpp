@@ -235,7 +235,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
 
     emulatedPipeline.streams.reserve(request_config.streams.size());
     for (const auto& stream : request_config.streams) {
-        EmulatedStream halStream = {{
+        emulatedPipeline.streams.push_back({{
                 .id = stream.id,
                 .override_format = stream.format,
                 .producer_usage = GRALLOC_USAGE_SW_WRITE_OFTEN,
@@ -243,11 +243,11 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
                 .max_buffers = mMaxPipelineDepth,
                 .override_data_space = stream.data_space,
                 .is_physical_camera_stream = stream.is_physical_camera_stream,
-                .physical_camera_id = stream.physical_camera_id,},
-                .width = stream.width,
-                .height = stream.height,
-        };
-        emulatedPipeline.streams.push_back(halStream);
+                .physical_camera_id = stream.physical_camera_id
+            },
+            .width = stream.width,
+            .height = stream.height,
+            .bufferSize = stream.buffer_size});
     }
 
     // TODO: configure pipeline
@@ -330,8 +330,9 @@ status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(uint32_t frame_numbe
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::Flush() {
-    // TODO
-    return OK;
+    ATRACE_CALL();
+    std::lock_guard<std::mutex> lock(mAPIMutex);
+    return mRequestProcessor->flush();
 }
 
 uint32_t EmulatedCameraDeviceSessionHwlImpl::GetCameraId() const {

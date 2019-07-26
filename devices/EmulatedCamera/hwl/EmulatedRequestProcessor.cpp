@@ -27,6 +27,7 @@
 namespace android {
 
 using android::hardware::camera::common::V1_0::helper::HandleImporter;
+using google_camera_hal::ErrorCode;
 using google_camera_hal::HwlPipelineResult;
 using google_camera_hal::NotifyMessage;
 using google_camera_hal::MessageType;
@@ -43,14 +44,15 @@ EmulatedRequestProcessor::~EmulatedRequestProcessor() {
     ATRACE_CALL();
     {
         std::lock_guard<std::mutex> lock(mProcessMutex);
-        auto ret = mSensor->shutDown();
-        if (ret != OK) {
-            ALOGE("%s: Failed during sensor shutdown %s (%d)", __FUNCTION__, strerror(-ret), ret);
-        }
         mProcessorDone = true;
         mRequestCondition.notify_one();
     }
     mRequestThread.join();
+
+    auto ret = mSensor->shutDown();
+    if (ret != OK) {
+        ALOGE("%s: Failed during sensor shutdown %s (%d)", __FUNCTION__, strerror(-ret), ret);
+    }
 }
 
 status_t EmulatedRequestProcessor::processPipelineRequests(uint32_t frameNumber,
@@ -95,6 +97,127 @@ status_t EmulatedRequestProcessor::processPipelineRequests(uint32_t frameNumber,
     return OK;
 }
 
+status_t EmulatedRequestProcessor::flush() {
+    std::lock_guard<std::mutex> lock(mProcessMutex);
+    // First flush in-flight requests
+    auto ret = mSensor->flush();
+
+    // Then the rest of the pending requests
+    while (!mPendingRequests.empty()) {
+        const auto& request = mPendingRequests.front();
+
+        if (request.callback.notify != nullptr) {
+            NotifyMessage msg = {
+                .type = MessageType::kError,
+                .message.error = {
+                    .frame_number = request.frameNumber,
+                    .error_stream_id = -1,
+                    .error_code = ErrorCode::kErrorRequest
+                }
+            };
+            request.callback.notify(request.pipelineId, msg);
+        }
+
+        mPendingRequests.pop();
+    }
+
+    return ret;
+}
+
+inline uint32_t alignTo(uint32_t value, uint32_t alignment) {
+    uint32_t delta = value % alignment;
+    return (delta == 0) ? value : (value + (alignment - delta));
+}
+
+status_t getBufferSizeAndStride(const EmulatedStream& stream, uint32_t *size /*out*/,
+        uint32_t *stride /*out*/) {
+    if (size == nullptr) {
+        return BAD_VALUE;
+    }
+
+    switch (stream.override_format) {
+        case HAL_PIXEL_FORMAT_RGB_888:
+            *stride = stream.width * 3;
+            *size = (*stride) * stream.width;
+            break;
+        case HAL_PIXEL_FORMAT_RGBA_8888:
+            *stride = stream.width * 4;;
+            *size = (*stride) * stream.width;
+            break;
+        case HAL_PIXEL_FORMAT_Y16:
+            if (stream.override_data_space == HAL_DATASPACE_DEPTH) {
+                *stride = alignTo(alignTo(stream.width, 2) * 2, 16);
+                *size = (*stride) * alignTo(stream.height, 2);
+            } else {
+                return BAD_VALUE;
+            }
+            break;
+        case HAL_PIXEL_FORMAT_BLOB:
+            if (stream.override_data_space == HAL_DATASPACE_V0_JFIF) {
+                *size = stream.bufferSize;
+                *stride = *size;
+            } else {
+                return BAD_VALUE;
+            }
+            break;
+        case HAL_PIXEL_FORMAT_RAW16:
+            *stride = stream.width * 2;
+            *size = (*stride) * stream.width;
+            break;
+        default:
+            return BAD_VALUE;
+    }
+
+    return OK;
+}
+
+status_t lockSensorBuffer(const EmulatedStream& stream, HandleImporter& importer /*in*/,
+        buffer_handle_t buffer, SensorBuffer *sensorBuffer /*out*/) {
+    if (sensorBuffer == nullptr) {
+        return BAD_VALUE;
+    }
+
+    auto width = static_cast<int32_t> (stream.width);
+    auto height = static_cast<int32_t> (stream.height);
+    if (stream.override_format == HAL_PIXEL_FORMAT_YCBCR_420_888) {
+        IMapper::Rect mapRect = {0, 0, width, height};
+        auto yuvLayout = importer.lockYCbCr(buffer, stream.producer_usage, mapRect);
+        if ((yuvLayout.y != nullptr) && (yuvLayout.cb != nullptr) &&
+                (yuvLayout.cr != nullptr)) {
+            sensorBuffer->plane.imgYCrCb.imgY = static_cast<uint8_t *> (yuvLayout.y);
+            sensorBuffer->plane.imgYCrCb.imgCb = static_cast<uint8_t *> (yuvLayout.cb);
+            sensorBuffer->plane.imgYCrCb.imgCr = static_cast<uint8_t *> (yuvLayout.cr);
+            sensorBuffer->plane.imgYCrCb.yStride = yuvLayout.yStride;
+            sensorBuffer->plane.imgYCrCb.CbCrStride = yuvLayout.cStride;
+            sensorBuffer->plane.imgYCrCb.CbCrStep = yuvLayout.chromaStep;
+        } else {
+            ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
+            return BAD_VALUE;
+        }
+    } else {
+        uint32_t bufferSize = 0, stride = 0;
+        auto ret = getBufferSizeAndStride(stream, &bufferSize, &stride);
+        if (ret == OK) {
+            sensorBuffer->plane.img.img = static_cast<uint8_t *> (importer.lock(buffer,
+                        stream.producer_usage, bufferSize));
+            if (sensorBuffer->plane.img.img != nullptr) {
+                sensorBuffer->plane.img.stride = stride;
+                sensorBuffer->plane.img.bufferSize = bufferSize;
+            } else {
+                ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
+                return BAD_VALUE;
+            }
+            ALOGE("%s: Mapped address: %p", __func__, sensorBuffer->plane.img.img);
+        } else {
+            ALOGE("%s: Unsupported pixel format: 0x%x", __FUNCTION__,
+                    stream.override_format);
+            return BAD_VALUE;
+        }
+    }
+
+    return OK;
+}
+
 void EmulatedRequestProcessor::requestProcessorLoop() {
     ATRACE_CALL();
 
@@ -117,41 +240,21 @@ void EmulatedRequestProcessor::requestProcessorLoop() {
                 for (auto& outputBuffer : outputBuffers) {
                     const auto& stream = request.streamMap.at(outputBuffer.stream_id);
                     SensorBuffer sensorBuffer = {
-                            .streamId = outputBuffer.stream_id,
                             .width = stream.width,
                             .height = stream.height,
                             .format = stream.override_format,
                             .dataSpace = stream.override_data_space,
-                            .buffer = &outputBuffer.buffer,
+                            .streamBuffer = outputBuffer,
                     };
 
-                    auto width = static_cast<int32_t> (stream.width);
-                    auto height = static_cast<int32_t> (stream.height);
-                    if (stream.override_format == HAL_PIXEL_FORMAT_YCBCR_420_888) {
-                        IMapper::Rect mapRect = {0, 0, width, height};
-                        auto yuvLayout = importer.lockYCbCr(outputBuffer.buffer,
-                                stream.producer_usage, mapRect);
-                        if ((yuvLayout.y != nullptr) && (yuvLayout.cb != nullptr) &&
-                                (yuvLayout.cr != nullptr)) {
-
-                            sensorBuffer.plane.imgYCrCb.imgY = static_cast<uint8_t *> (yuvLayout.y);
-                            sensorBuffer.plane.imgYCrCb.imgCb =
-                                    static_cast<uint8_t *> (yuvLayout.cb);
-                            sensorBuffer.plane.imgYCrCb.imgCr =
-                                    static_cast<uint8_t *> (yuvLayout.cr);
-                            sensorBuffer.plane.imgYCrCb.yStride = yuvLayout.yStride;
-                            sensorBuffer.plane.imgYCrCb.CbCrStride = yuvLayout.cStride;
-                            sensorBuffer.plane.imgYCrCb.CbCrStep = yuvLayout.chromaStep;
-
-                        } else {
-                            ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
-                            outputBuffer.status = google_camera_hal::BufferStatus::kError;
-                        }
+                    auto ret = lockSensorBuffer(stream, importer, outputBuffer.buffer,
+                            &sensorBuffer);
+                    if (ret == OK) {
+                        sensorBuffers->push_back(sensorBuffer);
                     } else {
-                        //TODO
+                        //TODO: return failed buffers immediately
+                        outputBuffer.status = google_camera_hal::BufferStatus::kError;
                     }
-
-                    sensorBuffers->push_back(sensorBuffer);
                 }
 
                 auto result = std::make_unique<HwlPipelineResult>();
@@ -163,11 +266,10 @@ void EmulatedRequestProcessor::requestProcessorLoop() {
                     HalCameraMetadata::Create(1, 10);
                 result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH, &mMaxPipelineDepth, 1);
                 result->input_buffers = request.inputBuffers;
-                result->output_buffers = outputBuffers;
                 result->partial_result = 1; //TODO: Change in case of partial result support
 
-                EmulatedSensor::SensorSettings settings(request.callback, request.pipelineId,
-                        ms2ns(33), ms2ns(33), 25 /*ISO*/, request.frameNumber);
+                EmulatedSensor::SensorSettings settings(request.callback, us2ns(33), ms2ns(33),
+                        100 /*ISO*/, request.frameNumber);
 
                 mSensor->setCurrentRequest(settings, std::move(result), std::move(sensorBuffers));
                 mPendingRequests.pop();

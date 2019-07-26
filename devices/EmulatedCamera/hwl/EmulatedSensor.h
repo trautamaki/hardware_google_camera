@@ -81,6 +81,7 @@
 
 #include "Base.h"
 #include "EmulatedScene.h"
+#include "JpegCompressor.h"
 #include "HandleImporter.h"
 
 #include <hwl_types.h>
@@ -128,27 +129,26 @@ public:
 
     struct SensorSettings {
         HwlPipelineCallback notifyCallback;
-        uint32_t pipelineId;
         nsecs_t exposureTime, frameDuration;
         uint32_t gain;
         uint32_t frameNumber;
         SensorSettings () :
                 notifyCallback {nullptr, nullptr},
-                pipelineId(0),
                 exposureTime(0),
                 frameDuration(0),
                 gain(0),
                 frameNumber(0) {}
 
-        SensorSettings (HwlPipelineCallback notifyCallback, uint32_t pipelineId,
-                nsecs_t exposureTime, nsecs_t frameDuration, uint32_t gain,
-                uint32_t frameNumber) : notifyCallback(notifyCallback),
-                pipelineId(pipelineId), exposureTime(exposureTime), frameDuration(frameDuration),
-                gain(gain), frameNumber(frameNumber) {}
+        SensorSettings (HwlPipelineCallback notifyCallback, nsecs_t exposureTime,
+                nsecs_t frameDuration, uint32_t gain, uint32_t frameNumber) :
+                notifyCallback(notifyCallback), exposureTime(exposureTime),
+                frameDuration(frameDuration), gain(gain), frameNumber(frameNumber) {}
     };
 
     void setCurrentRequest(SensorSettings settings, std::unique_ptr<HwlPipelineResult> result,
             std::unique_ptr<Buffers> outputBuffers);
+
+    status_t flush() { return OK; } // TODO
 
     /*
      * Synchronizing with sensor operation (vertical sync)
@@ -158,12 +158,6 @@ public:
     // is starting readout of its latest frame of data. Returns true if vertical
     // sync is signaled, false if the wait timed out.
     bool waitForVSync(nsecs_t reltime);
-
-    // Wait until a new frame has been read out, and then return the time
-    // capture started.  May return immediately if a new frame has been pushed
-    // since the last wait for a new frame. Returns true if new frame is
-    // returned, false if timed out.
-    bool waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime);
 
     static const nsecs_t kSupportedExposureTimeRange[2];
     static const nsecs_t kSupportedFrameDurationRange[2];
@@ -210,27 +204,15 @@ private:
     std::unique_ptr<HwlPipelineResult> mCurrentResult;
     std::unique_ptr<Buffers> mCurrentOutputBuffers;
     HandleImporter mImporter;
+    std::unique_ptr<JpegCompressor> mJpegCompressor;
 
     // End of control parameters
-
-    Mutex mReadoutMutex;  // Lock before accessing readout variables
-    // Start of readout variables
-    Condition mReadoutAvailable;
-    Condition mReadoutComplete;
-    Buffers *mCapturedBuffers;
-    nsecs_t mCaptureTime;
-    // End of readout variables
-
-    // Time of sensor startup, used for simulation zero-time point
-    nsecs_t mStartupTime;
 
     /**
      * Inherited Thread virtual overrides, and members only used by the
      * processing thread
      */
-    virtual status_t readyToRun();
-
-    virtual bool threadLoop();
+    bool threadLoop() override;
 
     nsecs_t mNextCaptureTime;
     std::unique_ptr<Buffers> mNextCapturedBuffers;

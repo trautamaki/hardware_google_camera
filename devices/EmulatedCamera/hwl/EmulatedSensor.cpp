@@ -33,6 +33,7 @@
 
 namespace android {
 
+using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::NotifyMessage;
 using google_camera_hal::MessageType;
 
@@ -87,8 +88,7 @@ float sqrtf_approx(float r) {
 }
 
 EmulatedSensor::EmulatedSensor() : Thread(false),
-        mGotVSync(false),
-        mCapturedBuffers(nullptr) {
+        mGotVSync(false) {
 }
 
 EmulatedSensor::~EmulatedSensor() {
@@ -161,9 +161,9 @@ status_t EmulatedSensor::startUp(SensorCharacteristics characteristics) {
     mScene = std::make_unique<EmulatedScene>(mChars.width, mChars.height, kElectronsPerLuxSecond);
     mRowReadoutTime = mChars.frameDurationRange[0] / mChars.height;
     kBaseGainFactor = (float)mChars.maxRawValue / EmulatedSensor::kSaturationElectrons;
+    mJpegCompressor = std::make_unique<JpegCompressor>();
 
     int res;
-    mCapturedBuffers = nullptr;
     res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);
     if (res != OK) {
         ALOGE("Unable to start up sensor capture thread: %d", res);
@@ -179,12 +179,12 @@ status_t EmulatedSensor::shutDown() {
     if (res != OK) {
         ALOGE("Unable to shut down sensor capture thread: %d", res);
     }
+    mJpegCompressor.release();
     return res;
 }
 
 void EmulatedSensor::setCurrentRequest(SensorSettings settings,
         std::unique_ptr<HwlPipelineResult> result, std::unique_ptr<Buffers> outputBuffers) {
-    ALOGE("%s: frameNumber: %u", __func__, settings.frameNumber);
     Mutex::Autolock lock(mControlMutex);
     mCurrentSettings = settings;
     mCurrentResult = std::move(result);
@@ -204,63 +204,23 @@ bool EmulatedSensor::waitForVSync(nsecs_t reltime) {
     return mGotVSync;
 }
 
-bool EmulatedSensor::waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime) {
-    Mutex::Autolock lock(mReadoutMutex);
-
-    if (mCapturedBuffers == NULL) {
-        int res;
-        res = mReadoutAvailable.waitRelative(mReadoutMutex, reltime);
-        if (res == TIMED_OUT) {
-            return false;
-        } else if (res != OK || mCapturedBuffers == NULL) {
-            ALOGE("Error waiting for sensor readout signal: %d", res);
-            return false;
-        }
-    }
-    mReadoutComplete.signal();
-
-    *captureTime = mCaptureTime;
-    mCapturedBuffers = NULL;
-    return true;
-}
-
-status_t EmulatedSensor::readyToRun() {
-    ALOGV("Starting up sensor thread");
-    mStartupTime = systemTime();
-    mNextCaptureTime = 0;
-    mNextCapturedBuffers = nullptr;
-    return OK;
-}
-
 bool EmulatedSensor::threadLoop() {
     /**
      * Sensor capture operation main loop.
      *
-     * Stages are out-of-order relative to a single frame's processing, but
-     * in-order in time.
      */
 
     /**
      * Stage 1: Read in latest control parameters
      */
-    uint64_t exposureDuration;
-    uint64_t frameDuration;
-    uint32_t gain;
-    uint32_t pipelineId;
     std::unique_ptr<Buffers> nextBuffers;
     std::unique_ptr<HwlPipelineResult> nextResult;
-    uint32_t frameNumber;
-    HwlPipelineCallback notifyCallback;
+    SensorSettings settings;
     {
         Mutex::Autolock lock(mControlMutex);
-        exposureDuration = mCurrentSettings.exposureTime;
-        frameDuration = mCurrentSettings.frameDuration;
-        gain = mCurrentSettings.gain;
+        settings = mCurrentSettings;
         std::swap(nextBuffers, mCurrentOutputBuffers);
         std::swap(nextResult, mCurrentResult);
-        frameNumber = mCurrentSettings.frameNumber;
-        pipelineId = mCurrentSettings.pipelineId;
-        notifyCallback = mCurrentSettings.notifyCallback;
         // Don't reuse callbacks after set
         mCurrentSettings.notifyCallback = {nullptr, nullptr};
 
@@ -270,110 +230,110 @@ bool EmulatedSensor::threadLoop() {
         mVSync.signal();
     }
 
-    /**
-     * Stage 3: Read out latest captured image
-     */
-
-    Buffers *capturedBuffers = NULL;
-    nsecs_t captureTime = 0;
-
     nsecs_t startRealTime = systemTime();
     // Stagefright cares about system time for timestamps, so base simulated
     // time on that.
-    nsecs_t simulatedTime = startRealTime;
-    nsecs_t frameEndRealTime = startRealTime + frameDuration;
-
-    if (mNextCapturedBuffers != nullptr) {
-        ALOGVV("Sensor starting readout");
-        // Pretend we're doing readout now; will signal once enough time has elapsed
-        //capturedBuffers = mNextCapturedBuffers;
-        //captureTime = mNextCaptureTime;
-    }
-    simulatedTime += mRowReadoutTime + kMinVerticalBlank;
-
-    // TODO: Move this signal to another thread to simulate readout
-    // time properly
-    if (capturedBuffers != NULL) {
-        /*
-        ALOGVV("Sensor readout complete");
-        Mutex::Autolock lock(mReadoutMutex);
-        if (mCapturedBuffers != NULL) {
-            ALOGV("Waiting for readout thread to catch up!");
-            mReadoutComplete.wait(mReadoutMutex);
-        }
-        */
-
-        mCapturedBuffers = capturedBuffers;
-        mCaptureTime = captureTime;
-        mReadoutAvailable.signal();
-        capturedBuffers = NULL;
-    }
+    nsecs_t frameEndRealTime = startRealTime + settings.frameDuration;
 
     /**
      * Stage 2: Capture new image
      */
-    mNextCaptureTime = simulatedTime;
-    std::swap(mNextCapturedBuffers,  nextBuffers);
+    mNextCaptureTime = frameEndRealTime;
+    std::swap(mNextCapturedBuffers, nextBuffers);
 
     if (mNextCapturedBuffers != nullptr) {
-        if (notifyCallback.notify != nullptr) {
+        if (settings.notifyCallback.notify != nullptr) {
             NotifyMessage msg {
                 .type = MessageType::kShutter,
                 .message.shutter = {
-                    .frame_number = frameNumber,
-                        .timestamp_ns = static_cast<uint64_t>(mNextCaptureTime)}};
-            notifyCallback.notify(pipelineId, msg);
+                    .frame_number = settings.frameNumber,
+                    .timestamp_ns = static_cast<uint64_t>(mNextCaptureTime)
+                }
+            };
+            settings.notifyCallback.notify(nextResult->pipeline_id, msg);
         }
-        ALOGVV("Starting next capture: Exposure: %f ms, gain: %d",
-                (float)exposureDuration / 1e6, gain);
-        mScene->setExposureDuration((float)exposureDuration / 1e9);
+        ALOGVV("Starting next capture: Exposure: %f ms, gain: %d", ns2ms(settings.exposureTime),
+                gain);
+        mScene->setExposureDuration((float)settings.exposureTime / 1e9);
         mScene->calculateScene(mNextCaptureTime);
+        nextResult->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP, &mNextCaptureTime, 1);
 
-        for (const auto& b : *mNextCapturedBuffers) {
+        for (auto& b : *mNextCapturedBuffers) {
             ALOGVV(
                     "Sensor capturing buffer %d: stream %d,"
                     " %d x %d, format %x, stride %d, buf %p, img %p",
                     i, b.streamId, b.width, b.height, b.format, b.stride, b.buffer,
                     b.img);
+            b.streamBuffer.status = BufferStatus::kOk;
+            bool postProcessingNeeded = false;
             switch (b.format) {
                 case HAL_PIXEL_FORMAT_RAW16:
-                    captureRaw(b.plane.img.img, gain, b.plane.img.stride);
+                    captureRaw(b.plane.img.img, settings.gain, b.plane.img.stride);
                     break;
                 case HAL_PIXEL_FORMAT_RGB_888:
-                    captureRGB(b.plane.img.img, gain, b.plane.img.stride);
+                    captureRGB(b.plane.img.img, settings.gain, b.plane.img.stride);
                     break;
                 case HAL_PIXEL_FORMAT_RGBA_8888:
-                    captureRGBA(b.plane.img.img, gain, b.plane.img.stride);
+                    captureRGBA(b.plane.img.img, settings.gain, b.plane.img.stride);
                     break;
                 case HAL_PIXEL_FORMAT_BLOB:
-                    if (b.dataSpace != HAL_DATASPACE_DEPTH) {
+                    if (b.dataSpace == HAL_DATASPACE_V0_JFIF) {
                         // Add auxillary buffer of the right size
                         // Assumes only one BLOB (JPEG) buffer in
                         // mNextCapturedBuffers
-                        SensorBuffer bAux;
-                        bAux.streamId = 0;
-                        bAux.width = b.width;
-                        bAux.height = b.height;
-                        bAux.format = HAL_PIXEL_FORMAT_RGB_888;
-                        bAux.plane.img.stride = b.width;
-                        bAux.buffer = NULL;
-                        // TODO: Reuse these
-                        bAux.plane.img.img = new uint8_t[b.width * b.height * 3];
-                        mNextCapturedBuffers->push_back(bAux);
+                        auto jpegInput = std::make_unique<SensorBuffer>();
+                        jpegInput->width = b.width;
+                        jpegInput->height = b.height;
+                        jpegInput->format = HAL_PIXEL_FORMAT_RGB_888;
+                        jpegInput->plane.img.stride = b.width * 3;
+                        auto inputBuffer = new uint8_t[jpegInput->plane.img.stride * b.height];
+                        jpegInput->plane.img.img = inputBuffer;
+                        captureRGB(jpegInput->plane.img.img, settings.gain,
+                                jpegInput->plane.img.stride);
+
+                        auto jpegResult = std::make_unique<HwlPipelineResult>();
+                        jpegResult->camera_id = nextResult->camera_id;
+                        jpegResult->pipeline_id = nextResult->pipeline_id;
+                        jpegResult->frame_number = nextResult->frame_number;
+                        jpegResult->result_metadata = HalCameraMetadata::Clone(
+                                nextResult->result_metadata.get());
+
+                        auto jpegJob = std::make_unique<JpegJob>();
+                        jpegJob->input = std::move(jpegInput);
+                        jpegJob->output = std::make_unique<SensorBuffer>(b);
+                        jpegJob->result = std::move(jpegResult);
+                        jpegJob->callback = std::make_unique<HwlPipelineCallback>(
+                                settings.notifyCallback);
+                        auto ret = mJpegCompressor->queue(std::move(jpegJob));
+                        if (ret == OK) {
+                            nextResult->partial_result = 0;
+                            nextResult->result_metadata.release();
+                            postProcessingNeeded = true;
+                        } else {
+                            delete [] inputBuffer;
+                            b.streamBuffer.status = BufferStatus::kError;
+                        }
                     } else {
-                        ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__, b.format, b.dataSpace);
+                        ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__, b.format,
+                                b.dataSpace);
+                        b.streamBuffer.status = BufferStatus::kError;
                     }
                     break;
                 case HAL_PIXEL_FORMAT_YCrCb_420_SP:
                 case HAL_PIXEL_FORMAT_YCbCr_420_888:
-                    captureNV21(b.plane.imgYCrCb, gain);
+                    captureNV21(b.plane.imgYCrCb, settings.gain);
                     break;
                 case HAL_PIXEL_FORMAT_Y16:
-                    captureDepth(b.plane.img.img, gain, b.plane.img.stride);
+                    captureDepth(b.plane.img.img, settings.gain, b.plane.img.stride);
                     break;
                 default:
                     ALOGE("%s: Unknown format %x, no output", __FUNCTION__, b.format);
+                    b.streamBuffer.status = BufferStatus::kError;
                     break;
+            }
+
+            if (!postProcessingNeeded) {
+                nextResult->output_buffers.push_back(b.streamBuffer);
             }
         }
     }
@@ -396,13 +356,13 @@ bool EmulatedSensor::threadLoop() {
             (int)((endRealTime - startRealTime) / 1000000),
             (int)(frameDuration / 1000000));
 
-    if ((notifyCallback.process_pipeline_result != nullptr) && (nextResult.get() != nullptr)) {
-        nextResult->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP, &mNextCaptureTime, 1);
+    if ((settings.notifyCallback.process_pipeline_result != nullptr) &&
+            (nextResult.get() != nullptr) && (!nextResult->output_buffers.empty())) {
         for (auto &outputBuffer : nextResult->output_buffers) {
             mImporter.unlock(outputBuffer.buffer);
         }
 
-        notifyCallback.process_pipeline_result(std::move(nextResult));
+        settings.notifyCallback.process_pipeline_result(std::move(nextResult));
     }
 
     return true;
@@ -419,7 +379,7 @@ void EmulatedSensor::captureRaw(uint8_t *img, uint32_t gain, uint32_t stride) {
     mScene->setReadoutPixel(0, 0);
     for (unsigned int y = 0; y < mChars.height; y++) {
         int *bayerRow = bayerSelect + (y & 0x1) * 2;
-        uint16_t *px = (uint16_t *)img + y * stride;
+        uint16_t *px = (uint16_t *)img + y * (stride / 2);
         for (unsigned int x = 0; x < mChars.width; x++) {
             uint32_t electronCount;
             electronCount = mScene->getPixelElectrons()[bayerRow[x & 0x1]];
@@ -458,7 +418,7 @@ void EmulatedSensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t stride) {
     uint32_t inc = ceil((float)mChars.width / stride);
 
     for (unsigned int y = 0, outY = 0; y < mChars.height; y += inc, outY++) {
-        uint8_t *px = img + outY * stride * 4;
+        uint8_t *px = img + outY * stride;
         mScene->setReadoutPixel(0, y);
         for (unsigned int x = 0; x < mChars.width; x += inc) {
             uint32_t rCount, gCount, bCount;
@@ -488,7 +448,7 @@ void EmulatedSensor::captureRGB(uint8_t *img, uint32_t gain, uint32_t stride) {
 
     for (unsigned int y = 0, outY = 0; y < mChars.height; y += inc, outY++) {
         mScene->setReadoutPixel(0, y);
-        uint8_t *px = img + outY * stride * 3;
+        uint8_t *px = img + outY * stride;
         for (unsigned int x = 0; x < mChars.width; x += inc) {
             uint32_t rCount, gCount, bCount;
             // TODO: Perfect demosaicing is a cheat

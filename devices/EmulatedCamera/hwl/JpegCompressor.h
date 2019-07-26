@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,18 @@
  * limitations under the License.
  */
 
-/**
- * This class simulates a hardware JPEG compressor.  It receives image buffers
- * in RGBA_8888 format, processes them in a worker thread, and then pushes them
- * out to their destination stream.
- */
+#ifndef HW_EMULATOR_CAMERA_JPEG_H
+#define HW_EMULATOR_CAMERA_JPEG_H
 
-#ifndef HW_EMULATOR_CAMERA2_JPEG_H
-#define HW_EMULATOR_CAMERA2_JPEG_H
-
-#include "utils/Mutex.h"
-#include "utils/Thread.h"
-#include "utils/Timers.h"
+#include <condition_variable>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 #include "Base.h"
+#include "HandleImporter.h"
 
-#include <stdio.h>
+#include <hwl_types.h>
 
 extern "C" {
 #include <jpeglib.h>
@@ -37,82 +33,41 @@ extern "C" {
 
 namespace android {
 
-class JpegCompressor : private Thread, public virtual RefBase {
+using android::hardware::camera::common::V1_0::helper::HandleImporter;
+using google_camera_hal::BufferStatus;
+using google_camera_hal::HwlPipelineCallback;
+using google_camera_hal::HwlPipelineResult;
+
+struct JpegJob {
+    std::unique_ptr<SensorBuffer> input, output;
+    std::unique_ptr<HwlPipelineResult> result;
+    std::unique_ptr<HwlPipelineCallback> callback;
+};
+
+class JpegCompressor {
 public:
     JpegCompressor();
-    ~JpegCompressor();
+    virtual ~JpegCompressor();
 
-    struct JpegListener {
-        // Called when JPEG compression has finished, or encountered an error
-        virtual void onJpegDone(const SensorBuffer &jpegBuffer, bool success) = 0;
-        // Called when the input buffer for JPEG is not needed any more,
-        // if the buffer came from the framework.
-        virtual void onJpegInputDone(const SensorBuffer &inputBuffer) = 0;
-        virtual ~JpegListener();
-    };
-
-    // Start compressing COMPRESSED format buffers; JpegCompressor takes
-    // ownership of the Buffers vector.
-    // Reserve() must be called first.
-    status_t start(Buffers *buffers, JpegListener *listener);
-
-    // Compress and block until buffer is complete.
-    status_t compressSynchronous(Buffers *buffers);
-
-    status_t cancel();
-
-    bool isBusy();
-    bool isStreamInUse(uint32_t id);
-
-    bool waitForDone(nsecs_t timeout);
-
-    // Reserve the compressor for a later start() call.
-    status_t reserve();
-
-    // TODO: Measure this
-    static const size_t kMaxJpegSize = 300000;
+    status_t queue(std::unique_ptr<JpegJob> job);
 
 private:
-    Mutex mBusyMutex;
-    bool mIsBusy;
-    Condition mDone;
-    bool mSynchronous;
+    std::mutex mMutex;
+    std::condition_variable mCondition;
+    bool mJpegDone = false;
+    std::thread mJpegProcessingThread;
+    HandleImporter mImporter;
+    std::queue<std::unique_ptr<JpegJob>> mPendingJobs;
 
-    Mutex mMutex;
-
-    Buffers *mBuffers;
-    JpegListener *mListener;
-
-    SensorBuffer mJpegBuffer, mAuxBuffer;
-    bool mFoundJpeg, mFoundAux;
-
-    jpeg_compress_struct mCInfo;
-
-    struct JpegError : public jpeg_error_mgr {
-        JpegCompressor *parent;
-    };
     j_common_ptr mJpegErrorInfo;
-
-    struct JpegDestination : public jpeg_destination_mgr {
-        JpegCompressor *parent;
-    };
-
-    static void jpegErrorHandler(j_common_ptr cinfo);
-
-    static void jpegInitDestination(j_compress_ptr cinfo);
-    static boolean jpegEmptyOutputBuffer(j_compress_ptr cinfo);
-    static void jpegTermDestination(j_compress_ptr cinfo);
-
+    jpeg_compress_struct mCInfo;
     bool checkError(const char *msg);
-    status_t compress();
+    void compress(std::unique_ptr<JpegJob> job);
+    void cleanUp(std::unique_ptr<JpegJob> job, BufferStatus status);
+    void threadLoop();
 
-    void cleanUp();
-
-    /**
-     * Inherited Thread virtual overrides
-     */
-    virtual status_t readyToRun();
-    virtual bool threadLoop();
+    JpegCompressor(const JpegCompressor&) = delete;
+    JpegCompressor& operator = (const JpegCompressor&) = delete;
 };
 
 }  // namespace android

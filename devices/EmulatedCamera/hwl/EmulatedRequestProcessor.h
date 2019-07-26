@@ -35,6 +35,7 @@ using google_camera_hal::StreamBuffer;
 
 struct EmulatedStream : public HalStream {
     uint32_t width, height;
+    size_t bufferSize;
 };
 
 struct EmulatedPipeline {
@@ -52,6 +53,8 @@ public:
     status_t processPipelineRequests(uint32_t frameNumber,
             const std::vector<HwlPipelineRequest>& requests,
             const std::vector<EmulatedPipeline>& pipelines);
+
+    status_t flush();
 
 private:
 
@@ -77,6 +80,9 @@ private:
     std::queue<PendingRequest> mPendingRequests;
     uint8_t mMaxPipelineDepth;
     sp<EmulatedSensor> mSensor;
+
+    EmulatedRequestProcessor(const EmulatedRequestProcessor&) = delete;
+    EmulatedRequestProcessor& operator = (const EmulatedRequestProcessor&) = delete;
 };
 
 }  // namespace android
