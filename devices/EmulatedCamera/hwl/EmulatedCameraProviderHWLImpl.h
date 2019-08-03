@@ -31,6 +31,7 @@ using google_camera_hal::HwlCameraProviderCallback;
 using google_camera_hal::VendorTagSection;
 using google_camera_hal::CameraBufferAllocatorHwl;
 using google_camera_hal::HalCameraMetadata;
+using google_camera_hal::HwlTorchModeStatusChangeFunc;
 
 class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
 public:
@@ -67,6 +68,7 @@ private:
     static const char* kCameraDefinitionsKey;
 
     std::vector<std::unique_ptr<HalCameraMetadata>> mStaticMetadata;
+    HwlTorchModeStatusChangeFunc mTorchCb;
 };
 
 extern "C" CameraProviderHwl* CreateCameraProviderHwl() {

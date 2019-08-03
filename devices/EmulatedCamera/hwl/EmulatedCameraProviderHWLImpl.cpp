@@ -25,6 +25,7 @@
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
 #include "EmulatedSensor.h"
+#include "EmulatedTorchState.h"
 #include "utils/HWLUtils.h"
 #include "vendor_tag_defs.h"
 
@@ -454,8 +455,9 @@ status_t EmulatedCameraProviderHwlImpl::initialize() {
 }
 
 status_t EmulatedCameraProviderHwlImpl::SetCallback(
-    const HwlCameraProviderCallback& /*callback*/) {
-    // TODO: set callbacks
+    const HwlCameraProviderCallback& callback) {
+    mTorchCb = callback.torch_mode_status_change;
+
     return OK;
 }
 
@@ -497,7 +499,22 @@ status_t EmulatedCameraProviderHwlImpl::CreateCameraDeviceHwl(
 
     std::unique_ptr<HalCameraMetadata> meta = HalCameraMetadata::Clone(
             mStaticMetadata[cameraId].get());
-    *camera_device_hwl = EmulatedCameraDeviceHwlImpl::Create(cameraId, std::move(meta));
+
+    std::shared_ptr<EmulatedTorchState> torchState;
+    camera_metadata_ro_entry entry;
+    bool flashSupported = false;
+    auto ret = meta->Get(ANDROID_FLASH_INFO_AVAILABLE, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+        if (entry.data.u8[0] == ANDROID_FLASH_INFO_AVAILABLE_TRUE) {
+            flashSupported = true;
+        }
+    }
+
+    if (flashSupported) {
+        torchState = std::make_shared<EmulatedTorchState>(cameraId, mTorchCb);
+    }
+
+    *camera_device_hwl = EmulatedCameraDeviceHwlImpl::Create(cameraId, std::move(meta), torchState);
     if (*camera_device_hwl == nullptr) {
         ALOGE("%s: Cannot create EmulatedCameraDeviceHWlImpl.", __FUNCTION__);
         return BAD_VALUE;

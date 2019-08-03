@@ -30,14 +30,15 @@
 namespace android {
 
 std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> EmulatedCameraDeviceSessionHwlImpl::Create(
-        uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta) {
+        uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta,
+        std::shared_ptr<EmulatedTorchState> torchState) {
     ATRACE_CALL();
     if (staticMeta.get() == nullptr) {
         return nullptr;
     }
 
     auto session = std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl>(
-            new EmulatedCameraDeviceSessionHwlImpl);
+            new EmulatedCameraDeviceSessionHwlImpl(torchState));
     if (session == nullptr) {
         ALOGE("%s: Creating EmulatedCameraDeviceSessionHwlImpl failed", __FUNCTION__);
         return nullptr;
@@ -87,7 +88,11 @@ status_t EmulatedCameraDeviceSessionHwlImpl::initialize(uint32_t cameraId,
     return mRequestProcessor->initialize(HalCameraMetadata::Clone(mStaticMetadata.get()));
 }
 
-EmulatedCameraDeviceSessionHwlImpl::~EmulatedCameraDeviceSessionHwlImpl() { }
+EmulatedCameraDeviceSessionHwlImpl::~EmulatedCameraDeviceSessionHwlImpl() {
+    if (mTorchState.get() != nullptr) {
+        mTorchState->releaseFlashHw();
+    }
+}
 
 status_t EmulatedCameraDeviceSessionHwlImpl::ConstructDefaultRequestSettings(
     RequestTemplate type, std::unique_ptr<HalCameraMetadata>* default_settings) {

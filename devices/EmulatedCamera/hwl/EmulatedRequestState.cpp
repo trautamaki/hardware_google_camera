@@ -453,11 +453,24 @@ status_t EmulatedRequestState::processAE() {
         auto ret = update3AMeteringRegion(ANDROID_CONTROL_AE_REGIONS, *mRequestSettings,
                 mAEMeteringRegion);
         if (ret != OK) {
-            return ret;
+            ALOGE("%s: Failed updating the 3A metering regions: %d, (%s)", __FUNCTION__, ret,
+                    strerror(-ret));
         }
 
     }
+
     camera_metadata_ro_entry_t entry;
+    bool autoAEMode = false;
+    bool autoAEFlashMode =  false;
+    switch (mAEMode) {
+        case ANDROID_CONTROL_AE_MODE_ON_AUTO_FLASH:
+        case ANDROID_CONTROL_AE_MODE_ON_ALWAYS_FLASH:
+        case ANDROID_CONTROL_AE_MODE_ON_AUTO_FLASH_REDEYE:
+            autoAEFlashMode =  true;
+            [[fallthrough]];
+        case ANDROID_CONTROL_AE_MODE_ON:
+            autoAEMode = true;
+    };
     if (((mAEMode == ANDROID_CONTROL_AE_MODE_OFF) || (mControlMode == ANDROID_CONTROL_MODE_OFF)) &&
             mSupportsManualSensor) {
         auto ret = mRequestSettings->Get(ANDROID_SENSOR_EXPOSURE_TIME, &entry);
@@ -504,17 +517,54 @@ status_t EmulatedRequestState::processAE() {
             }
         }
         mAEState = ANDROID_CONTROL_AE_STATE_INACTIVE;
-    } else if (mIsBackwardCompatible && (mAEMode == ANDROID_CONTROL_AE_MODE_ON)) {
-        // Do AE compensation on the results of the AE
+    } else if (mIsBackwardCompatible && autoAEMode) {
         auto ret = doFakeAE();
-        if (ret == OK) {
-            ret = compensateAE();
+        if (ret != OK) {
+            ALOGE("%s: Failed fake AE: %d, (%s)", __FUNCTION__, ret,
+                    strerror(-ret));
         }
 
-        return ret;
+        // Do AE compensation on the results of the AE
+        ret = compensateAE();
+        if (ret != OK) {
+            ALOGE("%s: Failed duiring AE compensation: %d, (%s)", __FUNCTION__, ret,
+                    strerror(-ret));
+        }
     } else {
         ALOGI("%s: No emulation for AE mode: %d using previous sensor settings!", __FUNCTION__,
                 mAEMode);
+    }
+
+    if (mIsFlashSupported) {
+        mFlashState = ANDROID_FLASH_STATE_READY;
+        // Flash fires only if the request manually enables it (SINGLE/TORCH)
+        // and the appropriate AE mode is set or during still capture with auto
+        // flash AE modes.
+        bool manualFlashMode = false;
+        auto ret = mRequestSettings->Get(ANDROID_FLASH_MODE, &entry);
+        if ((ret == OK) && (entry.count == 1)) {
+            if ((entry.data.u8[0] == ANDROID_FLASH_MODE_SINGLE) ||
+                    (entry.data.u8[0] == ANDROID_FLASH_MODE_TORCH)) {
+                manualFlashMode = true;
+            }
+        }
+        if (manualFlashMode && ((mAEMode == ANDROID_CONTROL_AE_MODE_OFF) ||
+                    (mAEMode == ANDROID_CONTROL_AE_MODE_ON))) {
+            mFlashState = ANDROID_FLASH_STATE_FIRED;
+        } else {
+            bool isStillCapture = false;
+            ret = mRequestSettings->Get(ANDROID_CONTROL_CAPTURE_INTENT, &entry);
+            if ((ret == OK) && (entry.count == 1)) {
+                if (entry.data.u8[0] == ANDROID_CONTROL_CAPTURE_INTENT_STILL_CAPTURE) {
+                    isStillCapture = true;
+                }
+            }
+            if (isStillCapture && autoAEFlashMode) {
+                mFlashState = ANDROID_FLASH_STATE_FIRED;
+            }
+        }
+    } else {
+        mFlashState = ANDROID_FLASH_STATE_UNAVAILABLE;
     }
 
     return OK;
@@ -1826,8 +1876,9 @@ status_t EmulatedRequestState::initializeFlashDefaults() {
     }
 
     if (mIsFlashSupported) {
-        ALOGE("%s: Emulator doesn't support flash yet!", __FUNCTION__);
-        return BAD_VALUE;
+        mFlashState = ANDROID_FLASH_STATE_READY;
+    } else {
+        mFlashState = ANDROID_FLASH_STATE_UNAVAILABLE;
     }
 
     uint8_t flashMode = ANDROID_FLASH_MODE_OFF;

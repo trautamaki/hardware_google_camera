@@ -22,6 +22,7 @@
 #include <camera_device_session_hwl.h>
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedRequestProcessor.h"
+#include "EmulatedTorchState.h"
 #include "utils/StreamConfigurationMap.h"
 
 namespace android {
@@ -40,7 +41,8 @@ using google_camera_hal::HalStream;
 class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 public:
     static std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> Create(uint32_t cameraId,
-            std::unique_ptr<HalCameraMetadata> staticMeta);
+            std::unique_ptr<HalCameraMetadata> staticMeta,
+            std::shared_ptr<EmulatedTorchState> torchState);
 
     virtual ~EmulatedCameraDeviceSessionHwlImpl();
 
@@ -97,8 +99,9 @@ private:
 
     status_t initialize(uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta);
 
-    EmulatedCameraDeviceSessionHwlImpl() :
-        mMaxPipelineDepth(0) {}
+    EmulatedCameraDeviceSessionHwlImpl(
+            std::shared_ptr<EmulatedTorchState> torchState) :
+        mMaxPipelineDepth(0), mTorchState(torchState) {}
 
     uint8_t mMaxPipelineDepth;
 
@@ -112,6 +115,7 @@ private:
     std::unique_ptr<EmulatedRequestProcessor> mRequestProcessor;
     std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
     SensorCharacteristics mSensorChars;
+    std::shared_ptr<EmulatedTorchState> mTorchState;
 };
 
 }  // namespace android

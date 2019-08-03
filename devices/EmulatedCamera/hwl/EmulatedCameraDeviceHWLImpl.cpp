@@ -26,9 +26,10 @@
 namespace android {
 
 std::unique_ptr<CameraDeviceHwl> EmulatedCameraDeviceHwlImpl::Create(
-        uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta) {
+        uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta,
+        std::shared_ptr<EmulatedTorchState> torchState) {
     auto device = std::unique_ptr<EmulatedCameraDeviceHwlImpl>(new EmulatedCameraDeviceHwlImpl(
-                cameraId, std::move(staticMeta)));
+                cameraId, std::move(staticMeta), torchState));
 
     if (device == nullptr) {
         ALOGE("%s: Creating EmulatedCameraDeviceHwlImpl failed.", __FUNCTION__);
@@ -49,8 +50,9 @@ std::unique_ptr<CameraDeviceHwl> EmulatedCameraDeviceHwlImpl::Create(
 }
 
 EmulatedCameraDeviceHwlImpl::EmulatedCameraDeviceHwlImpl(uint32_t cameraId,
-        std::unique_ptr<HalCameraMetadata> staticMeta) :
-    mCameraId(cameraId), mStaticMetadata(std::move(staticMeta)) { }
+        std::unique_ptr<HalCameraMetadata> staticMeta,
+        std::shared_ptr<EmulatedTorchState> torchState) :
+    mCameraId(cameraId), mStaticMetadata(std::move(staticMeta)), mTorchState(torchState) { }
 
 uint32_t EmulatedCameraDeviceHwlImpl::GetCameraId() const {
   return mCameraId;
@@ -95,9 +97,12 @@ status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
     return OK;
 }
 
-status_t EmulatedCameraDeviceHwlImpl::SetTorchMode(TorchMode /*mode*/) {
-    // TODO: impl
-    return INVALID_OPERATION;
+status_t EmulatedCameraDeviceHwlImpl::SetTorchMode(TorchMode mode) {
+    if (mTorchState.get() == nullptr) {
+        return INVALID_OPERATION;
+    }
+
+    return mTorchState->setTorchMode(mode);
 }
 
 status_t EmulatedCameraDeviceHwlImpl::DumpState(int /*fd*/) {
@@ -113,10 +118,14 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
     }
 
     std::unique_ptr<HalCameraMetadata> meta = HalCameraMetadata::Clone(mStaticMetadata.get());
-    *session = EmulatedCameraDeviceSessionHwlImpl::Create(mCameraId, std::move(meta));
+    *session = EmulatedCameraDeviceSessionHwlImpl::Create(mCameraId, std::move(meta), mTorchState);
     if (*session == nullptr) {
         ALOGE("%s: Cannot create EmulatedCameraDeviceSessionHWlImpl.", __FUNCTION__);
         return BAD_VALUE;
+    }
+
+    if (mTorchState.get() != nullptr) {
+        mTorchState->acquireFlashHw();
     }
 
     return OK;

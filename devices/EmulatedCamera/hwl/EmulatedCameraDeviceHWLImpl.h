@@ -19,6 +19,7 @@
 
 #include <camera_device_hwl.h>
 #include "EmulatedSensor.h"
+#include "EmulatedTorchState.h"
 #include <hal_types.h>
 #include "utils/StreamConfigurationMap.h"
 
@@ -35,7 +36,8 @@ using google_camera_hal::TorchMode;
 class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
 public:
     static std::unique_ptr<CameraDeviceHwl> Create(uint32_t cameraId,
-            std::unique_ptr<HalCameraMetadata> staticMeta);
+            std::unique_ptr<HalCameraMetadata> staticMeta,
+            std::shared_ptr<EmulatedTorchState> torchState);
 
     virtual ~EmulatedCameraDeviceHwlImpl() = default;
 
@@ -67,12 +69,14 @@ private:
     const uint32_t mCameraId = 0;
 
     EmulatedCameraDeviceHwlImpl(uint32_t camera_id,
-            std::unique_ptr<HalCameraMetadata> staticMeta);
+            std::unique_ptr<HalCameraMetadata> staticMeta,
+            std::shared_ptr<EmulatedTorchState> torchState);
 
     status_t initialize();
 
     std::unique_ptr<HalCameraMetadata> mStaticMetadata;
     std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
+    std::shared_ptr<EmulatedTorchState> mTorchState;
     SensorCharacteristics mSensorChars;
 };
 
