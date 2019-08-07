@@ -43,8 +43,7 @@ public:
     status_t getDefaultRequest(RequestTemplate type,
             std::unique_ptr<HalCameraMetadata>* default_settings/*out*/);
 
-    std::unique_ptr<HwlPipelineResult> initializeResult(const PendingRequest& request,
-            uint32_t pipelineId, uint32_t frameNumber);
+    std::unique_ptr<HwlPipelineResult> initializeResult(uint32_t pipelineId, uint32_t frameNumber);
 
     status_t initializeSensorSettings(std::unique_ptr<HalCameraMetadata> requestSettings,
             EmulatedSensor::SensorSettings *sensorSettings/*out*/);
@@ -73,6 +72,7 @@ private:
     status_t initializeNoiseReductionDefaults();
     status_t initializeColorCorrectionDefaults();
     status_t initializeScalerDefaults();
+    status_t initializeReprocessDefaults();
     status_t initializeMeteringRegionDefault(uint32_t tag, int32_t *region/*out*/);
     status_t initializeControlefaults();
     status_t initializeInfoDefaults();
@@ -121,6 +121,8 @@ private:
     bool mSupportsManualPostProcessing = false;
     bool mIsBackwardCompatible = false;
     bool mIsRAWCapable = false;
+    bool mSupportsPrivateReprocessing = false;
+    bool mSupportsYUVReprocessing = false;
 
     // android.control.*
     struct SceneOverride {

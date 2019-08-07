@@ -35,6 +35,8 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_READ_SENSOR_SETTINGS,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BURST_CAPTURE,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING,
     //TODO: Support more capabilities out-of-the box
 };
 
@@ -672,15 +674,14 @@ status_t EmulatedRequestState::initializeSensorSettings(
     return OK;
 }
 
-std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(
-        const PendingRequest& request, uint32_t pipelineId, uint32_t frameNumber) {
+std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(uint32_t pipelineId,
+        uint32_t frameNumber) {
     std::lock_guard<std::mutex> lock(mRequestStateMutex);
     auto result = std::make_unique<HwlPipelineResult>();
     result->camera_id = mCameraId;
     result->pipeline_id = pipelineId;
     result->frame_number = frameNumber;
     result->result_metadata = HalCameraMetadata::Clone(mRequestSettings.get());
-    result->input_buffers = request.inputBuffers;
     result->partial_result = mPartialResultCount;
 
     // Results supported on all emulated devices
@@ -1421,6 +1422,12 @@ status_t EmulatedRequestState::initializeControlDefaults() {
                 awbMode = ANDROID_CONTROL_AWB_MODE_OFF;
                 afMode = ANDROID_CONTROL_AF_MODE_OFF;
                 break;
+            case RequestTemplate::kZeroShutterLag:
+                intent = ANDROID_CONTROL_CAPTURE_INTENT_ZERO_SHUTTER_LAG;
+                if (mPictureCAFSupported) {
+                    afMode = ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
+                }
+                break;
             case RequestTemplate::kPreview:
                 intent = ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW;
                 if (mPictureCAFSupported) {
@@ -1583,6 +1590,8 @@ status_t EmulatedRequestState::initializeEdgeDefaults() {
             mAvailableEdgeModes.end();
         bool isHQModeSupported = mAvailableEdgeModes.find(ANDROID_EDGE_MODE_HIGH_QUALITY) !=
             mAvailableEdgeModes.end();
+        bool isZSLModeSupported = mAvailableEdgeModes.find(ANDROID_EDGE_MODE_ZERO_SHUTTER_LAG) !=
+            mAvailableEdgeModes.end();
         uint8_t edgeMode = *mAvailableAEModes.begin();
         for (size_t idx = 0; idx < kTemplateCount; idx++) {
             if (mDefaultRequests[idx].get() == nullptr) {
@@ -1600,6 +1609,11 @@ status_t EmulatedRequestState::initializeEdgeDefaults() {
                 case RequestTemplate::kStillCapture:
                     if (isHQModeSupported) {
                         edgeMode = ANDROID_EDGE_MODE_HIGH_QUALITY;
+                    }
+                    break;
+                case RequestTemplate::kZeroShutterLag:
+                    if (isZSLModeSupported) {
+                        edgeMode = ANDROID_EDGE_MODE_ZERO_SHUTTER_LAG;
                     }
                     break;
                 default:
@@ -1784,6 +1798,8 @@ status_t EmulatedRequestState::initializeNoiseReductionDefaults() {
             ANDROID_NOISE_REDUCTION_MODE_FAST) != mAvailableNoiseReductionModes.end();
     bool isHQModeSupported = mAvailableNoiseReductionModes.find(
             ANDROID_NOISE_REDUCTION_MODE_HIGH_QUALITY) != mAvailableNoiseReductionModes.end();
+    bool isZSLModeSupported = mAvailableNoiseReductionModes.find(
+            ANDROID_NOISE_REDUCTION_MODE_ZERO_SHUTTER_LAG) != mAvailableNoiseReductionModes.end();
     uint8_t noiseReductionMode = *mAvailableLensShadingMapModes.begin();
     for (size_t idx = 0; idx < kTemplateCount; idx++) {
         if (mDefaultRequests[idx].get() == nullptr) {
@@ -1801,6 +1817,11 @@ status_t EmulatedRequestState::initializeNoiseReductionDefaults() {
             case RequestTemplate::kStillCapture:
                 if (isHQModeSupported) {
                     noiseReductionMode = ANDROID_NOISE_REDUCTION_MODE_HIGH_QUALITY;
+                }
+                break;
+            case RequestTemplate::kZeroShutterLag:
+                if (isZSLModeSupported) {
+                    noiseReductionMode = ANDROID_NOISE_REDUCTION_MODE_ZERO_SHUTTER_LAG;
                 }
                 break;
             default:
@@ -2008,6 +2029,33 @@ status_t EmulatedRequestState::initializeInfoDefaults() {
 
     mSupportedHWLevel = entry.data.u8[0];
 
+    return initializeReprocessDefaults();
+}
+
+status_t EmulatedRequestState::initializeReprocessDefaults() {
+    if (mSupportsPrivateReprocessing || mSupportsYUVReprocessing) {
+        StreamConfigurationMap configMap(*mStaticMetadata);
+        if (!configMap.supportsReprocessing()) {
+            ALOGE("%s: Reprocess capability present but InputOutput format map is absent!",
+                    __FUNCTION__);
+            return BAD_VALUE;
+        }
+
+        auto inputFormats = configMap.getInputFormats();
+        for (const auto& inputFormat : inputFormats) {
+            auto outputFormats = configMap.getValidOutputFormatsForInput(inputFormat);
+            for (const auto& outputFormat : outputFormats) {
+                if (!EmulatedSensor::isReprocessPathSupported(
+                            EmulatedSensor::overrideFormat(inputFormat),
+                            EmulatedSensor::overrideFormat(outputFormat))) {
+                    ALOGE("%s: Input format: 0x%x to output format: 0x%x reprocess is"
+                            " currently not supported!", __FUNCTION__, inputFormat, outputFormat);
+                    return BAD_VALUE;
+                }
+            }
+        }
+    }
+
     return initializeLensDefaults();
 }
 
@@ -2071,6 +2119,10 @@ status_t EmulatedRequestState::initializeRequestDefaults() {
             ANDROID_REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR);
     mSupportsManualPostProcessing = supportsCapability(
             ANDROID_REQUEST_AVAILABLE_CAPABILITIES_MANUAL_POST_PROCESSING);
+    mSupportsPrivateReprocessing = supportsCapability(
+            ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING);
+    mSupportsYUVReprocessing = supportsCapability(
+            ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING);
     mIsBackwardCompatible = supportsCapability(
             ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE);
     mIsRAWCapable = supportsCapability(ANDROID_REQUEST_AVAILABLE_CAPABILITIES_RAW);
@@ -2092,6 +2144,11 @@ status_t EmulatedRequestState::initializeRequestDefaults() {
                 //Noop
                 break;
         }
+    }
+
+    if (mSupportsYUVReprocessing || mSupportsPrivateReprocessing) {
+        auto templateIdx = static_cast<size_t> (RequestTemplate::kZeroShutterLag);
+        mDefaultRequests[templateIdx] = HalCameraMetadata::Create(1, 10);
     }
 
     return initializeInfoDefaults();

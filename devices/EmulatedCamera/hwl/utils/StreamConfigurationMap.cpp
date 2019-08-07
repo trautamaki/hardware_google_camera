@@ -99,6 +99,24 @@ StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars) {
         appendAvailableStreamStallDurations(entry);
     }
 
+    ret = chars.Get(ANDROID_SCALER_AVAILABLE_INPUT_OUTPUT_FORMATS_MAP, &entry);
+    if (ret == OK) {
+        size_t i = 0;
+        while (i < entry.count) {
+            auto inputFormat = static_cast<android_pixel_format_t>(entry.data.i32[i++]);
+            auto outputFormatCount = entry.data.i32[i++];
+            if (outputFormatCount <= 0 || ((outputFormatCount + i) > entry.count)) {
+                ALOGE("%s: Invalid output format count: %d!", __func__, outputFormatCount);
+                break;
+            }
+            size_t outputFormatsEnd = outputFormatCount + i;
+            for (; i < outputFormatsEnd; i++) {
+                mStreamInputOutputMap[inputFormat].insert(
+                        static_cast<android_pixel_format_t>(entry.data.i32[i]));
+            }
+            mStreamInputFormats.insert(inputFormat);
+        }
+    }
 }
 
 }  // namespace android

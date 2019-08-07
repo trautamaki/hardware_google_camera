@@ -70,6 +70,19 @@ public:
         return (ret == mStreamStallMap.end()) ? 0 : ret->second;
     }
 
+    bool supportsReprocessing() const {
+        return !mStreamInputOutputMap.empty();
+    }
+
+    const std::set<android_pixel_format_t>& getValidOutputFormatsForInput(
+            android_pixel_format_t format) {
+        return mStreamInputOutputMap[format];
+    }
+
+    const std::set<android_pixel_format_t>& getInputFormats() {
+        return mStreamInputFormats;
+    }
+
 private:
 
     void appendAvailableStreamConfigurations(const camera_metadata_ro_entry& entry);
@@ -88,6 +101,9 @@ private:
     std::unordered_map<android_pixel_format_t, std::set<StreamSize>> mStreamOutputSizeMap;
     std::unordered_map<StreamConfig, nsecs_t, StreamConfigurationHash> mStreamStallMap;
     std::unordered_map<StreamConfig, nsecs_t, StreamConfigurationHash> mStreamMinDurationMap;
+    std::set<android_pixel_format_t> mStreamInputFormats;
+    std::unordered_map<android_pixel_format_t, std::set<android_pixel_format_t>>
+        mStreamInputOutputMap;
 };
 
 

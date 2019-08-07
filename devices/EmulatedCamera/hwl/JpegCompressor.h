@@ -40,25 +40,25 @@ using google_camera_hal::BufferStatus;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
 
-struct JpegARGBInput {
+struct JpegYUV420Input {
     uint32_t width, height;
-    uint32_t stride;
-    uint8_t *img;
+    bool bufferOwner;
+    YCbCrPlanes yuvPlanes;
 
-    JpegARGBInput() : width(0), height(0), stride(0), img(nullptr) {}
-    ~JpegARGBInput() {
-        if (img != nullptr) {
-            delete [] img;
-            img = nullptr;
+    JpegYUV420Input() : width(0), height(0), bufferOwner(false) {}
+    ~JpegYUV420Input() {
+        if ((yuvPlanes.imgY != nullptr) && bufferOwner) {
+            delete [] yuvPlanes.imgY;
+            yuvPlanes = {};
         }
     }
 
-    JpegARGBInput(const JpegARGBInput&) = delete;
-    JpegARGBInput& operator = (const JpegARGBInput&) = delete;
+    JpegYUV420Input(const JpegYUV420Input&) = delete;
+    JpegYUV420Input& operator = (const JpegYUV420Input&) = delete;
 };
 
-struct JpegJob {
-    std::unique_ptr<JpegARGBInput> input;
+struct JpegYUV420Job {
+    std::unique_ptr<JpegYUV420Input> input;
     std::unique_ptr<SensorBuffer> output;
     std::unique_ptr<HalCameraMetadata> resultMetadata;
 };
@@ -68,31 +68,29 @@ public:
     JpegCompressor(std::unique_ptr<ExifUtils> exifUtils);
     virtual ~JpegCompressor();
 
-    status_t queue(std::unique_ptr<JpegJob> job);
+    status_t queueYUV420(std::unique_ptr<JpegYUV420Job> job);
 
 private:
     std::mutex mMutex;
     std::condition_variable mCondition;
     bool mJpegDone = false;
     std::thread mJpegProcessingThread;
-    HandleImporter mImporter;
-    std::queue<std::unique_ptr<JpegJob>> mPendingJobs;
+    std::queue<std::unique_ptr<JpegYUV420Job>> mPendingYUVJobs;
     std::unique_ptr<ExifUtils> mExifUtils;
 
     j_common_ptr mJpegErrorInfo;
     bool checkError(const char *msg);
-    void compress(std::unique_ptr<JpegJob> job);
-    struct ARGBFrame {
+    void compressYUV420(std::unique_ptr<JpegYUV420Job> job);
+    struct YUV420Frame {
         uint8_t *outputBuffer;
         size_t outputBufferSize;
-        uint8_t *inputBuffer;
-        size_t inputBufferStride;
+        YCbCrPlanes yuvPlanes;
         size_t width;
         size_t height;
         const uint8_t *app1Buffer;
         size_t app1BufferSize;
     };
-    size_t compressARGBFrame(ARGBFrame frame);
+    size_t compressYUV420Frame(YUV420Frame frame);
     void threadLoop();
 
     JpegCompressor(const JpegCompressor&) = delete;

@@ -74,24 +74,41 @@ status_t EmulatedRequestProcessor::processPipelineRequests(uint32_t frameNumber,
             }
         }
 
-        const auto& streams = pipelines[request.pipeline_id].streams;
-        auto sensorBuffers = std::make_unique<Buffers>();
-        sensorBuffers->reserve(request.output_buffers.size());
-        for (const auto& outputBuffer : request.output_buffers) {
-            auto sensorBuffer = createSensorBuffer(frameNumber, streams.at(outputBuffer.stream_id),
-                    request, pipelines[request.pipeline_id].cb, outputBuffer);
-            if (sensorBuffer.get() != nullptr) {
-                sensorBuffers->push_back(std::move(sensorBuffer));
-            }
-        }
+        auto outputBuffers = createSensorBuffers(frameNumber, request.output_buffers,
+                pipelines[request.pipeline_id].streams, request.pipeline_id,
+                pipelines[request.pipeline_id].cb);
+        auto inputBuffers = createSensorBuffers(frameNumber, request.input_buffers,
+                pipelines[request.pipeline_id].streams, request.pipeline_id,
+                pipelines[request.pipeline_id].cb);
 
         mPendingRequests.push({
                 .settings = HalCameraMetadata::Clone(request.settings.get()),
-                .inputBuffers = request.input_buffers,
-                .outputBuffers = std::move(sensorBuffers)});
+                .inputBuffers = std::move(inputBuffers),
+                .outputBuffers = std::move(outputBuffers)});
     }
 
     return OK;
+}
+
+std::unique_ptr<Buffers> EmulatedRequestProcessor::createSensorBuffers(uint32_t frameNumber,
+        const std::vector<StreamBuffer>& buffers,
+        const std::unordered_map<uint32_t, EmulatedStream>& streams, uint32_t pipelineId,
+        HwlPipelineCallback cb) {
+    if (buffers.empty()) {
+        return nullptr;
+    }
+
+    auto sensorBuffers = std::make_unique<Buffers>();
+    sensorBuffers->reserve(buffers.size());
+    for (const auto& buffer : buffers) {
+        auto sensorBuffer = createSensorBuffer(frameNumber, streams.at(buffer.stream_id),
+                pipelineId, cb, buffer);
+        if (sensorBuffer.get() != nullptr) {
+            sensorBuffers->push_back(std::move(sensorBuffer));
+        }
+    }
+
+    return sensorBuffers;
 }
 
 void EmulatedRequestProcessor::notifyFailedRequest(const PendingRequest& request) {
@@ -214,19 +231,25 @@ status_t EmulatedRequestProcessor::lockSensorBuffer(const EmulatedStream& stream
 }
 
 std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::createSensorBuffer(uint32_t frameNumber,
-        const EmulatedStream& stream, const HwlPipelineRequest& request,
-        HwlPipelineCallback callback, StreamBuffer streamBuffer) {
+        const EmulatedStream& emulatedStream, uint32_t pipelineId, HwlPipelineCallback callback,
+        StreamBuffer streamBuffer) {
     auto buffer = std::make_unique<SensorBuffer>();
 
+    auto stream = emulatedStream;
+    // Make sure input stream formats are correctly mapped here
+    if (stream.isInput) {
+        stream.override_format = EmulatedSensor::overrideFormat(stream.override_format);
+    }
     buffer->width = stream.width;
     buffer->height = stream.height;
     buffer->format = stream.override_format;
     buffer->dataSpace = stream.override_data_space;
     buffer->streamBuffer = streamBuffer;
-    buffer->pipelineId = request.pipeline_id;
+    buffer->pipelineId = pipelineId;
     buffer->callback = callback;
     buffer->frameNumber = frameNumber;
     buffer->cameraId = mCameraId;
+    buffer->isInput = stream.isInput;
 
     auto ret = lockSensorBuffer(stream, buffer->importer, streamBuffer.buffer, buffer.get());
     if (ret != OK) {
@@ -249,13 +272,16 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::createSensorBuffer(uint3
     return buffer;
 }
 
-std::unique_ptr<Buffers> EmulatedRequestProcessor::initializeOutputBuffers(
-        const PendingRequest& request) {
-    auto outputBuffers = std::make_unique<Buffers>();
+std::unique_ptr<Buffers> EmulatedRequestProcessor::acquireBuffers(
+        Buffers *buffers) {
+    if ((buffers == nullptr) || (buffers->empty())) {
+        return nullptr;
+    }
 
-    outputBuffers->reserve(request.outputBuffers->size());
-    auto outputBuffer = request.outputBuffers->begin();
-    while (outputBuffer != request.outputBuffers->end()) {
+    auto acquiredBuffers = std::make_unique<Buffers>();
+    acquiredBuffers->reserve(buffers->size());
+    auto outputBuffer = buffers->begin();
+    while (outputBuffer != buffers->end()) {
         if((*outputBuffer)->acquireFenceFd >= 0) {
             auto ret = sync_wait((*outputBuffer)->acquireFenceFd,
                     ns2ms(EmulatedSensor::kSupportedFrameDurationRange[1]));
@@ -269,13 +295,13 @@ std::unique_ptr<Buffers> EmulatedRequestProcessor::initializeOutputBuffers(
         if ((*outputBuffer)->streamBuffer.status == BufferStatus::kOk) {
             // In case buffer processing is successful, flip this flag accordingly
             (*outputBuffer)->streamBuffer.status = BufferStatus::kError;
-            outputBuffers->push_back(std::move(*outputBuffer));
+            acquiredBuffers->push_back(std::move(*outputBuffer));
         }
 
-        outputBuffer = request.outputBuffers->erase(outputBuffer);
+        outputBuffer = buffers->erase(outputBuffer);
     }
 
-    return outputBuffers;
+    return acquiredBuffers;
 }
 
 void EmulatedRequestProcessor::requestProcessorLoop() {
@@ -303,11 +329,13 @@ void EmulatedRequestProcessor::requestProcessorLoop() {
                     ret = mRequestState->initializeSensorSettings(HalCameraMetadata::Clone(
                                 mLastSettings.get()), &settings);
                 }
-                auto outputBuffers = initializeOutputBuffers(request);
+
+                auto outputBuffers = acquireBuffers(request.outputBuffers.get());
                 if (!outputBuffers->empty() && (ret == OK)) {
-                    auto result = mRequestState->initializeResult(request, pipelineId, frameNumber);
+                    auto result = mRequestState->initializeResult(pipelineId, frameNumber);
+                    auto inputBuffers = acquireBuffers(request.inputBuffers.get());
                     mSensor->setCurrentRequest(settings, std::move(result),
-                            std::move(outputBuffers));
+                            std::move(inputBuffers), std::move(outputBuffers));
                 } else {
                     // No further processing is needed, just fail the result which will complete
                     // this request.

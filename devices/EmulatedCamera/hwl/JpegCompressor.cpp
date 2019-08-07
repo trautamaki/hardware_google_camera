@@ -45,14 +45,14 @@ JpegCompressor::~JpegCompressor() {
     mJpegDone = true;
     mCondition.notify_one();
     mJpegProcessingThread.join();
-    while (!mPendingJobs.empty()) {
-        auto job = std::move(mPendingJobs.front());
+    while (!mPendingYUVJobs.empty()) {
+        auto job = std::move(mPendingYUVJobs.front());
         job->output->streamBuffer.status = BufferStatus::kError;
-        mPendingJobs.pop();
+        mPendingYUVJobs.pop();
     }
 }
 
-status_t JpegCompressor::queue(std::unique_ptr<JpegJob> job) {
+status_t JpegCompressor::queueYUV420(std::unique_ptr<JpegYUV420Job> job) {
     ATRACE_CALL();
 
     if ((job->input.get() == nullptr) || (job->output.get() == nullptr) ||
@@ -63,7 +63,7 @@ status_t JpegCompressor::queue(std::unique_ptr<JpegJob> job) {
     }
 
     std::unique_lock<std::mutex> lock(mMutex);
-    mPendingJobs.push(std::move(job));
+    mPendingYUVJobs.push(std::move(job));
     mCondition.notify_one();
 
     return OK;
@@ -73,17 +73,17 @@ void JpegCompressor::threadLoop() {
     ATRACE_CALL();
 
     while (!mJpegDone) {
-        std::unique_ptr<JpegJob> currentJob = nullptr;
+        std::unique_ptr<JpegYUV420Job> currentYUVJob = nullptr;
         {
             std::lock_guard<std::mutex> lock(mMutex);
-            if (!mPendingJobs.empty()) {
-                currentJob = std::move(mPendingJobs.front());
-                mPendingJobs.pop();
+            if (!mPendingYUVJobs.empty()) {
+                currentYUVJob = std::move(mPendingYUVJobs.front());
+                mPendingYUVJobs.pop();
             }
         }
 
-        if (currentJob.get() != nullptr) {
-            compress(std::move(currentJob));
+        if (currentYUVJob.get() != nullptr) {
+            compressYUV420(std::move(currentYUVJob));
         }
 
         std::unique_lock<std::mutex> lock(mMutex);
@@ -94,7 +94,7 @@ void JpegCompressor::threadLoop() {
     }
 }
 
-void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
+void JpegCompressor::compressYUV420(std::unique_ptr<JpegYUV420Job> job) {
     const uint8_t *app1Buffer = nullptr;
     size_t app1BufferSize = 0;
     std::vector<uint8_t> thumbnailJpegBuffer;
@@ -104,42 +104,55 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
             camera_metadata_ro_entry_t entry;
             size_t thumbnailWidth = 0;
             size_t thumbnailHeight = 0;
-            size_t thumbnailStride = 0;
-            std::vector<uint8_t> thumbARGBFrame;
+            std::vector<uint8_t> thumbYUV420Frame;
+            YCbCrPlanes thumbPlanes;
             auto ret = job->resultMetadata->Get(ANDROID_JPEG_THUMBNAIL_SIZE, &entry);
             if ((ret == OK) && (entry.count == 2)) {
                 thumbnailWidth = entry.data.i32[0];
                 thumbnailHeight = entry.data.i32[1];
                 if ((thumbnailWidth > 0) && (thumbnailHeight > 0)) {
-                    thumbnailStride = thumbnailWidth * 4;
-                    thumbARGBFrame.resize(thumbnailStride * thumbnailHeight);
+                    thumbYUV420Frame.resize((thumbnailWidth * thumbnailHeight * 3) / 2);
+                    thumbPlanes = {
+                            .imgY = thumbYUV420Frame.data(),
+                            .imgCb = thumbYUV420Frame.data() + thumbnailWidth * thumbnailHeight,
+                            .imgCr = thumbYUV420Frame.data() +
+                                    (thumbnailWidth * thumbnailHeight * 5) / 4,
+                            .yStride = thumbnailWidth,
+                            .CbCrStride = thumbnailWidth / 2};
                     // TODO: Crop thumbnail according to documentation
-                    auto stat = ARGBScale(
-                            job->input->img,
-                            job->input->stride,
+                    auto stat = I420Scale(
+                            job->input->yuvPlanes.imgY,
+                            job->input->yuvPlanes.yStride,
+                            job->input->yuvPlanes.imgCb,
+                            job->input->yuvPlanes.CbCrStride,
+                            job->input->yuvPlanes.imgCr,
+                            job->input->yuvPlanes.CbCrStride,
                             job->input->width,
                             job->input->height,
-                            thumbARGBFrame.data(),
-                            thumbnailStride,
+                            thumbPlanes.imgY,
+                            thumbPlanes.yStride,
+                            thumbPlanes.imgCb,
+                            thumbPlanes.CbCrStride,
+                            thumbPlanes.imgCr,
+                            thumbPlanes.CbCrStride,
                             thumbnailWidth,
                             thumbnailHeight,
                             libyuv::kFilterNone);
                     if (stat != 0) {
                         ALOGE("%s: Failed during thumbnail scaling: %d", __FUNCTION__, stat);
-                        thumbARGBFrame.clear();
+                        thumbYUV420Frame.clear();
                     }
                 }
             }
 
             if (mExifUtils->setFromMetadata(*job->resultMetadata, job->input->width,
                         job->input->height)) {
-                if (!thumbARGBFrame.empty()) {
+                if (!thumbYUV420Frame.empty()) {
                     thumbnailJpegBuffer.resize(64*1024); //APP1 is limited by 64k
-                    encodedThumbnailSize = compressARGBFrame({
+                    encodedThumbnailSize = compressYUV420Frame({
                             .outputBuffer = thumbnailJpegBuffer.data(),
                             .outputBufferSize = thumbnailJpegBuffer.size(),
-                            .inputBuffer = thumbARGBFrame.data(),
-                            .inputBufferStride = thumbnailStride,
+                            .yuvPlanes = thumbPlanes,
                             .width = thumbnailWidth,
                             .height = thumbnailHeight,
                             .app1Buffer = nullptr,
@@ -180,11 +193,10 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
         }
     }
 
-    auto encodedSize = compressARGBFrame({
+    auto encodedSize = compressYUV420Frame({
             .outputBuffer = job->output->plane.img.img,
             .outputBufferSize = job->output->plane.img.bufferSize,
-            .inputBuffer = job->input->img,
-            .inputBufferStride = job->input->stride,
+            .yuvPlanes = job->input->yuvPlanes,
             .width = job->input->width,
             .height = job->input->height,
             .app1Buffer = app1Buffer,
@@ -208,7 +220,7 @@ void JpegCompressor::compress(std::unique_ptr<JpegJob> job) {
     }
 }
 
-size_t JpegCompressor::compressARGBFrame(ARGBFrame frame) {
+size_t JpegCompressor::compressYUV420Frame(YUV420Frame frame) {
     ATRACE_CALL();
 
     struct CustomJpegDestMgr : public jpeg_destination_mgr {
@@ -239,6 +251,7 @@ size_t JpegCompressor::compressARGBFrame(ARGBFrame frame) {
 
     dmgr.buffer = static_cast<JOCTET*>(frame.outputBuffer);
     dmgr.bufferSize = frame.outputBufferSize;
+    ALOGE("%s: Jpeg out buffer: %p size: %u", __func__, dmgr.buffer, (unsigned) dmgr.bufferSize);
     dmgr.encodedSize = 0;
     dmgr.success = true;
     cinfo->client_data = static_cast<void*>(&dmgr);
@@ -265,15 +278,37 @@ size_t JpegCompressor::compressARGBFrame(ARGBFrame frame) {
     // Set up compression parameters
     cinfo->image_width = frame.width;
     cinfo->image_height = frame.height;
-    cinfo->input_components = 4;
-    cinfo->in_color_space = JCS_EXT_ARGB;
+    cinfo->input_components = 3;
+    cinfo->in_color_space = JCS_YCbCr;
 
     jpeg_set_defaults(cinfo.get());
     if (checkError("Error configuring defaults")) {
         return 0;
     }
 
-    // Do compression
+    jpeg_set_colorspace(cinfo.get(), JCS_YCbCr);
+    if (checkError("Error configuring color space")) {
+        return 0;
+    }
+
+    cinfo->raw_data_in = 1;
+    // YUV420 planar with chroma subsampling
+    cinfo->comp_info[0].h_samp_factor = 2;
+    cinfo->comp_info[0].v_samp_factor = 2;
+    cinfo->comp_info[1].h_samp_factor = 1;
+    cinfo->comp_info[1].v_samp_factor = 1;
+    cinfo->comp_info[2].h_samp_factor = 1;
+    cinfo->comp_info[2].v_samp_factor = 1;
+
+    int maxVSampFactor = std::max( {
+        cinfo->comp_info[0].v_samp_factor,
+        cinfo->comp_info[1].v_samp_factor,
+        cinfo->comp_info[2].v_samp_factor
+    });
+    int cVSubSampling = cinfo->comp_info[0].v_samp_factor /
+                        cinfo->comp_info[1].v_samp_factor;
+
+    // Start compression
     jpeg_start_compress(cinfo.get(), TRUE);
     if (checkError("Error starting compression")) {
         return 0;
@@ -284,14 +319,40 @@ size_t JpegCompressor::compressARGBFrame(ARGBFrame frame) {
                 frame.app1BufferSize);
     }
 
-    size_t rowStride = frame.inputBufferStride;
-    const size_t kChunkSize = 32;
-    while (cinfo->next_scanline < cinfo->image_height) {
-        JSAMPROW chunk[kChunkSize];
-        for (size_t i = 0; i < kChunkSize; i++) {
-            chunk[i] = (JSAMPROW)(frame.inputBuffer + (i + cinfo->next_scanline) * rowStride);
+    // Compute our macroblock height, so we can pad our input to be vertically
+    // macroblock aligned.
+
+    size_t mcuV = DCTSIZE*maxVSampFactor;
+    size_t paddedHeight = mcuV * ((cinfo->image_height + mcuV - 1) / mcuV);
+
+    std::vector<JSAMPROW> yLines (paddedHeight);
+    std::vector<JSAMPROW> cbLines(paddedHeight/cVSubSampling);
+    std::vector<JSAMPROW> crLines(paddedHeight/cVSubSampling);
+
+    uint8_t *py = static_cast<uint8_t*>(frame.yuvPlanes.imgY);
+    uint8_t *pcr = static_cast<uint8_t*>(frame.yuvPlanes.imgCr);
+    uint8_t *pcb = static_cast<uint8_t*>(frame.yuvPlanes.imgCb);
+
+    for(uint32_t i = 0; i < paddedHeight; i++)
+    {
+        /* Once we are in the padding territory we still point to the last line
+         * effectively replicating it several times ~ CLAMP_TO_EDGE */
+        int li = std::min(i, cinfo->image_height - 1);
+        yLines[i]  = static_cast<JSAMPROW>(py + li * frame.yuvPlanes.yStride);
+        if(i < paddedHeight / cVSubSampling)
+        {
+            crLines[i] = static_cast<JSAMPROW>(pcr + li * frame.yuvPlanes.CbCrStride);
+            cbLines[i] = static_cast<JSAMPROW>(pcb + li * frame.yuvPlanes.CbCrStride);
         }
-        jpeg_write_scanlines(cinfo.get(), chunk, kChunkSize);
+    }
+
+    const uint32_t batchSize = DCTSIZE * maxVSampFactor;
+    while (cinfo->next_scanline < cinfo->image_height) {
+        JSAMPARRAY planes[3]{ &yLines[cinfo->next_scanline],
+                              &cbLines[cinfo->next_scanline/cVSubSampling],
+                              &crLines[cinfo->next_scanline/cVSubSampling] };
+
+        jpeg_write_raw_data(cinfo.get(), planes, batchSize);
         if (checkError("Error while compressing")) {
             return 0;
         }

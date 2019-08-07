@@ -132,10 +132,12 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
 
     emulatedPipeline.streams.reserve(request_config.streams.size());
     for (const auto& stream : request_config.streams) {
+        bool isInput = stream.stream_type == google_camera_hal::StreamType::kInput;
         emulatedPipeline.streams.emplace(std::make_pair<uint32_t, EmulatedStream>(stream.id, {{
                 .id = stream.id,
-                .override_format = EmulatedSensor::overrideFormat(stream.format),
-                .producer_usage = GRALLOC_USAGE_SW_WRITE_OFTEN,
+                .override_format = isInput ? stream.format : EmulatedSensor::overrideFormat(stream.format),
+                .producer_usage = isInput ? 0 : GRALLOC_USAGE_SW_WRITE_OFTEN |
+                        GRALLOC_USAGE_SW_READ_OFTEN,
                 .consumer_usage = 0,
                 .max_buffers = mMaxPipelineDepth,
                 .override_data_space = stream.data_space,
@@ -143,6 +145,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(uint32_t physical
                 .physical_camera_id = stream.physical_camera_id},
             .width = stream.width,
             .height = stream.height,
+            .isInput = isInput,
             .bufferSize = stream.buffer_size}));
     }
 
@@ -213,7 +216,26 @@ status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(uint32_t frame_numbe
     ATRACE_CALL();
     std::lock_guard<std::mutex> lock(mAPIMutex);
 
-    //TODO: Check input request
+    // Check whether reprocess request has valid/supported outputs.
+    for (const auto& request : requests) {
+        if (!request.input_buffers.empty()) {
+            for (const auto& inputBuffer : request.input_buffers) {
+                const auto& streams = mPipelines[request.pipeline_id].streams;
+                auto inputStream = streams.at(inputBuffer.stream_id);
+                auto outputFormats = mStreamConigurationMap->getValidOutputFormatsForInput(
+                        inputStream.override_format);
+                for (const auto& outputBuffer : request.output_buffers) {
+                    auto outputStream = streams.at(outputBuffer.stream_id);
+                    if (outputFormats.find(outputStream.override_format) == outputFormats.end()) {
+                        ALOGE("%s: Reprocess request with input format: 0x%x to output format: 0x%x"
+                                " not supported!", __FUNCTION__, inputStream.override_format,
+                                outputStream.override_format);
+                        return BAD_VALUE;
+                    }
+                }
+            }
+        }
+    }
 
     if (mErrorState) {
         ALOGE("%s session is in error state and cannot process further requests", __FUNCTION__);

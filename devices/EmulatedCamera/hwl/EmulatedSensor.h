@@ -105,7 +105,7 @@ struct SensorCharacteristics {
     camera_metadata_enum_android_sensor_info_color_filter_arrangement colorArangement;
     uint32_t maxRawValue;
     uint32_t blackLevelPattern[4];
-    uint32_t maxRawStreams, maxProcessedStreams, maxStallingStreams;
+    uint32_t maxRawStreams, maxProcessedStreams, maxStallingStreams, maxInputStreams;
     uint32_t physicalSize[2];
     bool isFlashSupported;
 
@@ -113,7 +113,7 @@ struct SensorCharacteristics {
         frameDurationRange{0}, sensitivityRange{0},
         colorArangement(ANDROID_SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB), maxRawValue(0),
         blackLevelPattern{0}, maxRawStreams(0), maxProcessedStreams(0),
-        maxStallingStreams(0), physicalSize{0}, isFlashSupported(false) {}
+        maxStallingStreams(0), maxInputStreams(0), physicalSize{0}, isFlashSupported(false) {}
 };
 
 class EmulatedSensor : private Thread, public virtual RefBase {
@@ -128,6 +128,18 @@ public:
 
         return format;
     }
+
+    static bool isReprocessPathSupported(android_pixel_format_t inputFormat,
+            android_pixel_format_t outputFormat) {
+        if ((HAL_PIXEL_FORMAT_YCBCR_420_888 == inputFormat) &&
+                ((HAL_PIXEL_FORMAT_YCBCR_420_888 == outputFormat) ||
+                (HAL_PIXEL_FORMAT_BLOB == outputFormat))) {
+            return true;
+        }
+
+        return false;
+    }
+
     static bool areCharacteristicsSupported(const SensorCharacteristics& characteristics);
     static bool isStreamCombinationSupported(const StreamConfiguration& config,
             StreamConfigurationMap& map, const SensorCharacteristics& sensorChars);
@@ -153,7 +165,7 @@ public:
     };
 
     void setCurrentRequest(SensorSettings settings, std::unique_ptr<HwlPipelineResult> result,
-            std::unique_ptr<Buffers> outputBuffers);
+            std::unique_ptr<Buffers> inputBuffers, std::unique_ptr<Buffers> outputBuffers);
 
     status_t flush();
 
@@ -213,6 +225,7 @@ private:
     static const uint32_t kMaxRAWStreams;
     static const uint32_t kMaxProcessedStreams;
     static const uint32_t kMaxStallingStreams;
+    static const uint32_t kMaxInputStreams;
 
     Mutex mControlMutex;  // Lock before accessing control parameters
     // Start of control parameters
@@ -221,6 +234,7 @@ private:
     SensorSettings mCurrentSettings;
     std::unique_ptr<HwlPipelineResult> mCurrentResult;
     std::unique_ptr<Buffers> mCurrentOutputBuffers;
+    std::unique_ptr<Buffers> mCurrentInputBuffers;
     std::unique_ptr<JpegCompressor> mJpegCompressor;
 
     // End of control parameters
@@ -239,9 +253,18 @@ private:
     enum RGBLayout { RGB, RGBA, ARGB };
     void captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
             RGBLayout layout, uint32_t gain);
-    void captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height, uint32_t gain);
+    void captureYUV420(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height, uint32_t gain);
     void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height,
             uint32_t stride);
+
+    struct YUV420Frame {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        YCbCrPlanes planes;
+    };
+
+    status_t processYUV420(const YUV420Frame& input, const YUV420Frame& output,
+            uint32_t gain, bool reprocessRequest);
 
     bool waitForVSyncLocked(nsecs_t reltime);
 };

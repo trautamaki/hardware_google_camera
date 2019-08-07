@@ -79,6 +79,7 @@ const float EmulatedSensor::kReadNoiseVarAfterGain =
 const uint32_t EmulatedSensor::kMaxRAWStreams = 1;
 const uint32_t EmulatedSensor::kMaxProcessedStreams = 3;
 const uint32_t EmulatedSensor::kMaxStallingStreams = 2;
+const uint32_t EmulatedSensor::kMaxInputStreams = 1;
 
 const camera_metadata_rational EmulatedSensor::kDefaultColorTransform[9] =
         {{1, 1}, {0, 1}, {0, 1}, {0, 1}, {1, 1}, {0, 1}, {0, 1}, {0, 1}, {1, 1}};
@@ -176,12 +177,19 @@ bool EmulatedSensor::areCharacteristicsSupported(const SensorCharacteristics& ch
         return false;
     }
 
+    if (characteristics.maxInputStreams > kMaxInputStreams) {
+        ALOGE("%s: Input streams maximum %u exceeds supported maximum %u", __FUNCTION__,
+                characteristics.maxInputStreams, kMaxInputStreams);
+        return false;
+    }
+
     return true;
 }
 
 bool EmulatedSensor::isStreamCombinationSupported(const StreamConfiguration& config,
         StreamConfigurationMap& map, const SensorCharacteristics& sensorChars) {
     uint32_t rawStreamCount = 0;
+    uint32_t inputStreamCount = 0;
     uint32_t processedStreamCount = 0;
     uint32_t stallingStreamCount = 0;
 
@@ -191,28 +199,39 @@ bool EmulatedSensor::isStreamCombinationSupported(const StreamConfiguration& con
             return false;
         }
 
-        if (stream.stream_type != google_camera_hal::StreamType::kOutput) {
-            ALOGE("%s: Stream type: 0x%x not supported!", __FUNCTION__, stream.stream_type);
-            return false;
+        if (stream.stream_type == google_camera_hal::StreamType::kInput) {
+            if (sensorChars.maxInputStreams == 0) {
+                ALOGE("%s: Input streams are not supported on this device!", __FUNCTION__);
+                return false;
+            }
+
+            auto supportedOutputs = map.getValidOutputFormatsForInput(stream.format);
+            if (supportedOutputs.empty()) {
+                ALOGE("%s: Input stream with format: 0x%x no supported on this device!",
+                        __FUNCTION__, stream.format);
+                return false;
+            }
+
+            inputStreamCount++;
+        } else {
+            switch (stream.format) {
+                case HAL_PIXEL_FORMAT_BLOB:
+                    if (stream.data_space != HAL_DATASPACE_V0_JFIF) {
+                        ALOGE("%s: Unsupported Blob dataspace 0x%x", __FUNCTION__,
+                                stream.data_space);
+                        return false;
+                    }
+                    stallingStreamCount++;
+                    break;
+                case HAL_PIXEL_FORMAT_RAW16:
+                    rawStreamCount++;
+                    break;
+                default:
+                    processedStreamCount++;
+            }
         }
 
-        auto format = overrideFormat(stream.format);
-        switch (format) {
-            case HAL_PIXEL_FORMAT_BLOB:
-                if (stream.data_space != HAL_DATASPACE_V0_JFIF) {
-                    ALOGE("%s: Unsupported Blob dataspace 0x%x", __FUNCTION__, stream.data_space);
-                    return false;
-                }
-                stallingStreamCount++;
-                break;
-            case HAL_PIXEL_FORMAT_RAW16:
-                rawStreamCount++;
-                break;
-            default:
-                processedStreamCount++;
-        }
-
-        auto outputSizes = map.getOutputSizes(format);
+        auto outputSizes = map.getOutputSizes(stream.format);
         if (outputSizes.empty()) {
             ALOGE("%s: Unsupported format: 0x%x", __FUNCTION__, stream.format);
             return false;
@@ -241,6 +260,12 @@ bool EmulatedSensor::isStreamCombinationSupported(const StreamConfiguration& con
     if (stallingStreamCount > sensorChars.maxStallingStreams) {
         ALOGE("%s: Stalling streams maximum %u exceeds supported maximum %u", __FUNCTION__,
                 stallingStreamCount, sensorChars.maxStallingStreams);
+        return false;
+    }
+
+    if (inputStreamCount > sensorChars.maxInputStreams) {
+        ALOGE("%s: Input stream maximum %u exceeds supported maximum %u", __FUNCTION__,
+                inputStreamCount, sensorChars.maxInputStreams);
         return false;
     }
 
@@ -285,10 +310,12 @@ status_t EmulatedSensor::shutDown() {
 }
 
 void EmulatedSensor::setCurrentRequest(SensorSettings settings,
-        std::unique_ptr<HwlPipelineResult> result, std::unique_ptr<Buffers> outputBuffers) {
+        std::unique_ptr<HwlPipelineResult> result,
+        std::unique_ptr<Buffers> inputBuffers, std::unique_ptr<Buffers> outputBuffers) {
     Mutex::Autolock lock(mControlMutex);
     mCurrentSettings = settings;
     mCurrentResult = std::move(result);
+    mCurrentInputBuffers = std::move(inputBuffers);
     mCurrentOutputBuffers = std::move(outputBuffers);
 }
 
@@ -319,6 +346,9 @@ status_t EmulatedSensor::flush() {
     mJpegCompressor = std::make_unique<JpegCompressor>(std::move(exifUtils));
 
     // Then return any pending frames here
+    if ((mCurrentInputBuffers.get() != nullptr) && (!mCurrentInputBuffers->empty())) {
+        mCurrentInputBuffers->clear();
+    }
     if ((mCurrentOutputBuffers.get() != nullptr) && (!mCurrentOutputBuffers->empty())) {
         for (const auto& buffer : *mCurrentOutputBuffers) {
             buffer->streamBuffer.status = BufferStatus::kError;
@@ -357,6 +387,7 @@ bool EmulatedSensor::threadLoop() {
      * Stage 1: Read in latest control parameters
      */
     std::unique_ptr<Buffers> nextBuffers;
+    std::unique_ptr<Buffers> nextInputBuffer;
     std::unique_ptr<HwlPipelineResult> nextResult;
     SensorSettings settings;
     HwlPipelineCallback callback = {nullptr, nullptr};
@@ -364,6 +395,7 @@ bool EmulatedSensor::threadLoop() {
         Mutex::Autolock lock(mControlMutex);
         settings = mCurrentSettings;
         std::swap(nextBuffers, mCurrentOutputBuffers);
+        std::swap(nextInputBuffer, mCurrentInputBuffers);
         std::swap(nextResult, mCurrentResult);
 
         // Signal VSync for start of readout
@@ -381,6 +413,27 @@ bool EmulatedSensor::threadLoop() {
      * Stage 2: Capture new image
      */
     mNextCaptureTime = frameEndRealTime;
+
+    bool reprocessRequest = false;
+    if ((nextInputBuffer.get() != nullptr) && (!nextInputBuffer->empty())) {
+        if (nextInputBuffer->size() > 1) {
+            ALOGW("%s: Reprocess supports only single input!", __FUNCTION__);
+        }
+        if (nextInputBuffer->at(0)->format != HAL_PIXEL_FORMAT_YCBCR_420_888) {
+            ALOGE("%s: Reprocess input format: 0x%x not supported! Skipping reprocess!",
+                    __FUNCTION__, nextInputBuffer->at(0)->format);
+        } else {
+            camera_metadata_ro_entry_t entry;
+            auto ret = nextResult->result_metadata->Get(ANDROID_SENSOR_TIMESTAMP, &entry);
+            if ((ret == OK) && (entry.count == 1)) {
+                mNextCaptureTime = entry.data.i64[0];
+            } else {
+                ALOGW("%s: Reprocess timestamp absent!", __FUNCTION__);
+            }
+
+            reprocessRequest = true;
+        }
+    }
 
     if (nextBuffers != nullptr) {
         callback = nextBuffers->at(0)->callback;
@@ -405,27 +458,66 @@ bool EmulatedSensor::threadLoop() {
             (*b)->streamBuffer.status = BufferStatus::kOk;
             switch ((*b)->format) {
                 case HAL_PIXEL_FORMAT_RAW16:
-                    captureRaw((*b)->plane.img.img, settings.gain, (*b)->width);
+                    if (!reprocessRequest) {
+                        captureRaw((*b)->plane.img.img, settings.gain, (*b)->width);
+                    } else {
+                        ALOGE("%s: Reprocess requests with output format %x no supported!",
+                                __FUNCTION__, (*b)->format);
+                        (*b)->streamBuffer.status = BufferStatus::kError;
+                    }
                     break;
                 case HAL_PIXEL_FORMAT_RGB_888:
-                    captureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
-                            (*b)->plane.img.stride, RGBLayout::RGB, settings.gain);
+                    if (!reprocessRequest) {
+                        captureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
+                                (*b)->plane.img.stride, RGBLayout::RGB, settings.gain);
+                    } else {
+                        ALOGE("%s: Reprocess requests with output format %x no supported!",
+                                __FUNCTION__, (*b)->format);
+                        (*b)->streamBuffer.status = BufferStatus::kError;
+                    }
                     break;
                 case HAL_PIXEL_FORMAT_RGBA_8888:
-                    captureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
-                            (*b)->plane.img.stride, RGBLayout::RGBA, settings.gain);
+                    if (!reprocessRequest) {
+                        captureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
+                                (*b)->plane.img.stride, RGBLayout::RGBA, settings.gain);
+                    } else {
+                        ALOGE("%s: Reprocess requests with output format %x no supported!",
+                                __FUNCTION__, (*b)->format);
+                        (*b)->streamBuffer.status = BufferStatus::kError;
+                    }
                     break;
                 case HAL_PIXEL_FORMAT_BLOB:
                     if ((*b)->dataSpace == HAL_DATASPACE_V0_JFIF) {
-                        auto jpegInput = std::make_unique<JpegARGBInput>();
+                        YUV420Frame yuvInput {
+                                .width = reprocessRequest ? (*nextInputBuffer->begin())->width : 0,
+                                .height = reprocessRequest ? (*nextInputBuffer->begin())->height :
+                                        0,
+                                .planes = reprocessRequest ?
+                                        (*nextInputBuffer->begin())->plane.imgYCrCb : YCbCrPlanes{}
+                        };
+                        auto jpegInput = std::make_unique<JpegYUV420Input>();
                         jpegInput->width = (*b)->width;
                         jpegInput->height = (*b)->height;
-                        jpegInput->stride = (*b)->width * 4;
-                        jpegInput->img = new uint8_t[jpegInput->stride * (*b)->height];
-                        captureRGB(jpegInput->img, (*b)->width, (*b)->height, jpegInput->stride,
-                                RGBLayout::ARGB, settings.gain);
+                        auto img = new uint8_t[(jpegInput->width * jpegInput->height * 3) / 2];
+                        jpegInput->yuvPlanes = {.imgY = img,
+                            .imgCb = img + jpegInput->width * jpegInput->height,
+                            .imgCr = img + (jpegInput->width * jpegInput->height * 5) / 4,
+                            .yStride = jpegInput->width, .CbCrStride = jpegInput->width / 2,
+                            .CbCrStep = 1 };
+                        jpegInput->bufferOwner = true;
+                        YUV420Frame yuvOutput {
+                                .width = jpegInput->width,
+                                .height = jpegInput->height,
+                                .planes = jpegInput->yuvPlanes };
 
-                        auto jpegJob = std::make_unique<JpegJob>();
+                        auto ret = processYUV420(yuvInput, yuvOutput, settings.gain,
+                                reprocessRequest);
+                        if (ret != 0) {
+                            (*b)->streamBuffer.status = BufferStatus::kError;
+                            break;
+                        }
+
+                        auto jpegJob = std::make_unique<JpegYUV420Job>();
                         jpegJob->input = std::move(jpegInput);
                         // If jpeg compression is successful, then the jpeg compressor
                         // must set the corresponding status.
@@ -435,7 +527,7 @@ bool EmulatedSensor::threadLoop() {
                                 nextResult->result_metadata.get());
 
                         Mutex::Autolock lock(mControlMutex);
-                        mJpegCompressor->queue(std::move(jpegJob));
+                        mJpegCompressor->queueYUV420(std::move(jpegJob));
                     } else {
                         ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__, (*b)->format,
                                 (*b)->dataSpace);
@@ -445,51 +537,37 @@ bool EmulatedSensor::threadLoop() {
                 case HAL_PIXEL_FORMAT_YCrCb_420_SP:
                 case HAL_PIXEL_FORMAT_YCbCr_420_888:
                     {
-                        // Generate the smallest possible frame with the expected AR and
-                        // then scale using libyuv.
-                        float aspectRatio = static_cast<float>((*b)->width) / (*b)->height;
-                        size_t tempWidth = EmulatedScene::kSceneWidth * aspectRatio;
-                        size_t tempHeight = EmulatedScene::kSceneHeight;
-                        std::vector<uint8_t> tempYUV;
-                        tempYUV.reserve((tempWidth * tempHeight * 3) / 2);
-                        auto tempYUVBuffer = tempYUV.data();
-                        YCbCrPlanes yuvPlanes = {.imgY = tempYUVBuffer,
-                                .imgCb = tempYUVBuffer + tempWidth * tempHeight,
-                                .imgCr = tempYUVBuffer + (tempWidth * tempHeight * 5) / 4,
-                                .yStride = tempWidth, .CbCrStride = tempWidth / 2,
-                                .CbCrStep = 1 };
-                        captureNV21(yuvPlanes, tempWidth, tempHeight, settings.gain);
-                        auto ret = I420Scale(
-                                yuvPlanes.imgY,
-                                yuvPlanes.yStride,
-                                yuvPlanes.imgCb,
-                                yuvPlanes.CbCrStride,
-                                yuvPlanes.imgCr,
-                                yuvPlanes.CbCrStride,
-                                tempWidth,
-                                tempHeight,
-                                (*b)->plane.imgYCrCb.imgY,
-                                (*b)->plane.imgYCrCb.yStride,
-                                (*b)->plane.imgYCrCb.imgCb,
-                                (*b)->plane.imgYCrCb.CbCrStride,
-                                (*b)->plane.imgYCrCb.imgCr,
-                                (*b)->plane.imgYCrCb.CbCrStride,
-                                (*b)->width,
-                                (*b)->height,
-                                libyuv::kFilterNone);
+                        YUV420Frame yuvInput {
+                                .width = reprocessRequest ? (*nextInputBuffer->begin())->width : 0,
+                                .height = reprocessRequest ? (*nextInputBuffer->begin())->height :
+                                        0,
+                                .planes = reprocessRequest ?
+                                        (*nextInputBuffer->begin())->plane.imgYCrCb : YCbCrPlanes{}
+                        };
+                        YUV420Frame yuvOutput {
+                                .width = (*b)->width,
+                                .height = (*b)->height,
+                                .planes = (*b)->plane.imgYCrCb };
+                        auto ret = processYUV420(yuvInput, yuvOutput, settings.gain,
+                                reprocessRequest);
                         if (ret != 0) {
-                            ALOGE("%s: Failed during YUV scaling: %d", __FUNCTION__, ret);
                             (*b)->streamBuffer.status = BufferStatus::kError;
                         }
                     }
                     break;
                 case HAL_PIXEL_FORMAT_Y16:
-                    if ((*b)->dataSpace == HAL_DATASPACE_DEPTH) {
-                        captureDepth((*b)->plane.img.img, settings.gain, (*b)->width, (*b)->height,
-                                (*b)->plane.img.stride);
+                    if (!reprocessRequest) {
+                        if ((*b)->dataSpace == HAL_DATASPACE_DEPTH) {
+                            captureDepth((*b)->plane.img.img, settings.gain, (*b)->width,
+                                    (*b)->height, (*b)->plane.img.stride);
+                        } else {
+                            ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__,
+                                    (*b)->format, (*b)->dataSpace);
+                            (*b)->streamBuffer.status = BufferStatus::kError;
+                        }
                     } else {
-                        ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__, (*b)->format,
-                                (*b)->dataSpace);
+                        ALOGE("%s: Reprocess requests with output format %x no supported!",
+                                __FUNCTION__, (*b)->format);
                         (*b)->streamBuffer.status = BufferStatus::kError;
                     }
                     break;
@@ -504,6 +582,13 @@ bool EmulatedSensor::threadLoop() {
             } else {
                 b++;
             }
+        }
+    }
+
+    if (reprocessRequest) {
+        auto inputBuffer = nextInputBuffer->begin();
+        while (inputBuffer != nextInputBuffer->end()) {
+            (*inputBuffer++)->streamBuffer.status = BufferStatus::kOk;
         }
     }
 
@@ -627,7 +712,7 @@ void EmulatedSensor::captureRGB(uint8_t *img, uint32_t width, uint32_t height, u
     ALOGVV("RGB sensor image captured");
 }
 
-void EmulatedSensor::captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height,
+void EmulatedSensor::captureYUV420(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height,
         uint32_t gain) {
     ATRACE_CALL();
     float totalGain = gain / 100.0 * kBaseGainFactor;
@@ -680,7 +765,7 @@ void EmulatedSensor::captureNV21(YCbCrPlanes yuvLayout, uint32_t width, uint32_t
             for (unsigned int j = 1; j < incH; j++) mScene->getPixelElectrons();
         }
     }
-    ALOGVV("NV21 sensor image captured");
+    ALOGVV("YUV420 sensor image captured");
 }
 
 void EmulatedSensor::captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height,
@@ -709,6 +794,56 @@ void EmulatedSensor::captureDepth(uint8_t *img, uint32_t gain, uint32_t width, u
         // simulatedTime += mRowReadoutTime;
     }
     ALOGVV("Depth sensor image captured");
+}
+
+status_t EmulatedSensor::processYUV420(const YUV420Frame& input, const YUV420Frame& output,
+        uint32_t gain, bool reprocessRequest) {
+    size_t inputWidth, inputHeight;
+    YCbCrPlanes yuvPlanes;
+    std::vector<uint8_t> tempYUV;
+    if (reprocessRequest) {
+        inputWidth = input.width;
+        inputHeight = input.height;
+        yuvPlanes = input.planes;
+    } else {
+        // Generate the smallest possible frame with the expected AR and
+        // then scale using libyuv.
+        float aspectRatio = static_cast<float>(output.width) / output.height;
+        inputWidth = EmulatedScene::kSceneWidth * aspectRatio;
+        inputHeight = EmulatedScene::kSceneHeight;
+        tempYUV.reserve((inputWidth * inputHeight * 3) / 2);
+        auto tempYUVBuffer = tempYUV.data();
+        yuvPlanes = {.imgY = tempYUVBuffer,
+            .imgCb = tempYUVBuffer + inputWidth * inputHeight,
+            .imgCr = tempYUVBuffer + (inputWidth * inputHeight * 5) / 4,
+            .yStride = inputWidth, .CbCrStride = inputWidth / 2,
+            .CbCrStep = 1 };
+        captureYUV420(yuvPlanes, inputWidth, inputHeight, gain);
+    }
+
+    auto ret = I420Scale(
+            yuvPlanes.imgY,
+            yuvPlanes.yStride,
+            yuvPlanes.imgCb,
+            yuvPlanes.CbCrStride,
+            yuvPlanes.imgCr,
+            yuvPlanes.CbCrStride,
+            inputWidth,
+            inputHeight,
+            output.planes.imgY,
+            output.planes.yStride,
+            output.planes.imgCb,
+            output.planes.CbCrStride,
+            output.planes.imgCr,
+            output.planes.CbCrStride,
+            output.width,
+            output.height,
+            libyuv::kFilterNone);
+    if (ret != 0) {
+        ALOGE("%s: Failed during YUV scaling: %d", __FUNCTION__, ret);
+    }
+
+    return ret;
 }
 
 }  // namespace android

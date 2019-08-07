@@ -135,6 +135,17 @@ status_t getSensorCharacteristics(const HalCameraMetadata* metadata,
                 sizeof(sensorChars->blackLevelPattern));
     }
 
+    if (hasCapability(metadata, ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING) ||
+            hasCapability(metadata, ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING))  {
+        ret = metadata->Get(ANDROID_REQUEST_MAX_NUM_INPUT_STREAMS, &entry);
+        if ((ret != OK) || (entry.count != 1)) {
+            ALOGE("%s: Invalid ANDROID_REQUEST_MAX_NUM_INPUT_STREAMS!", __FUNCTION__);
+            return BAD_VALUE;
+        }
+
+        sensorChars->maxInputStreams = entry.data.i32[0];
+    }
+
     return ret;
 }
 

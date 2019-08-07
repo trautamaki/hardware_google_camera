@@ -29,14 +29,18 @@ using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::StreamBuffer;
 
 struct YCbCrPlanes {
-    uint8_t *imgY, *imgCb, *imgCr;
-    uint32_t yStride, CbCrStride, CbCrStep;
+    uint8_t *imgY = nullptr;
+    uint8_t *imgCb = nullptr;
+    uint8_t *imgCr = nullptr;
+    uint32_t yStride = 0;
+    uint32_t CbCrStride = 0;
+    uint32_t CbCrStep = 0;
 };
 
 struct SinglePlane {
-    uint8_t *img;
-    uint32_t stride;
-    uint32_t bufferSize;
+    uint8_t *img = nullptr;
+    uint32_t stride = 0;
+    uint32_t bufferSize = 0;
 };
 
 struct SensorBuffer {
@@ -50,6 +54,7 @@ struct SensorBuffer {
     HandleImporter importer;
     HwlPipelineCallback callback;
     int acquireFenceFd;
+    bool isInput;
 
     union Plane {
         SinglePlane img;
@@ -58,7 +63,7 @@ struct SensorBuffer {
 
     SensorBuffer() : width(0), height(0), frameNumber(0), pipelineId(0), cameraId(0),
             format(HAL_PIXEL_FORMAT_RGBA_8888), dataSpace(HAL_DATASPACE_UNKNOWN),
-            streamBuffer{0}, acquireFenceFd(-1) {}
+            streamBuffer{0}, acquireFenceFd(-1), isInput(false), plane{} {}
 
     SensorBuffer(const SensorBuffer&) = delete;
     SensorBuffer& operator = (const SensorBuffer&) = delete;
@@ -107,7 +112,11 @@ struct std::default_delete<android::SensorBuffer> {
                 result->partial_result = 0;
 
                 buffer->streamBuffer.acquire_fence = buffer->streamBuffer.release_fence = nullptr;
-                result->output_buffers.push_back(buffer->streamBuffer);
+                if (buffer->isInput) {
+                    result->input_buffers.push_back(buffer->streamBuffer);
+                } else {
+                    result->output_buffers.push_back(buffer->streamBuffer);
+                }
                 buffer->callback.process_pipeline_result(std::move(result));
             }
             delete buffer;

@@ -84,7 +84,8 @@
  "android.edge.availableEdgeModes": [
   "0", 
   "1", 
-  "2"
+  "2", 
+  "3"
  ], 
  "android.flash.info.available": [
   "TRUE"
@@ -139,14 +140,33 @@
  "android.noiseReduction.availableNoiseReductionModes": [
   "0", 
   "1", 
-  "2"
+  "2", 
+  "4"
  ], 
  "android.request.availableCapabilities": [
   "BACKWARD_COMPATIBLE", 
   "MANUAL_SENSOR", 
   "MANUAL_POST_PROCESSING", 
   "READ_SENSOR_SETTINGS", 
-  "BURST_CAPTURE"
+  "BURST_CAPTURE", 
+  "PRIVATE_REPROCESSING", 
+  "YUV_REPROCESSING"
+ ], 
+ "android.request.maxNumInputStreams": [
+  "1"
+ ], 
+ "android.scaler.availableInputOutputFormatsMap": [
+  "34", 
+  "2", 
+  "33", 
+  "35", 
+  "35", 
+  "2", 
+  "33", 
+  "35"
+ ], 
+ "android.reprocess.maxCaptureStall": [
+  "2"
  ], 
  "android.request.availableCharacteristicsKeys": [
   "983043", 
@@ -214,6 +234,9 @@
   "65575", 
   "983050", 
   "393217", 
+  "1572865", 
+  "786440", 
+  "851977", 
   "-2080374781"
  ], 
  "android.request.availableRequestKeys": [
@@ -478,6 +501,10 @@
   "0"
  ], 
  "android.scaler.availableStreamConfigurations": [
+  "35", 
+  "1856", 
+  "1392", 
+  "INPUT", 
   "33", 
   "1856", 
   "1392", 
@@ -514,6 +541,10 @@
   "1280", 
   "720", 
   "OUTPUT", 
+  "34", 
+  "1856", 
+  "1392", 
+  "INPUT", 
   "34", 
   "1856", 
   "1392", 
