@@ -201,7 +201,9 @@ private:
     nsecs_t mSensorExposureTime = EmulatedSensor::kDefaultExposureTime;
     nsecs_t mSensorFrameDuration = EmulatedSensor::kDefaultFrameDuration;
     int32_t mSensorSensitivity = EmulatedSensor::kDefaultSensitivity;
-    bool mReportSensorSettings = false;
+    bool mReportFrameDuration = false;
+    bool mReportSensitivity = false;
+    bool mReportExposureTime = false;
     std::set<int32_t> mAvailableTestPatternModes;
     bool mReportRollingShutterSkew = false;
 

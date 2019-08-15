@@ -652,8 +652,6 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(
     if (mIsBackwardCompatible) {
         result->result_metadata->Set(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER, &mAETrigger, 1);
         result->result_metadata->Set(ANDROID_CONTROL_AF_TRIGGER, &mAFTrigger, 1);
-        uint8_t effectMode = ANDROID_CONTROL_EFFECT_MODE_OFF;
-        result->result_metadata->Set(ANDROID_CONTROL_EFFECT_MODE, &effectMode, 1);
         uint8_t vstabMode = ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF;
         result->result_metadata->Set(ANDROID_CONTROL_VIDEO_STABILIZATION_MODE, &vstabMode, 1);
         if (mExposureCompensationSupported) {
@@ -682,9 +680,13 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::initializeResult(
         result->result_metadata->Set(ANDROID_CONTROL_AF_REGIONS, mAFMeteringRegion,
                 ARRAY_SIZE(mAFMeteringRegion));
     }
-    if (mReportSensorSettings) {
+    if (mReportExposureTime) {
         result->result_metadata->Set(ANDROID_SENSOR_EXPOSURE_TIME, &mSensorExposureTime, 1);
+    }
+    if (mReportFrameDuration) {
         result->result_metadata->Set(ANDROID_SENSOR_FRAME_DURATION, &mSensorFrameDuration, 1);
+    }
+    if (mReportSensitivity) {
         result->result_metadata->Set(ANDROID_SENSOR_SENSITIVITY, &mSensorSensitivity, 1);
     }
     if (mReportRollingShutterSkew) {
@@ -796,30 +798,16 @@ status_t EmulatedRequestState::initializeSensorDefaults() {
 
     mReportRollingShutterSkew = mAvailableResults.find(ANDROID_SENSOR_ROLLING_SHUTTER_SKEW) !=
             mAvailableResults.end();
+    mReportSensitivity = mAvailableResults.find(ANDROID_SENSOR_SENSITIVITY) !=
+        mAvailableRequests.end();
+    mReportExposureTime = mAvailableResults.find(ANDROID_SENSOR_EXPOSURE_TIME) !=
+        mAvailableRequests.end();
+    mReportFrameDuration = mAvailableResults.find(ANDROID_SENSOR_FRAME_DURATION) !=
+        mAvailableRequests.end();
 
     if (mAvailableResults.find(ANDROID_SENSOR_TIMESTAMP) == mAvailableRequests.end()) {
         ALOGE("%s: Sensor timestamp must always be part of the results!", __FUNCTION__);
         return BAD_VALUE;
-    }
-
-    if (mReportSensorSettings) {
-        if (mAvailableResults.find(ANDROID_SENSOR_SENSITIVITY) == mAvailableRequests.end()) {
-            ALOGE("%s: Sensor sensitivity must always be part of the results on devices supporting"
-                    " sensor setting reads!", __FUNCTION__);
-            return BAD_VALUE;
-        }
-
-        if (mAvailableResults.find(ANDROID_SENSOR_EXPOSURE_TIME) == mAvailableRequests.end()) {
-            ALOGE("%s: Sensor exposure time must always be part of the results on devices"
-                    "supporting sensor setting reads!", __FUNCTION__);
-            return BAD_VALUE;
-        }
-
-        if (mAvailableResults.find(ANDROID_SENSOR_FRAME_DURATION) == mAvailableRequests.end()) {
-            ALOGE("%s: Sensor frame duration must always be part of the results on devices"
-                    "supporting sensor setting reads!", __FUNCTION__);
-            return BAD_VALUE;
-        }
     }
 
     ret = mStaticMetadata->Get(ANDROID_SENSOR_AVAILABLE_TEST_PATTERN_MODES, &entry);
@@ -1371,6 +1359,7 @@ status_t EmulatedRequestState::initializeControlDefaults() {
         awbMode = ANDROID_CONTROL_AWB_MODE_AUTO;
         afMode = mAFSupported ? ANDROID_CONTROL_AF_MODE_AUTO : ANDROID_CONTROL_AF_MODE_OFF;
         sceneMode = ANDROID_CONTROL_SCENE_MODE_DISABLED;
+        uint8_t effectMode = ANDROID_CONTROL_EFFECT_MODE_OFF;
         uint8_t aeLock = ANDROID_CONTROL_AE_LOCK_OFF;
         uint8_t awbLock = ANDROID_CONTROL_AWB_LOCK_OFF;
         int32_t aeTargetFPS [] = {mAETargetFPS.minFPS, mAETargetFPS.maxFPS};
@@ -1455,6 +1444,7 @@ status_t EmulatedRequestState::initializeControlDefaults() {
                         *mAvailableAntibandingModes.begin();
                 mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_ANTIBANDING_MODE, &antibandingMode,
                         1);
+                mDefaultRequests[idx]->Set(ANDROID_CONTROL_EFFECT_MODE, &effectMode, 1);
                 uint8_t aeTrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
                 mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER, &aeTrigger, 1);
                 uint8_t afTrigger = ANDROID_CONTROL_AF_TRIGGER_IDLE;
@@ -2033,8 +2023,6 @@ status_t EmulatedRequestState::initializeRequestDefaults() {
     mIsBackwardCompatible = supportsCapability(
             ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE);
     mIsRAWCapable = supportsCapability(ANDROID_REQUEST_AVAILABLE_CAPABILITIES_RAW);
-    mReportSensorSettings = supportsCapability(
-            ANDROID_REQUEST_AVAILABLE_CAPABILITIES_READ_SENSOR_SETTINGS);
 
     if (mSupportsManualSensor) {
         auto templateIdx = static_cast<size_t> (RequestTemplate::kManual);

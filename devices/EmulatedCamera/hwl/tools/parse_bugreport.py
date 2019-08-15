@@ -41,30 +41,43 @@ Parse media.camera dump section and populate the camera
 characteristics dictionary.
 """
 def parseCameraDump(deviceId, cameraDumpPath, chars):
+    deviceRegExp = "== Camera HAL device device@[0-9]+\.[0-9]+/{0} \(v3.".format(deviceId)
+    tagRegExp = " {4}android[a-zA-Z0-9\.]+ \([a-z0-9]+\): "
+    tagValueRegExp = "[^a-zA-Z0-9-\._]"
     with open(cameraDumpPath, "r") as file:
-        cameraSection = "== Camera HAL device \w+@[0-9]+\.[0-9]+/{0} ".format(deviceId)
-        devices = re.split(cameraSection, file.read())
-        if len(devices) != 3:
+        devices = re.split(deviceRegExp, file.read())
+        if len(devices) != 3 and len(devices) != 2:
             print "Camera device id: {0} not found".format(deviceId)
             sys.exit()
 
-        tags = re.split(r' {4}android\.', devices[1])
+        tags = re.split(tagRegExp, devices[1])
+        tagsContent = re.findall(tagRegExp, devices[1])
+        i = 0;
+        parseEnd = False
         for tag in tags[1:]:
+            if parseEnd:
+                break
+
             lines = tag.splitlines()
             if len(lines) < 2:
                 print "Empty tag entry, skipping!"
                 continue
-            tagName = lines[0].split()
+            tagName = tagsContent[i].split()[0]
 
-            if len(tagName) < 1:
+            if tagName is None or len(tagName) < 1:
                 print "Invalid tag found, skipping!"
                 continue
 
+            i += 1
             for line in lines[1:]:
+                if line.startswith('== Camera HAL device device'):
+                    parseEnd = True
+                    break
+
                 values = re.split(r' {8}', line)
                 if len(values) == 2:
-                    key = "android.{0}".format(tagName[0])
-                    tagValues = filter(None, re.split(r'[^a-zA-Z0-9-\._]', values[1]))
+                    key = tagName
+                    tagValues = filter(None, re.split(tagValueRegExp, values[1]))
                     if chars.has_key(key):
                         chars[key] = chars[key] + tagValues
                     else:

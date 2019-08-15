@@ -33,6 +33,7 @@ namespace android {
 // Location of the camera configuration files.
 const char* EmulatedCameraProviderHwlImpl::kConfigurationFileLocation [] = {
         "/vendor/etc/config/camera.json",
+        "/vendor/etc/config/camera_front.json",
         "/vendor/etc/config/camera_depth.json",
 };
 
