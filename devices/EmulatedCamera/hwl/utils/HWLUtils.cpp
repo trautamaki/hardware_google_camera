@@ -126,6 +126,34 @@ status_t getSensorCharacteristics(const HalCameraMetadata* metadata,
 
         memcpy(sensorChars->blackLevelPattern, entry.data.i32,
                 sizeof(sensorChars->blackLevelPattern));
+
+        ret = metadata->Get(ANDROID_LENS_INFO_SHADING_MAP_SIZE, &entry);
+        if ((ret == OK) && (entry.count == 2)) {
+            sensorChars->lensShadingMapSize[0] = entry.data.i32[0];
+            sensorChars->lensShadingMapSize[1] = entry.data.i32[1];
+        } else {
+            ALOGE("%s: No available shading map size!", __FUNCTION__);
+            return BAD_VALUE;
+        }
+
+        ret = metadata->Get(ANDROID_SENSOR_COLOR_TRANSFORM1, &entry);
+        if ((ret != OK) || (entry.count != (3 * 3))) { // 3x3 rational matrix
+            ALOGE("%s: Invalid ANDROID_SENSOR_COLOR_TRANSFORM1!", __FUNCTION__);
+            return BAD_VALUE;
+        }
+
+        sensorChars->colorFilter.rX = RAT_TO_FLOAT(entry.data.r[0]);
+        sensorChars->colorFilter.rY = RAT_TO_FLOAT(entry.data.r[1]);
+        sensorChars->colorFilter.rZ = RAT_TO_FLOAT(entry.data.r[2]);
+        sensorChars->colorFilter.grX = RAT_TO_FLOAT(entry.data.r[3]);
+        sensorChars->colorFilter.grY = RAT_TO_FLOAT(entry.data.r[4]);
+        sensorChars->colorFilter.grZ = RAT_TO_FLOAT(entry.data.r[5]);
+        sensorChars->colorFilter.gbX = RAT_TO_FLOAT(entry.data.r[3]);
+        sensorChars->colorFilter.gbY = RAT_TO_FLOAT(entry.data.r[4]);
+        sensorChars->colorFilter.gbZ = RAT_TO_FLOAT(entry.data.r[5]);
+        sensorChars->colorFilter.bX = RAT_TO_FLOAT(entry.data.r[6]);
+        sensorChars->colorFilter.bY = RAT_TO_FLOAT(entry.data.r[7]);
+        sensorChars->colorFilter.bZ = RAT_TO_FLOAT(entry.data.r[8]);
     } else {
         sensorChars->colorArangement =
             static_cast<camera_metadata_enum_android_sensor_info_color_filter_arrangement> (
@@ -144,6 +172,19 @@ status_t getSensorCharacteristics(const HalCameraMetadata* metadata,
         }
 
         sensorChars->maxInputStreams = entry.data.i32[0];
+    }
+
+
+    ret = metadata->Get(ANDROID_REQUEST_PIPELINE_MAX_DEPTH, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+        if (entry.data.u8[0] == 0) {
+            ALOGE("%s: Maximum request pipeline must have a non zero value!", __FUNCTION__);
+            return BAD_VALUE;
+        }
+        sensorChars->maxPipelineDepth = entry.data.u8[0];
+    } else {
+        ALOGE("%s: Maximum request pipeline depth absent!", __FUNCTION__);
+        return BAD_VALUE;
     }
 
     return ret;

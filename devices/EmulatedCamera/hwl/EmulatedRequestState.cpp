@@ -37,13 +37,12 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING,
-    //TODO: Support more capabilities out-of-the box
 };
 
 const std::set<uint8_t> EmulatedRequestState::kSupportedHWLevels = {
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED,
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL,
-    //TODO: Support more hw levels out-of-the box
+    ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_3,
 };
 
 template<typename T>
@@ -667,9 +666,22 @@ status_t EmulatedRequestState::initializeSensorSettings(
         return ret;
     }
 
+    ret = mRequestSettings->Get(ANDROID_STATISTICS_LENS_SHADING_MAP_MODE, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+        if (mAvailableLensShadingMapModes.find(entry.data.u8[0]) !=
+                mAvailableLensShadingMapModes.end()) {
+            sensorSettings->lensShadingMapMode = entry.data.u8[0];
+        } else {
+            ALOGE("%s: Lens shading map mode: %d not supported!", __FUNCTION__, entry.data.u8[0]);
+        }
+    }
+
     sensorSettings->exposureTime = mSensorExposureTime;
     sensorSettings->frameDuration = mSensorFrameDuration;
     sensorSettings->gain = mSensorSensitivity;
+    sensorSettings->reportNeutralColorPoint = mReportNeutralColorPoint;
+    sensorSettings->reportGreenSplit = mReportGreenSplit;
+    sensorSettings->reportNoiseProfile = mReportNoiseProfile;
 
     return OK;
 }
@@ -855,7 +867,30 @@ status_t EmulatedRequestState::initializeSensorDefaults() {
         mAvailableRequests.end();
     mReportFrameDuration = mAvailableResults.find(ANDROID_SENSOR_FRAME_DURATION) !=
         mAvailableRequests.end();
+    mReportNeutralColorPoint = mAvailableResults.find(ANDROID_SENSOR_NEUTRAL_COLOR_POINT) !=
+        mAvailableRequests.end();
+    mReportGreenSplit = mAvailableResults.find(ANDROID_SENSOR_GREEN_SPLIT) !=
+        mAvailableRequests.end();
+    mReportNoiseProfile = mAvailableResults.find(ANDROID_SENSOR_NOISE_PROFILE) !=
+        mAvailableRequests.end();
 
+    if (mIsRAWCapable && !mReportGreenSplit) {
+        ALOGE("%s: RAW capable devices must be able to report the noise profile!",
+                __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    if (mIsRAWCapable && !mReportNeutralColorPoint) {
+        ALOGE("%s: RAW capable devices must be able to report the neutral color point!",
+                __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    if (mIsRAWCapable && !mReportGreenSplit) {
+        ALOGE("%s: RAW capable devices must be able to report the green split!",
+                __FUNCTION__);
+        return BAD_VALUE;
+    }
     if (mAvailableResults.find(ANDROID_SENSOR_TIMESTAMP) == mAvailableRequests.end()) {
         ALOGE("%s: Sensor timestamp must always be part of the results!", __FUNCTION__);
         return BAD_VALUE;
@@ -922,21 +957,61 @@ status_t EmulatedRequestState::initializeStatisticsDefaults() {
         mAvailableHotPixelMapModes.emplace(ANDROID_STATISTICS_HOT_PIXEL_MAP_MODE_OFF);
     }
 
+    bool hotpixelModeOffSupported = mAvailableHotPixelMapModes.find(
+            ANDROID_STATISTICS_HOT_PIXEL_MAP_MODE_OFF) != mAvailableHotPixelMapModes.end();
+    bool facedetectModeOffSupported = mAvailableFaceDetectModes.find(
+            ANDROID_STATISTICS_FACE_DETECT_MODE_OFF) != mAvailableFaceDetectModes.end();
+    bool lensShadingMapModeOFfSupported = mAvailableLensShadingMapModes.find(
+            ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_ON) !=
+            mAvailableLensShadingMapModes.end();
+    bool lensShadingMapModeOnSupported = mAvailableLensShadingMapModes.find(
+            ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_ON) !=
+            mAvailableLensShadingMapModes.end();
+    if (mIsRAWCapable && !lensShadingMapModeOnSupported) {
+        ALOGE("%s: RAW capable device must support lens shading map reporting!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    if (lensShadingMapModeOnSupported &&
+            (mAvailableResults.find(ANDROID_STATISTICS_LENS_SHADING_MAP) ==
+             mAvailableResults.end())) {
+        ALOGE("%s: Lens shading map reporting available but corresponding result key is absent!",
+                __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    if (lensShadingMapModeOnSupported && ((mShadingMapSize[0] == 0) || (mShadingMapSize[1] == 0))) {
+        ALOGE("%s: Lens shading map reporting available but without valid shading map size!",
+                __FUNCTION__);
+        return BAD_VALUE;
+    }
+
     mReportSceneFlicker = mAvailableResults.find(ANDROID_STATISTICS_SCENE_FLICKER) !=
         mAvailableResults.end();
 
-    uint8_t faceDetectMode = *mAvailableFaceDetectModes.begin();
-    uint8_t hotPixelMapMode = *mAvailableHotPixelMapModes.begin();
-    uint8_t lensShadingMapMode = *mAvailableLensShadingMapModes.begin();
+    uint8_t faceDetectMode = facedetectModeOffSupported ? ANDROID_STATISTICS_FACE_DETECT_MODE_OFF :
+            *mAvailableFaceDetectModes.begin();
+    uint8_t hotPixelMapMode = hotpixelModeOffSupported ? ANDROID_STATISTICS_HOT_PIXEL_MAP_MODE_OFF :
+            *mAvailableHotPixelMapModes.begin();
+    uint8_t lensShadingMapMode = lensShadingMapModeOFfSupported ?
+            ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_OFF : *mAvailableLensShadingMapModes.begin();
     for (size_t idx = 0; idx < kTemplateCount; idx++) {
         if (mDefaultRequests[idx].get() == nullptr) {
             continue;
         }
 
+        if ((static_cast<RequestTemplate>(idx) == RequestTemplate::kStillCapture) &&
+                mIsRAWCapable && lensShadingMapModeOnSupported) {
+            uint8_t lensShadingMapOn = ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_ON;
+            mDefaultRequests[idx]->Set(ANDROID_STATISTICS_LENS_SHADING_MAP_MODE, &lensShadingMapOn,
+                    1);
+        } else {
+            mDefaultRequests[idx]->Set(ANDROID_STATISTICS_LENS_SHADING_MAP_MODE,
+                    &lensShadingMapMode, 1);
+        }
+
         mDefaultRequests[idx]->Set(ANDROID_STATISTICS_FACE_DETECT_MODE, &faceDetectMode, 1);
         mDefaultRequests[idx]->Set(ANDROID_STATISTICS_HOT_PIXEL_MAP_MODE, &hotPixelMapMode, 1);
-        mDefaultRequests[idx]->Set(ANDROID_STATISTICS_LENS_SHADING_MAP_MODE, &lensShadingMapMode,
-                1);
     }
 
     return initializeBlackLevelDefaults();
@@ -1462,7 +1537,7 @@ status_t EmulatedRequestState::initializeControlDefaults() {
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_MODE, &controlMode, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_MODE, &aeMode, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AE_TARGET_FPS_RANGE, aeTargetFPS,
-                        ARRAY_SIZE(aeTargetFPS));
+                    ARRAY_SIZE(aeTargetFPS));
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AWB_MODE, &awbMode, 1);
             mDefaultRequests[idx]->Set(ANDROID_CONTROL_AF_MODE, &afMode, 1);
             if (mIsBackwardCompatible) {
@@ -1800,7 +1875,7 @@ status_t EmulatedRequestState::initializeNoiseReductionDefaults() {
             ANDROID_NOISE_REDUCTION_MODE_HIGH_QUALITY) != mAvailableNoiseReductionModes.end();
     bool isZSLModeSupported = mAvailableNoiseReductionModes.find(
             ANDROID_NOISE_REDUCTION_MODE_ZERO_SHUTTER_LAG) != mAvailableNoiseReductionModes.end();
-    uint8_t noiseReductionMode = *mAvailableLensShadingMapModes.begin();
+    uint8_t noiseReductionMode = *mAvailableNoiseReductionModes.begin();
     for (size_t idx = 0; idx < kTemplateCount; idx++) {
         if (mDefaultRequests[idx].get() == nullptr) {
             continue;
@@ -1939,6 +2014,15 @@ status_t EmulatedRequestState::initializeLensDefaults() {
         mFocalLength = entry.data.f[0];
     } else {
         ALOGE("%s: No available focal length!", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
+    ret = mStaticMetadata->Get(ANDROID_LENS_INFO_SHADING_MAP_SIZE, &entry);
+    if ((ret == OK) && (entry.count == 2)) {
+        mShadingMapSize[0] = entry.data.i32[0];
+        mShadingMapSize[1] = entry.data.i32[1];
+    } else if (mIsRAWCapable) {
+        ALOGE("%s: No available shading map size!", __FUNCTION__);
         return BAD_VALUE;
     }
 

@@ -152,10 +152,6 @@
  "android.lens.info.minimumFocusDistance": [
   "0.00000000"
  ], 
- "android.lens.info.shadingMapSize": [
-  "1", 
-  "1"
- ], 
  "android.noiseReduction.availableNoiseReductionModes": [
   "0", 
   "1", 
@@ -923,8 +919,7 @@
   "0"
  ], 
  "android.statistics.info.availableLensShadingMapModes": [
-  "0", 
-  "1"
+  "0"
  ], 
  "android.statistics.info.histogramBucketCount": [
   "64"

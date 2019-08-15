@@ -35,6 +35,7 @@
 #include <libyuv.h>
 #include <system/camera_metadata.h>
 #include "utils/ExifUtils.h"
+#include "utils/HWLUtils.h"
 
 namespace android {
 
@@ -81,6 +82,17 @@ const uint32_t EmulatedSensor::kMaxProcessedStreams = 3;
 const uint32_t EmulatedSensor::kMaxStallingStreams = 2;
 const uint32_t EmulatedSensor::kMaxInputStreams = 1;
 
+const uint32_t EmulatedSensor::kMaxLensShadingMapSize[2] {64, 64};
+const int32_t EmulatedSensor::kFixedBitPrecision = 64; // 6-bit
+// In fixed-point math, saturation point of sensor after gain
+const int32_t EmulatedSensor::kSaturationPoint = kFixedBitPrecision * 255;
+const camera_metadata_rational EmulatedSensor::kNeutralColorPoint[3] =
+        {{255, 1}, {255, 1}, {255, 1}};
+const float EmulatedSensor::kGreenSplit = 1.f; // No divergence
+// Reduce memory usage by allowing only one buffer in sensor, one in jpeg compressor
+// and one pending request to avoid stalls.
+const uint8_t EmulatedSensor::kPipelineDepth = 3;
+
 const camera_metadata_rational EmulatedSensor::kDefaultColorTransform[9] =
         {{1, 1}, {0, 1}, {0, 1}, {0, 1}, {1, 1}, {0, 1}, {0, 1}, {0, 1}, {1, 1}};
 const float EmulatedSensor::kDefaultColorCorrectionGains[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -106,7 +118,12 @@ float sqrtf_approx(float r) {
     return *(float *)(&r_i);
 }
 
-EmulatedSensor::EmulatedSensor() : Thread(false), mGotVSync(false) {}
+EmulatedSensor::EmulatedSensor() : Thread(false), mGotVSync(false) {
+    mGammaTable.resize(kSaturationPoint + 1);
+    for (int32_t i = 0; i <= kSaturationPoint; i++) {
+        mGammaTable[i] = applysRGBGamma(i, kSaturationPoint);
+    }
+}
 
 EmulatedSensor::~EmulatedSensor() {
     shutDown();
@@ -180,6 +197,20 @@ bool EmulatedSensor::areCharacteristicsSupported(const SensorCharacteristics& ch
     if (characteristics.maxInputStreams > kMaxInputStreams) {
         ALOGE("%s: Input streams maximum %u exceeds supported maximum %u", __FUNCTION__,
                 characteristics.maxInputStreams, kMaxInputStreams);
+        return false;
+    }
+
+    if ((characteristics.lensShadingMapSize[0] > kMaxLensShadingMapSize[0]) ||
+            (characteristics.lensShadingMapSize[1] > kMaxLensShadingMapSize[1])) {
+        ALOGE("%s: Lens shading map [%dx%d] exceeds supprorted maximum [%dx%d]", __FUNCTION__,
+                characteristics.lensShadingMapSize[0], characteristics.lensShadingMapSize[1],
+                kMaxLensShadingMapSize[0], kMaxLensShadingMapSize[1]);
+        return false;
+    }
+
+    if (characteristics.maxPipelineDepth < kPipelineDepth) {
+        ALOGE("%s: Pipeline depth %d smaller than supprorted minimum %d", __FUNCTION__,
+                characteristics.maxPipelineDepth, kPipelineDepth);
         return false;
     }
 
@@ -288,12 +319,30 @@ status_t EmulatedSensor::startUp(SensorCharacteristics characteristics) {
 
     mChars = characteristics;
     mScene = std::make_unique<EmulatedScene>(mChars.width, mChars.height, kElectronsPerLuxSecond);
+    mScene->setColorFilterXYZ(
+            mChars.colorFilter.rX,
+            mChars.colorFilter.rY,
+            mChars.colorFilter.rZ,
+            mChars.colorFilter.grX,
+            mChars.colorFilter.grY,
+            mChars.colorFilter.grZ,
+            mChars.colorFilter.gbX,
+            mChars.colorFilter.gbY,
+            mChars.colorFilter.gbZ,
+            mChars.colorFilter.bX,
+            mChars.colorFilter.bY,
+            mChars.colorFilter.bZ);
     mRowReadoutTime = mChars.frameDurationRange[0] / mChars.height;
     kBaseGainFactor = (float)mChars.maxRawValue / EmulatedSensor::kSaturationElectrons;
     mJpegCompressor = std::make_unique<JpegCompressor>(std::move(exifUtils));
 
-    int res;
-    res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);
+    if ((mChars.lensShadingMapSize[0] > 0) && (mChars.lensShadingMapSize[1] > 0)) {
+        // Perfect lens, no actual shading needed.
+        mLensShadingMap.resize(
+                mChars.lensShadingMapSize[0] * mChars.lensShadingMapSize[1] * 4, 1.f);
+    }
+
+    auto res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);
     if (res != OK) {
         ALOGE("Unable to start up sensor capture thread: %d", res);
     }
@@ -404,6 +453,9 @@ bool EmulatedSensor::threadLoop() {
         mVSync.signal();
     }
 
+    if (settings.frameDuration == 0) {
+        settings.frameDuration = EmulatedSensor::kSupportedFrameDurationRange[0];
+    }
     nsecs_t startRealTime = systemTime();
     // Stagefright cares about system time for timestamps, so base simulated
     // time on that.
@@ -452,6 +504,31 @@ bool EmulatedSensor::threadLoop() {
         mScene->setExposureDuration((float)settings.exposureTime / 1e9);
         mScene->calculateScene(mNextCaptureTime);
         nextResult->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP, &mNextCaptureTime, 1);
+        if (settings.lensShadingMapMode == ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_ON) {
+            nextResult->result_metadata->Set(ANDROID_STATISTICS_LENS_SHADING_MAP,
+                    mLensShadingMap.data(), mLensShadingMap.size());
+        }
+        if (settings.reportNeutralColorPoint) {
+            nextResult->result_metadata->Set(ANDROID_SENSOR_NEUTRAL_COLOR_POINT, kNeutralColorPoint,
+                    ARRAY_SIZE(kNeutralColorPoint));
+        }
+        if (settings.reportGreenSplit) {
+            nextResult->result_metadata->Set(ANDROID_SENSOR_GREEN_SPLIT, &kGreenSplit, 1);
+        }
+        if (settings.reportNoiseProfile) {
+            // TODO: pass the results as parameter to capture instead of re-calculating
+            float totalGain = settings.gain / 100.0 * kBaseGainFactor;
+            float noiseVarGain = totalGain * totalGain;
+            float readNoiseVar = kReadNoiseVarBeforeGain * noiseVarGain + kReadNoiseVarAfterGain;
+            // Noise profile is the same across all 4 CFA channels
+            double noiseProfile[2 * 4] = {
+                noiseVarGain, readNoiseVar,
+                noiseVarGain, readNoiseVar,
+                noiseVarGain, readNoiseVar,
+                noiseVarGain, readNoiseVar};
+            nextResult->result_metadata->Set(ANDROID_SENSOR_NOISE_PROFILE, noiseProfile,
+                    ARRAY_SIZE(noiseProfile));
+        }
 
         auto b = nextBuffers->begin();
         while (b != nextBuffers->end()) {
@@ -577,11 +654,7 @@ bool EmulatedSensor::threadLoop() {
                     break;
             }
 
-            if ((*b).get() == nullptr) {
-                b = nextBuffers->erase(b);
-            } else {
-                b++;
-            }
+            b = nextBuffers->erase(b);
         }
     }
 
@@ -590,6 +663,12 @@ bool EmulatedSensor::threadLoop() {
         while (inputBuffer != nextInputBuffer->end()) {
             (*inputBuffer++)->streamBuffer.status = BufferStatus::kOk;
         }
+        nextInputBuffer->clear();
+    }
+
+    if ((callback.process_pipeline_result != nullptr) && (nextResult.get() != nullptr) &&
+            (nextResult->result_metadata.get() != nullptr)) {
+        callback.process_pipeline_result(std::move(nextResult));
     }
 
     ALOGVV("Sensor vertical blanking interval");
@@ -608,11 +687,6 @@ bool EmulatedSensor::threadLoop() {
     nsecs_t endRealTime __unused = systemTime();
     ALOGVV("Frame cycle took %" PRIu64 "  ms, target %" PRIu64 " ms",
             ns2ms(endRealTime - startRealTime), ns2ms(settings.frameDuration));
-
-    if ((callback.process_pipeline_result != nullptr) && (nextResult.get() != nullptr) &&
-            (nextResult->result_metadata.get() != nullptr)) {
-        callback.process_pipeline_result(std::move(nextResult));
-    }
 
     return true;
 };
@@ -718,9 +792,7 @@ void EmulatedSensor::captureYUV420(YCbCrPlanes yuvLayout, uint32_t width, uint32
     float totalGain = gain / 100.0 * kBaseGainFactor;
     // Using fixed-point math with 6 bits of fractional precision.
     // In fixed-point math, calculate total scaling from electrons to 8bpp
-    const int scale64x = 64 * totalGain * 255 / mChars.maxRawValue;
-    // In fixed-point math, saturation point of sensor after gain
-    const int saturationPoint = 64 * 255;
+    const int scale64x = kFixedBitPrecision * totalGain * 255 / mChars.maxRawValue;
     // Fixed-point coefficients for RGB-YUV transform
     // Based on JFIF RGB->YUV transform.
     // Cb/Cr offset scaled by 64x twice since they're applied post-multiply
@@ -744,11 +816,16 @@ void EmulatedSensor::captureYUV420(YCbCrPlanes yuvLayout, uint32_t width, uint32
             // TODO: Perfect demosaicing is a cheat
             const uint32_t *pixel = mScene->getPixelElectrons();
             rCount = pixel[EmulatedScene::R] * scale64x;
-            rCount = rCount < saturationPoint ? rCount : saturationPoint;
+            rCount = rCount < kSaturationPoint ? rCount : kSaturationPoint;
             gCount = pixel[EmulatedScene::Gr] * scale64x;
-            gCount = gCount < saturationPoint ? gCount : saturationPoint;
+            gCount = gCount < kSaturationPoint ? gCount : kSaturationPoint;
             bCount = pixel[EmulatedScene::B] * scale64x;
-            bCount = bCount < saturationPoint ? bCount : saturationPoint;
+            bCount = bCount < kSaturationPoint ? bCount : kSaturationPoint;
+
+            // Gamma correction
+            rCount = mGammaTable[rCount];
+            gCount = mGammaTable[gCount];
+            bCount = mGammaTable[bCount];
 
             *pxY++ = (rgbToY[0] * rCount + rgbToY[1] * gCount + rgbToY[2] * bCount) / scaleOutSq;
             if (outY % 2 == 0 && outX % 2 == 0) {
@@ -798,6 +875,7 @@ void EmulatedSensor::captureDepth(uint8_t *img, uint32_t gain, uint32_t width, u
 
 status_t EmulatedSensor::processYUV420(const YUV420Frame& input, const YUV420Frame& output,
         uint32_t gain, bool reprocessRequest) {
+    ATRACE_CALL();
     size_t inputWidth, inputHeight;
     YCbCrPlanes yuvPlanes;
     std::vector<uint8_t> tempYUV;
@@ -844,6 +922,12 @@ status_t EmulatedSensor::processYUV420(const YUV420Frame& input, const YUV420Fra
     }
 
     return ret;
+}
+
+int32_t EmulatedSensor::applysRGBGamma(int32_t value, int32_t saturation) {
+    float nValue = (static_cast<float>(value) / saturation);
+    nValue = (nValue <= 0.0031308f) ? nValue * 12.92f : 1.055f * pow(nValue, 0.4166667f) - 0.055f;
+    return nValue * saturation;
 }
 
 }  // namespace android

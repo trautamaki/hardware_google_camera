@@ -251,7 +251,6 @@ size_t JpegCompressor::compressYUV420Frame(YUV420Frame frame) {
 
     dmgr.buffer = static_cast<JOCTET*>(frame.outputBuffer);
     dmgr.bufferSize = frame.outputBufferSize;
-    ALOGE("%s: Jpeg out buffer: %p size: %u", __func__, dmgr.buffer, (unsigned) dmgr.bufferSize);
     dmgr.encodedSize = 0;
     dmgr.success = true;
     cinfo->client_data = static_cast<void*>(&dmgr);

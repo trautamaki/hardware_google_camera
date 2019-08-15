@@ -97,23 +97,43 @@ using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
 using google_camera_hal::StreamConfiguration;
 
-struct SensorCharacteristics {
-    size_t width, height;
-    nsecs_t exposureTimeRange[2];
-    nsecs_t frameDurationRange[2];
-    int32_t sensitivityRange[2];
-    camera_metadata_enum_android_sensor_info_color_filter_arrangement colorArangement;
-    uint32_t maxRawValue;
-    uint32_t blackLevelPattern[4];
-    uint32_t maxRawStreams, maxProcessedStreams, maxStallingStreams, maxInputStreams;
-    uint32_t physicalSize[2];
-    bool isFlashSupported;
+/*
+ * Default to sRGB with D65 white point
+ */
+struct colorFilterXYZ {
+    float rX = 3.2406f;
+    float rY = -1.5372f;
+    float rZ = -0.4986f;
+    float grX = -0.9689f;
+    float grY = 1.8758f;
+    float grZ = 0.0415f;
+    float gbX = -0.9689f;
+    float gbY = 1.8758f;
+    float gbZ = 0.0415f;
+    float bX = 0.0557f;
+    float bY = -0.2040f;
+    float bZ = 1.0570f;
+};
 
-    SensorCharacteristics() : width(0), height(0), exposureTimeRange{0},
-        frameDurationRange{0}, sensitivityRange{0},
-        colorArangement(ANDROID_SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB), maxRawValue(0),
-        blackLevelPattern{0}, maxRawStreams(0), maxProcessedStreams(0),
-        maxStallingStreams(0), maxInputStreams(0), physicalSize{0}, isFlashSupported(false) {}
+struct SensorCharacteristics {
+    size_t width = 0;
+    size_t height = 0;
+    nsecs_t exposureTimeRange[2] = {0};
+    nsecs_t frameDurationRange[2] = {0};
+    int32_t sensitivityRange[2] = {0};
+    camera_metadata_enum_android_sensor_info_color_filter_arrangement colorArangement =
+            ANDROID_SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB;
+    colorFilterXYZ colorFilter;
+    uint32_t maxRawValue = 0;
+    uint32_t blackLevelPattern[4] = {0};
+    uint32_t maxRawStreams = 0;
+    uint32_t maxProcessedStreams = 0;
+    uint32_t maxStallingStreams = 0;
+    uint32_t maxInputStreams = 0;
+    uint32_t physicalSize[2] = {0};
+    bool isFlashSupported = false;
+    uint32_t lensShadingMapSize[2] = {0};
+    uint32_t maxPipelineDepth = 0;
 };
 
 class EmulatedSensor : private Thread, public virtual RefBase {
@@ -154,14 +174,14 @@ public:
     /*
      * Settings control
      */
-
     struct SensorSettings {
-        nsecs_t exposureTime, frameDuration;
-        uint32_t gain; // ISO
-
-        SensorSettings () : exposureTime(0), frameDuration(0), gain(0) {}
-        SensorSettings (nsecs_t exposureTime, nsecs_t frameDuration, uint32_t gain) :
-            exposureTime(exposureTime), frameDuration(frameDuration), gain(gain) {}
+        nsecs_t exposureTime = 0;
+        nsecs_t frameDuration = 0;
+        uint32_t gain = 0; // ISO
+        uint32_t lensShadingMapMode;
+        bool reportNeutralColorPoint = false;
+        bool reportGreenSplit = false;
+        bool reportNoiseProfile = false;
     };
 
     void setCurrentRequest(SensorSettings settings, std::unique_ptr<HwlPipelineResult> result,
@@ -192,6 +212,7 @@ public:
     static const float kDefaultToneMapCurveRed[4];
     static const float kDefaultToneMapCurveGreen[4];
     static const float kDefaultToneMapCurveBlue[4];
+    static const uint8_t kPipelineDepth;
 
 private:
     /**
@@ -221,11 +242,19 @@ private:
     static const float kReadNoiseStddevAfterGain;   // In raw digital units
     static const float kReadNoiseVarBeforeGain;
     static const float kReadNoiseVarAfterGain;
+    static const camera_metadata_rational kNeutralColorPoint[3];
+    static const float kGreenSplit;
 
     static const uint32_t kMaxRAWStreams;
     static const uint32_t kMaxProcessedStreams;
     static const uint32_t kMaxStallingStreams;
     static const uint32_t kMaxInputStreams;
+    static const uint32_t kMaxLensShadingMapSize[2];
+    static const int32_t kFixedBitPrecision;
+    static const int32_t kSaturationPoint;
+
+    std::vector<float> mLensShadingMap;
+    std::vector<int32_t> mGammaTable;
 
     Mutex mControlMutex;  // Lock before accessing control parameters
     // Start of control parameters
@@ -263,8 +292,10 @@ private:
         YCbCrPlanes planes;
     };
 
-    status_t processYUV420(const YUV420Frame& input, const YUV420Frame& output,
-            uint32_t gain, bool reprocessRequest);
+    status_t processYUV420(const YUV420Frame& input, const YUV420Frame& output, uint32_t gain,
+            bool reprocessRequest);
+
+    inline int32_t applysRGBGamma(int32_t value, int32_t saturation);
 
     bool waitForVSyncLocked(nsecs_t reltime);
 };

@@ -96,7 +96,7 @@
   "2"
  ], 
  "android.info.supportedHardwareLevel": [
-  "FULL"
+  "3"
  ], 
  "android.jpeg.availableThumbnailSizes": [
   "0", 
@@ -134,8 +134,8 @@
   "20.00000000"
  ], 
  "android.lens.info.shadingMapSize": [
-  "1", 
-  "1"
+  "17", 
+  "13"
  ], 
  "android.noiseReduction.availableNoiseReductionModes": [
   "0", 
@@ -150,7 +150,15 @@
   "READ_SENSOR_SETTINGS", 
   "BURST_CAPTURE", 
   "PRIVATE_REPROCESSING", 
-  "YUV_REPROCESSING"
+  "YUV_REPROCESSING", 
+  "RAW"
+ ], 
+ "android.sensor.referenceIlluminant1": [
+  "D50"
+ ],
+ "android.statistics.info.availableHotPixelMapModes": [
+  "0", 
+  "1"
  ], 
  "android.request.maxNumInputStreams": [
   "1"
@@ -237,6 +245,11 @@
   "1572865", 
   "786440", 
   "851977", 
+  "917507", 
+  "917509", 
+  "917511", 
+  "917513", 
+  "1179654", 
   "-2080374781"
  ], 
  "android.request.availableRequestKeys": [
@@ -368,9 +381,13 @@
   "524296", 
   "917530", 
   "1114126", 
+  "1114123", 
   "786441", 
   "917520", 
+  "917522", 
   "65576", 
+  "917523", 
+  "917526", 
   "-2080374783", 
   "-2080374782"
  ], 
@@ -393,6 +410,10 @@
   "10.00000000"
  ], 
  "android.scaler.availableMinFrameDurations": [
+  "32", 
+  "1856", 
+  "1392", 
+  "33331760", 
   "33", 
   "1856", 
   "1392", 
@@ -402,8 +423,16 @@
   "720", 
   "33331760", 
   "34", 
+  "160", 
+  "120", 
+  "33331760", 
+  "34", 
   "320", 
   "240", 
+  "33331760", 
+  "35", 
+  "160", 
+  "120", 
   "33331760", 
   "35", 
   "320", 
@@ -447,6 +476,10 @@
   "33331760"
  ], 
  "android.scaler.availableStallDurations": [
+  "32", 
+  "1856", 
+  "1392", 
+  "33331760", 
   "33", 
   "1856", 
   "1392", 
@@ -456,8 +489,16 @@
   "720", 
   "33331760", 
   "34", 
+  "160", 
+  "120", 
+  "0", 
+  "34", 
   "320", 
   "240", 
+  "0", 
+  "35", 
+  "160", 
+  "120", 
   "0", 
   "35", 
   "320", 
@@ -514,8 +555,16 @@
   "720", 
   "OUTPUT", 
   "34", 
+  "160", 
+  "120", 
+  "OUTPUT", 
+  "34", 
   "320", 
   "240", 
+  "OUTPUT", 
+  "35", 
+  "160", 
+  "120", 
   "OUTPUT", 
   "35", 
   "320", 
@@ -554,6 +603,10 @@
   "720", 
   "OUTPUT", 
   "35", 
+  "1856", 
+  "1392", 
+  "OUTPUT", 
+  "32", 
   "1856", 
   "1392", 
   "OUTPUT", 
@@ -565,14 +618,74 @@
  "android.scaler.croppingType": [
   "FREEFORM"
  ], 
+ "android.sensor.calibrationTransform1": [
+  "128", 
+  "128", 
+  "0", 
+  "128", 
+  "0", 
+  "128", 
+  "0", 
+  "128", 
+  "128", 
+  "128", 
+  "0",  
+  "128", 
+  "0", 
+  "128", 
+  "0", 
+  "128", 
+  "128", 
+  "128"
+ ], 
+ "android.sensor.colorTransform1": [
+  "3209", 
+  "1024", 
+  "-1655", 
+  "1024", 
+  "-502", 
+  "1024", 
+  "-1002", 
+  "1024", 
+  "1962", 
+  "1024", 
+  "34", 
+  "1024", 
+  "73", 
+  "1024", 
+  "-234", 
+  "1024", 
+  "1438", 
+  "1024"
+ ], 
+ "android.sensor.forwardMatrix1": [
+  "446", 
+  "1024", 
+  "394", 
+  "1024", 
+  "146", 
+  "1024", 
+  "227", 
+  "1024", 
+  "734", 
+  "1024", 
+  "62", 
+  "1024", 
+  "14", 
+  "1024", 
+  "99", 
+  "1024", 
+  "731", 
+  "1024"
+ ], 
  "android.sensor.availableTestPatternModes": [
   "0"
  ], 
  "android.sensor.blackLevelPattern": [
-  "1000", 
-  "1000", 
-  "1000", 
-  "1000"
+  "64", 
+  "64", 
+  "64", 
+  "64"
  ], 
  "android.sensor.info.activeArraySize": [
   "0", 
@@ -631,7 +744,8 @@
   "2"
  ], 
  "android.statistics.info.availableLensShadingMapModes": [
-  "0"
+  "0", 
+  "1"
  ], 
  "android.statistics.info.maxFaceCount": [
   "8"

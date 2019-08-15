@@ -25,6 +25,10 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 #endif
 
+#ifndef RAT_TO_FLOAT
+#define RAT_TO_FLOAT(a) (static_cast<float>(a.numerator) / a.denominator)
+#endif
+
 namespace android {
 
 using google_camera_hal::HalCameraMetadata;

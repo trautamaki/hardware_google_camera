@@ -121,10 +121,6 @@
  "android.lens.info.minimumFocusDistance": [
   "0.00000000"
  ], 
- "android.lens.info.shadingMapSize": [
-  "17", 
-  "13"
- ], 
  "android.lens.intrinsicCalibration": [
   "212.91796875", 
   "213.16793823", 
@@ -518,8 +514,7 @@
   "0"
  ], 
  "android.statistics.info.availableLensShadingMapModes": [
-  "0", 
-  "1"
+  "0"
  ], 
  "android.statistics.info.maxFaceCount": [
   "0"

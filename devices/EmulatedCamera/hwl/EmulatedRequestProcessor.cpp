@@ -65,7 +65,7 @@ status_t EmulatedRequestProcessor::processPipelineRequests(uint32_t frameNumber,
             return BAD_VALUE;
         }
 
-        while (mPendingRequests.size() >= mRequestState->getMaxPipelineDepth()) {
+        while (mPendingRequests.size() > EmulatedSensor::kPipelineDepth) {
             auto result = mRequestCondition.wait_for(lock,
                     std::chrono::nanoseconds(EmulatedSensor::kSupportedFrameDurationRange[1]));
             if (result == std::cv_status::timeout) {
@@ -250,10 +250,11 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::createSensorBuffer(uint3
     buffer->frameNumber = frameNumber;
     buffer->cameraId = mCameraId;
     buffer->isInput = stream.isInput;
+    // In case buffer processing is successful, flip this flag accordingly
+    buffer->streamBuffer.status = BufferStatus::kError;
 
     auto ret = lockSensorBuffer(stream, buffer->importer, streamBuffer.buffer, buffer.get());
     if (ret != OK) {
-        buffer->streamBuffer.status = BufferStatus::kError;
         buffer.release();
         buffer = nullptr;
     }
@@ -263,7 +264,6 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::createSensorBuffer(uint3
                 buffer->acquireFenceFd);
         if (!fenceStatus) {
             ALOGE("%s: Failed importing acquire fence!", __FUNCTION__);
-            buffer->streamBuffer.status = BufferStatus::kError;
             buffer.release();
             buffer = nullptr;
         }
@@ -282,19 +282,17 @@ std::unique_ptr<Buffers> EmulatedRequestProcessor::acquireBuffers(
     acquiredBuffers->reserve(buffers->size());
     auto outputBuffer = buffers->begin();
     while (outputBuffer != buffers->end()) {
+        status_t ret = OK;
         if((*outputBuffer)->acquireFenceFd >= 0) {
-            auto ret = sync_wait((*outputBuffer)->acquireFenceFd,
+            ret = sync_wait((*outputBuffer)->acquireFenceFd,
                     ns2ms(EmulatedSensor::kSupportedFrameDurationRange[1]));
             if (ret != OK) {
                 ALOGE("%s: Fence sync failed: %s, (%d)", __FUNCTION__, strerror(-ret),
                         ret);
-                (*outputBuffer)->streamBuffer.status = BufferStatus::kError;
             }
         }
 
-        if ((*outputBuffer)->streamBuffer.status == BufferStatus::kOk) {
-            // In case buffer processing is successful, flip this flag accordingly
-            (*outputBuffer)->streamBuffer.status = BufferStatus::kError;
+        if (ret == OK) {
             acquiredBuffers->push_back(std::move(*outputBuffer));
         }
 

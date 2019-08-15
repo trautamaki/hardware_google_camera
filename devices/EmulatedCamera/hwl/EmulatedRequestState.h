@@ -48,9 +48,6 @@ public:
     status_t initializeSensorSettings(std::unique_ptr<HalCameraMetadata> requestSettings,
             EmulatedSensor::SensorSettings *sensorSettings/*out*/);
 
-    // Helper methods
-    uint8_t getMaxPipelineDepth() const { return mMaxPipelineDepth; }
-
 private:
 
     bool supportsCapability(uint8_t cap);
@@ -208,6 +205,9 @@ private:
     bool mReportExposureTime = false;
     std::set<int32_t> mAvailableTestPatternModes;
     bool mReportRollingShutterSkew = false;
+    bool mReportNeutralColorPoint = false;
+    bool mReportGreenSplit = false;
+    bool mReportNoiseProfile = false;
 
     // android.scaler.*
     int32_t mScalerCropRegionDefault[4] = {0, 0, 0, 0};
@@ -248,6 +248,7 @@ private:
     bool mReportPoseTranslation = false;
     bool mReportDistortion = false;
     bool mReportIntrinsicCalibration = false;
+    int32_t mShadingMapSize[2] = {0};
 
     //android.hotpixel.*
     std::set<uint8_t> mAvailableHotPixelModes;
