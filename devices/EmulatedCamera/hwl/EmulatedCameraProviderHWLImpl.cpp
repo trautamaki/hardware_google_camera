@@ -332,7 +332,7 @@ status_t EmulatedCameraProviderHwlImpl::parseCharacteristics(const Json::Value& 
         return BAD_VALUE;
     }
 
-    mStaticMedata.push_back(std::move(staticMeta));
+    mStaticMetadata.push_back(std::move(staticMeta));
 
     return OK;
 }
@@ -380,7 +380,7 @@ status_t EmulatedCameraProviderHwlImpl::GetVisibleCameraIds(
         return BAD_VALUE;
     }
 
-    for (size_t cameraId = 0; cameraId < mStaticMedata.size(); cameraId++) {
+    for (size_t cameraId = 0; cameraId < mStaticMetadata.size(); cameraId++) {
         camera_ids->push_back(cameraId);
     }
 
@@ -398,12 +398,12 @@ status_t EmulatedCameraProviderHwlImpl::CreateCameraDeviceHwl(
         return BAD_VALUE;
     }
 
-    if (cameraId >= mStaticMedata.size()) {
+    if (cameraId >= mStaticMetadata.size()) {
         return BAD_VALUE;
     }
 
     std::unique_ptr<HalCameraMetadata> meta = HalCameraMetadata::Clone(
-            mStaticMedata[cameraId].get());
+            mStaticMetadata[cameraId].get());
     *camera_device_hwl = EmulatedCameraDeviceHwlImpl::Create(cameraId, std::move(meta));
     if (*camera_device_hwl == nullptr) {
         ALOGE("%s: Cannot create EmulatedCameraDeviceHWlImpl.", __FUNCTION__);

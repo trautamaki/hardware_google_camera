@@ -1,7 +1,7 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_MULTILIB := 64
+LOCAL_MULTILIB := both
 #TODO: Library name should include emulator
 LOCAL_MODULE := libgooglecamerahwl_impl
 LOCAL_MODULE_OWNER := google
@@ -10,6 +10,8 @@ LOCAL_VENDOR_MODULE := true
 LOCAL_SRC_FILES := \
     EmulatedCameraProviderHWLImpl.cpp \
     EmulatedCameraDeviceHWLImpl.cpp \
+    EmulatedCameraDeviceSessionHWLImpl.cpp \
+    EmulatedRequestProcessor.cpp \
     EmulatedScene.cpp \
     EmulatedSensor.cpp \
     HWLUtils.cpp \

@@ -20,6 +20,7 @@
 
 #include "camera_common.h"
 #include "EmulatedCameraDeviceHWLImpl.h"
+#include "EmulatedCameraDeviceSessionHWLImpl.h"
 
 namespace android {
 
@@ -107,7 +108,13 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
         return BAD_VALUE;
     }
 
-    // TODO: impl
+    std::unique_ptr<HalCameraMetadata> meta = HalCameraMetadata::Clone(mStaticMetadata.get());
+    *session = EmulatedCameraDeviceSessionHwlImpl::Create(mCameraId, std::move(meta));
+    if (*session == nullptr) {
+        ALOGE("%s: Cannot create EmulatedCameraDeviceSessionHWlImpl.", __FUNCTION__);
+        return BAD_VALUE;
+    }
+
     return OK;
 }
 

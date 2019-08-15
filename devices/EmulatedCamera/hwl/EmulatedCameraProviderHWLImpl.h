@@ -68,7 +68,7 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
         static const char* kConfigurationFileLocation;
         static const char* kCameraDefinitionsKey;
 
-        std::vector<std::unique_ptr<HalCameraMetadata>> mStaticMedata;
+        std::vector<std::unique_ptr<HalCameraMetadata>> mStaticMetadata;
         bool mSupportsFlash;
 };
 

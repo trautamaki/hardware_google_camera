@@ -169,7 +169,7 @@
       "android.request.partialResultCount":
         "1",
       "android.request.availableCapabilities":
-        ["0", "1", "2", "4", "6", "7"],
+        ["0", "1", "2", "6"],
       "android.request.availableRequestKeys":
         ["786435", "786433", "786432", "524290",
         "524291", "524288", "524289", "524292",
@@ -223,6 +223,8 @@
         "786446", "786447", "65575", "983050"],
       "android.control.postRawSensitivityBoostRange":
         ["100", "100"],
+      "android.request.availableSessionKeys":
+        ["786435"],
       "android.sensor.info.preCorrectionActiveArraySize":
         ["0", "0", "1600", "1200"]
 }
