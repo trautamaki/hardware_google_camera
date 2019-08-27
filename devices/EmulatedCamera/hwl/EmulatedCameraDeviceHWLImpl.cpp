@@ -16,125 +16,133 @@
 
 //#define LOG_NDEBUG 0
 #define LOG_TAG "EmulatedCameraDeviceHwlImpl"
+#include "EmulatedCameraDeviceHWLImpl.h"
+
 #include <log/log.h>
 
-#include "camera_common.h"
-#include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
+#include "camera_common.h"
 #include "utils/HWLUtils.h"
 
 namespace android {
 
 std::unique_ptr<CameraDeviceHwl> EmulatedCameraDeviceHwlImpl::Create(
-        uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta,
-        std::shared_ptr<EmulatedTorchState> torchState) {
-    auto device = std::unique_ptr<EmulatedCameraDeviceHwlImpl>(new EmulatedCameraDeviceHwlImpl(
-                cameraId, std::move(staticMeta), torchState));
+    uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
+    std::shared_ptr<EmulatedTorchState> torch_state) {
+  auto device = std::unique_ptr<EmulatedCameraDeviceHwlImpl>(
+      new EmulatedCameraDeviceHwlImpl(camera_id, std::move(static_meta),
+                                      torch_state));
 
-    if (device == nullptr) {
-        ALOGE("%s: Creating EmulatedCameraDeviceHwlImpl failed.", __FUNCTION__);
-        return nullptr;
-    }
+  if (device == nullptr) {
+    ALOGE("%s: Creating EmulatedCameraDeviceHwlImpl failed.", __FUNCTION__);
+    return nullptr;
+  }
 
-    status_t res = device->initialize();
-    if (res != OK) {
-        ALOGE("%s: Initializing EmulatedCameraDeviceHwlImpl failed: %s (%d).", __FUNCTION__,
-                strerror(-res), res);
-        return nullptr;
-    }
+  status_t res = device->Initialize();
+  if (res != OK) {
+    ALOGE("%s: Initializing EmulatedCameraDeviceHwlImpl failed: %s (%d).",
+          __FUNCTION__, strerror(-res), res);
+    return nullptr;
+  }
 
-    ALOGI("%s: Created EmulatedCameraDeviceHwlImpl for camera %u", __FUNCTION__,
-            device->mCameraId);
+  ALOGI("%s: Created EmulatedCameraDeviceHwlImpl for camera %u", __FUNCTION__,
+        device->camera_id_);
 
-    return device;
+  return device;
 }
 
-EmulatedCameraDeviceHwlImpl::EmulatedCameraDeviceHwlImpl(uint32_t cameraId,
-        std::unique_ptr<HalCameraMetadata> staticMeta,
-        std::shared_ptr<EmulatedTorchState> torchState) :
-    mCameraId(cameraId), mStaticMetadata(std::move(staticMeta)), mTorchState(torchState) { }
+EmulatedCameraDeviceHwlImpl::EmulatedCameraDeviceHwlImpl(
+    uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
+    std::shared_ptr<EmulatedTorchState> torch_state)
+    : camera_id_(camera_id),
+      static_metadata_(std::move(static_meta)),
+      torch_state_(torch_state) {
+}
 
 uint32_t EmulatedCameraDeviceHwlImpl::GetCameraId() const {
-  return mCameraId;
+  return camera_id_;
 }
 
-status_t EmulatedCameraDeviceHwlImpl::initialize() {
-    auto ret = getSensorCharacteristics(mStaticMetadata.get(), &mSensorChars);
-    if (ret != OK) {
-        ALOGE("%s: Unable to extract sensor characteristics %s (%d)", __FUNCTION__, strerror(-ret),
-                ret);
-        return ret;
-    }
+status_t EmulatedCameraDeviceHwlImpl::Initialize() {
+  auto ret = GetSensorCharacteristics(static_metadata_.get(), &sensor_chars_);
+  if (ret != OK) {
+    ALOGE("%s: Unable to extract sensor characteristics %s (%d)", __FUNCTION__,
+          strerror(-ret), ret);
+    return ret;
+  }
 
-    mStreamConigurationMap = std::make_unique<StreamConfigurationMap>(*mStaticMetadata);
+  stream_coniguration_map_ =
+      std::make_unique<StreamConfigurationMap>(*static_metadata_);
 
-    return OK;
+  return OK;
 }
 
-status_t EmulatedCameraDeviceHwlImpl::GetResourceCost(CameraResourceCost* cost) const {
-    // TODO: remove hardcode
-    cost->resource_cost = 100;
+status_t EmulatedCameraDeviceHwlImpl::GetResourceCost(
+    CameraResourceCost* cost) const {
+  // TODO: remove hardcode
+  cost->resource_cost = 100;
 
-    return OK;
+  return OK;
 }
 
 status_t EmulatedCameraDeviceHwlImpl::GetCameraCharacteristics(
     std::unique_ptr<HalCameraMetadata>* characteristics) const {
-    if (characteristics == nullptr) {
-        return BAD_VALUE;
-    }
+  if (characteristics == nullptr) {
+    return BAD_VALUE;
+  }
 
-    *characteristics = HalCameraMetadata::Clone(mStaticMetadata.get());
+  *characteristics = HalCameraMetadata::Clone(static_metadata_.get());
 
-    return OK;
+  return OK;
 }
 
 status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
     uint32_t /*physical_camera_id*/,
     std::unique_ptr<HalCameraMetadata>* /*characteristics*/) const {
-
-    // TODO: Logical camera support
-    return OK;
+  // TODO: Logical camera support
+  return OK;
 }
 
 status_t EmulatedCameraDeviceHwlImpl::SetTorchMode(TorchMode mode) {
-    if (mTorchState.get() == nullptr) {
-        return INVALID_OPERATION;
-    }
+  if (torch_state_.get() == nullptr) {
+    return INVALID_OPERATION;
+  }
 
-    return mTorchState->setTorchMode(mode);
+  return torch_state_->SetTorchMode(mode);
 }
 
 status_t EmulatedCameraDeviceHwlImpl::DumpState(int /*fd*/) {
-    return OK;
+  return OK;
 }
 
 status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/,
     std::unique_ptr<CameraDeviceSessionHwl>* session) {
-    if (session == nullptr) {
-        ALOGE("%s: session is nullptr.", __FUNCTION__);
-        return BAD_VALUE;
-    }
+  if (session == nullptr) {
+    ALOGE("%s: session is nullptr.", __FUNCTION__);
+    return BAD_VALUE;
+  }
 
-    std::unique_ptr<HalCameraMetadata> meta = HalCameraMetadata::Clone(mStaticMetadata.get());
-    *session = EmulatedCameraDeviceSessionHwlImpl::Create(mCameraId, std::move(meta), mTorchState);
-    if (*session == nullptr) {
-        ALOGE("%s: Cannot create EmulatedCameraDeviceSessionHWlImpl.", __FUNCTION__);
-        return BAD_VALUE;
-    }
+  std::unique_ptr<HalCameraMetadata> meta =
+      HalCameraMetadata::Clone(static_metadata_.get());
+  *session = EmulatedCameraDeviceSessionHwlImpl::Create(
+      camera_id_, std::move(meta), torch_state_);
+  if (*session == nullptr) {
+    ALOGE("%s: Cannot create EmulatedCameraDeviceSessionHWlImpl.", __FUNCTION__);
+    return BAD_VALUE;
+  }
 
-    if (mTorchState.get() != nullptr) {
-        mTorchState->acquireFlashHw();
-    }
+  if (torch_state_.get() != nullptr) {
+    torch_state_->AcquireFlashHw();
+  }
 
-    return OK;
+  return OK;
 }
 
 bool EmulatedCameraDeviceHwlImpl::IsStreamCombinationSupported(
-        const StreamConfiguration& stream_config) {
-    return EmulatedSensor::isStreamCombinationSupported(stream_config, *mStreamConigurationMap,
-            mSensorChars);
+    const StreamConfiguration& stream_config) {
+  return EmulatedSensor::IsStreamCombinationSupported(
+      stream_config, *stream_coniguration_map_, sensor_chars_);
 }
 
 }  // namespace android

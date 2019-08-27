@@ -18,32 +18,34 @@
 #define HW_EMULATOR_TORCH_STATE_H
 
 #include <hwl_types.h>
+
 #include <mutex>
 #include <queue>
 
 namespace android {
 
-using android::google_camera_hal::TorchMode;
 using android::google_camera_hal::HwlTorchModeStatusChangeFunc;
+using android::google_camera_hal::TorchMode;
 
 class EmulatedTorchState {
-public:
-    EmulatedTorchState(uint32_t cameraId, HwlTorchModeStatusChangeFunc torchCb) :
-            mCameraId(cameraId), mTorchCb(torchCb) {}
+ public:
+  EmulatedTorchState(uint32_t camera_id, HwlTorchModeStatusChangeFunc torch_cb)
+      : camera_id_(camera_id), torch_cb_(torch_cb) {
+  }
 
-    status_t setTorchMode(TorchMode mode);
-    void acquireFlashHw();
-    void releaseFlashHw();
+  status_t SetTorchMode(TorchMode mode);
+  void AcquireFlashHw();
+  void ReleaseFlashHw();
 
-private:
-    std::mutex mMutex;
+ private:
+  std::mutex mutex_;
 
-    uint32_t mCameraId;
-    HwlTorchModeStatusChangeFunc mTorchCb;
-    bool mCameraOpen = false;
+  uint32_t camera_id_;
+  HwlTorchModeStatusChangeFunc torch_cb_;
+  bool camera_open_ = false;
 
-    EmulatedTorchState(const EmulatedTorchState&) = delete;
-    EmulatedTorchState& operator = (const EmulatedTorchState&) = delete;
+  EmulatedTorchState(const EmulatedTorchState&) = delete;
+  EmulatedTorchState& operator=(const EmulatedTorchState&) = delete;
 };
 
 }  // namespace android

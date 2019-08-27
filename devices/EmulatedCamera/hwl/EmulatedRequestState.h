@@ -17,10 +17,11 @@
 #ifndef EMULATOR_CAMERA_HAL_HWL_REQUEST_STATE_H
 #define EMULATOR_CAMERA_HAL_HWL_REQUEST_STATE_H
 
-#include "EmulatedSensor.h"
-#include "hwl_types.h"
 #include <mutex>
 #include <unordered_map>
+
+#include "EmulatedSensor.h"
+#include "hwl_types.h"
 
 namespace android {
 
@@ -34,229 +35,244 @@ using google_camera_hal::StreamBuffer;
 struct PendingRequest;
 
 class EmulatedRequestState {
-public:
-    EmulatedRequestState(uint32_t cameraId) : mCameraId(cameraId) {}
-    virtual ~EmulatedRequestState() {}
+ public:
+  EmulatedRequestState(uint32_t camera_id) : camera_id_(camera_id) {
+  }
+  virtual ~EmulatedRequestState() {
+  }
 
-    status_t initialize(std::unique_ptr<HalCameraMetadata> staticMeta);
+  status_t Initialize(std::unique_ptr<HalCameraMetadata> static_meta);
 
-    status_t getDefaultRequest(RequestTemplate type,
-            std::unique_ptr<HalCameraMetadata>* default_settings/*out*/);
+  status_t GetDefaultRequest(
+      RequestTemplate type,
+      std::unique_ptr<HalCameraMetadata>* default_settings /*out*/);
 
-    std::unique_ptr<HwlPipelineResult> initializeResult(uint32_t pipelineId, uint32_t frameNumber);
+  std::unique_ptr<HwlPipelineResult> InitializeResult(uint32_t pipeline_id,
+                                                      uint32_t frame_number);
 
-    status_t initializeSensorSettings(std::unique_ptr<HalCameraMetadata> requestSettings,
-            EmulatedSensor::SensorSettings *sensorSettings/*out*/);
+  status_t InitializeSensorSettings(
+      std::unique_ptr<HalCameraMetadata> request_settings,
+      EmulatedSensor::SensorSettings* sensor_settings /*out*/);
 
-private:
+ private:
+  bool SupportsCapability(uint8_t cap);
 
-    bool supportsCapability(uint8_t cap);
+  status_t InitializeRequestDefaults();
+  status_t InitializeSensorDefaults();
+  status_t InitializeFlashDefaults();
+  status_t InitializeControlDefaults();
+  status_t InitializeControlAEDefaults();
+  status_t InitializeControlAWBDefaults();
+  status_t InitializeControlAFDefaults();
+  status_t InitializeControlSceneDefaults();
+  status_t InitializeHotPixelDefaults();
+  status_t InitializeStatisticsDefaults();
+  status_t InitializeTonemapDefaults();
+  status_t InitializeBlackLevelDefaults();
+  status_t InitializeEdgeDefaults();
+  status_t InitializeShadingDefaults();
+  status_t InitializeNoiseReductionDefaults();
+  status_t InitializeColorCorrectionDefaults();
+  status_t InitializeScalerDefaults();
+  status_t InitializeReprocessDefaults();
+  status_t InitializeMeteringRegionDefault(uint32_t tag,
+                                           int32_t* region /*out*/);
+  status_t InitializeControlefaults();
+  status_t InitializeInfoDefaults();
+  status_t InitializeLensDefaults();
 
-    status_t initializeRequestDefaults();
-    status_t initializeSensorDefaults();
-    status_t initializeFlashDefaults();
-    status_t initializeControlDefaults();
-    status_t initializeControlAEDefaults();
-    status_t initializeControlAWBDefaults();
-    status_t initializeControlAFDefaults();
-    status_t initializeControlSceneDefaults();
-    status_t initializeHotPixelDefaults();
-    status_t initializeStatisticsDefaults();
-    status_t initializeTonemapDefaults();
-    status_t initializeBlackLevelDefaults();
-    status_t initializeEdgeDefaults();
-    status_t initializeShadingDefaults();
-    status_t initializeNoiseReductionDefaults();
-    status_t initializeColorCorrectionDefaults();
-    status_t initializeScalerDefaults();
-    status_t initializeReprocessDefaults();
-    status_t initializeMeteringRegionDefault(uint32_t tag, int32_t *region/*out*/);
-    status_t initializeControlefaults();
-    status_t initializeInfoDefaults();
-    status_t initializeLensDefaults();
+  status_t ProcessAE();
+  status_t ProcessAF();
+  status_t ProcessAWB();
+  status_t DoFakeAE();
+  status_t CompensateAE();
+  status_t Update3AMeteringRegion(uint32_t tag,
+                                  const HalCameraMetadata& settings,
+                                  int32_t* region /*out*/);
 
-    status_t processAE();
-    status_t processAF();
-    status_t processAWB();
-    status_t doFakeAE();
-    status_t compensateAE();
-    status_t update3AMeteringRegion(uint32_t tag, const HalCameraMetadata& settings,
-            int32_t *region /*out*/);
+  std::mutex request_state_mutex_;
+  std::unique_ptr<HalCameraMetadata> request_settings_;
 
-    std::mutex mRequestStateMutex;
-    std::unique_ptr<HalCameraMetadata> mRequestSettings;
+  // Supported capabilities and features
+  static const std::set<uint8_t> kSupportedCapabilites;
+  static const std::set<uint8_t> kSupportedHWLevels;
+  std::unique_ptr<HalCameraMetadata> static_metadata_;
 
-    // Supported capabilities and features
-    static const std::set<uint8_t> kSupportedCapabilites;
-    static const std::set<uint8_t> kSupportedHWLevels;
-    std::unique_ptr<HalCameraMetadata> mStaticMetadata;
+  // android.blacklevel.*
+  uint8_t black_level_lock_ = ANDROID_BLACK_LEVEL_LOCK_ON;
+  bool report_black_level_lock_ = false;
 
-    // android.blacklevel.*
-    uint8_t mBlackLevelLock = ANDROID_BLACK_LEVEL_LOCK_ON;
-    bool mReportBlackLevelLock = false;
+  // android.colorcorrection.*
+  std::set<uint8_t> available_color_aberration_modes_;
 
-    // android.colorcorrection.*
-    std::set<uint8_t> mAvailableColorAberrationModes;
+  // android.edge.*
+  std::set<uint8_t> available_edge_modes_;
 
-    // android.edge.*
-    std::set<uint8_t> mAvailableEdgeModes;
+  // android.shading.*
+  std::set<uint8_t> available_shading_modes_;
 
-    // android.shading.*
-    std::set<uint8_t> mAvailableShadingModes;
+  // android.noiseReduction.*
+  std::set<uint8_t> available_noise_reduction_modes_;
 
-    // android.noiseReduction.*
-    std::set<uint8_t> mAvailableNoiseReductionModes;
+  // android.request.*
+  std::set<uint8_t> available_capabilities_;
+  std::set<int32_t> available_characteristics_;
+  std::set<int32_t> available_results_;
+  std::set<int32_t> available_requests_;
+  uint8_t max_pipeline_depth_ = 0;
+  int32_t partial_result_count_ = 1;  // TODO: add support for partial results
+  bool supports_manual_sensor_ = false;
+  bool supports_manual_post_processing_ = false;
+  bool is_backward_compatible_ = false;
+  bool is_raw_capable_ = false;
+  bool supports_private_reprocessing_ = false;
+  bool supports_yuv_reprocessing_ = false;
 
-    // android.request.*
-    std::set<uint8_t> mAvailableCapabilites;
-    std::set<int32_t> mAvailableCharacteritics;
-    std::set<int32_t> mAvailableResults;
-    std::set<int32_t> mAvailableRequests;
-    uint8_t mMaxPipelineDepth = 0;
-    int32_t mPartialResultCount = 1; // TODO: add support for partial results
-    bool mSupportsManualSensor = false;
-    bool mSupportsManualPostProcessing = false;
-    bool mIsBackwardCompatible = false;
-    bool mIsRAWCapable = false;
-    bool mSupportsPrivateReprocessing = false;
-    bool mSupportsYUVReprocessing = false;
+  // android.control.*
+  struct SceneOverride {
+    uint8_t ae_mode, awb_mode, af_mode;
+    SceneOverride()
+        : ae_mode(ANDROID_CONTROL_AE_MODE_OFF),
+          awb_mode(ANDROID_CONTROL_AWB_MODE_OFF),
+          af_mode(ANDROID_CONTROL_AF_MODE_OFF) {
+    }
+    SceneOverride(uint8_t ae, uint8_t awb, uint8_t af)
+        : ae_mode(ae), awb_mode(awb), af_mode(af) {
+    }
+  };
 
-    // android.control.*
-    struct SceneOverride {
-        uint8_t aeMode, awbMode, afMode;
-        SceneOverride() : aeMode(ANDROID_CONTROL_AE_MODE_OFF),
-                awbMode(ANDROID_CONTROL_AWB_MODE_OFF), afMode(ANDROID_CONTROL_AF_MODE_OFF) {}
-        SceneOverride(uint8_t ae, uint8_t awb, uint8_t af) : aeMode(ae), awbMode(awb), afMode(af) {}
-    };
+  struct FPSRange {
+    int32_t min_fps, max_fps;
+    FPSRange() : min_fps(-1), max_fps(-1) {
+    }
+    FPSRange(int32_t min, int32_t max) : min_fps(min), max_fps(max) {
+    }
+  };
 
-    struct FPSRange {
-        int32_t minFPS, maxFPS;
-        FPSRange() : minFPS(-1), maxFPS(-1) {}
-        FPSRange(int32_t min, int32_t max) : minFPS(min), maxFPS(max) {}
-    };
+  std::set<uint8_t> available_control_modes_;
+  std::set<uint8_t> available_ae_modes_;
+  std::set<uint8_t> available_af_modes_;
+  std::set<uint8_t> available_awb_modes_;
+  std::set<uint8_t> available_scenes_;
+  std::set<uint8_t> available_antibanding_modes_;
+  std::set<uint8_t> available_effects_;
+  std::set<uint8_t> available_vstab_modes_;
+  std::unordered_map<uint8_t, SceneOverride> scene_overrides_;
+  std::vector<FPSRange> available_fps_ranges_;
+  int32_t exposure_compensation_range_[2] = {0, 0};
+  camera_metadata_rational exposure_compensation_step_ = {0, 0};
+  bool exposure_compensation_supported_ = false;
+  int32_t exposure_compensation_ = 0;
+  int32_t ae_metering_region_[5] = {0, 0, 0, 0, 0};
+  int32_t awb_metering_region_[5] = {0, 0, 0, 0, 0};
+  int32_t af_metering_region_[5] = {0, 0, 0, 0, 0};
+  size_t max_ae_regions_ = 0;
+  size_t max_awb_regions_ = 0;
+  size_t max_af_regions_ = 0;
+  uint8_t control_mode_ = ANDROID_CONTROL_MODE_AUTO;
+  uint8_t scene_mode_ = ANDROID_CONTROL_SCENE_MODE_DISABLED;
+  uint8_t ae_mode_ = ANDROID_CONTROL_AE_MODE_ON;
+  uint8_t awb_mode_ = ANDROID_CONTROL_AWB_MODE_AUTO;
+  uint8_t af_mode_ = ANDROID_CONTROL_AF_MODE_AUTO;
+  uint8_t ae_lock_ = ANDROID_CONTROL_AE_LOCK_OFF;
+  uint8_t ae_state_ = ANDROID_CONTROL_AE_STATE_INACTIVE;
+  uint8_t awb_state_ = ANDROID_CONTROL_AWB_STATE_INACTIVE;
+  uint8_t awb_lock_ = ANDROID_CONTROL_AWB_LOCK_OFF;
+  uint8_t af_state_ = ANDROID_CONTROL_AF_STATE_INACTIVE;
+  uint8_t af_trigger_ = ANDROID_CONTROL_AF_TRIGGER_IDLE;
+  uint8_t ae_trigger_ = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
+  FPSRange ae_target_fps_ = {0, 0};
+  static const int32_t kMinimumStreamingFPS = 20;
+  bool ae_lock_available_ = false;
+  bool report_ae_lock_ = false;
+  bool scenes_supported_ = false;
+  size_t ae_frame_counter_ = 0;
+  const size_t kAEPrecaptureMinFrames = 10;
+  const float kExposureTrackRate = .2f;
+  const size_t kStableAeMaxFrames = 100;
+  const float kExposureWanderMin = -2;
+  const float kExposureWanderMax = 1;
+  int32_t post_raw_boost_ = 100;
+  bool report_post_raw_boost_ = false;
+  nsecs_t ae_target_exposure_time_ = EmulatedSensor::kDefaultExposureTime;
+  nsecs_t current_exposure_time_ = EmulatedSensor::kDefaultExposureTime;
+  bool awb_lock_available_ = false;
+  bool report_awb_lock_ = false;
+  bool af_mode_changed_ = false;
+  bool af_supported_ = false;
+  bool picture_caf_supported_ = false;
+  bool video_caf_supported_ = false;
 
-    std::set<uint8_t> mAvailableControlModes;
-    std::set<uint8_t> mAvailableAEModes;
-    std::set<uint8_t> mAvailableAFModes;
-    std::set<uint8_t> mAvailableAWBModes;
-    std::set<uint8_t> mAvailableScenes;
-    std::set<uint8_t> mAvailableAntibandingModes;
-    std::set<uint8_t> mAvailableEffects;
-    std::set<uint8_t> mAvailableVSTABModes;
-    std::unordered_map<uint8_t, SceneOverride> mSceneOverrides;
-    std::vector<FPSRange> mAvailableFPSRanges;
-    int32_t mExposureCompensationRange [2] = {0, 0};
-    camera_metadata_rational mExposureCompensationStep = {0, 0};
-    bool mExposureCompensationSupported = false;
-    int32_t mExposureCompensation = 0;
-    int32_t mAEMeteringRegion[5] = {0, 0, 0, 0, 0};
-    int32_t mAWBMeteringRegion[5] = {0, 0, 0, 0, 0};
-    int32_t mAFMeteringRegion[5] = {0, 0, 0, 0, 0};
-    size_t mMaxAERegions = 0;
-    size_t mMaxAWBRegions = 0;
-    size_t mMaxAFRegions = 0;
-    uint8_t mControlMode = ANDROID_CONTROL_MODE_AUTO;
-    uint8_t mSceneMode = ANDROID_CONTROL_SCENE_MODE_DISABLED;
-    uint8_t mAEMode = ANDROID_CONTROL_AE_MODE_ON;
-    uint8_t mAWBMode = ANDROID_CONTROL_AWB_MODE_AUTO;
-    uint8_t mAFMode = ANDROID_CONTROL_AF_MODE_AUTO;
-    uint8_t mAELock = ANDROID_CONTROL_AE_LOCK_OFF;
-    uint8_t mAEState = ANDROID_CONTROL_AE_STATE_INACTIVE;
-    uint8_t mAWBState = ANDROID_CONTROL_AWB_STATE_INACTIVE;
-    uint8_t mAWBLock = ANDROID_CONTROL_AWB_LOCK_OFF;
-    uint8_t mAFState = ANDROID_CONTROL_AF_STATE_INACTIVE;
-    uint8_t mAFTrigger = ANDROID_CONTROL_AF_TRIGGER_IDLE;
-    uint8_t mAETrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
-    FPSRange mAETargetFPS = {0, 0};
-    static const int32_t kMinimumStreamingFPS = 20;
-    bool mAELockAvailable = false;
-    bool mReportAELock = false;
-    bool mScenesSupported = false;
-    size_t mAEFrameCounter = 0;
-    const size_t kAEPrecaptureMinFrames = 10;
-    const float kExposureTrackRate = .2f;
-    const size_t kStableAeMaxFrames = 100;
-    const float kExposureWanderMin = -2;
-    const float kExposureWanderMax = 1;
-    int32_t mPostRawBoost = 100;
-    bool mReportPostRawBoost = false;
-    nsecs_t mAETargetExposureTime = EmulatedSensor::kDefaultExposureTime;
-    nsecs_t mCurrentExposureTime = EmulatedSensor::kDefaultExposureTime;
-    bool mAWBLockAvailable = false;
-    bool mReportAWBLock = false;
-    bool mAFModeChanged = false;
-    bool mAFSupported = false;
-    bool mPictureCAFSupported = false;
-    bool mVideoCAFSupported = false;
+  // android.flash.*
+  bool is_flash_supported_ = false;
+  uint8_t flash_state_ = ANDROID_FLASH_STATE_UNAVAILABLE;
 
-    // android.flash.*
-    bool mIsFlashSupported = false;
-    uint8_t mFlashState = ANDROID_FLASH_STATE_UNAVAILABLE;
+  // android.sensor.*
+  std::pair<int32_t, int32_t> sensor_sensitivity_range_;
+  std::pair<nsecs_t, nsecs_t> sensor_exposure_time_range_;
+  nsecs_t sensor_max_frame_duration_ =
+      EmulatedSensor::kSupportedFrameDurationRange[1];
+  nsecs_t sensor_exposure_time_ = EmulatedSensor::kDefaultExposureTime;
+  nsecs_t sensor_frame_duration_ = EmulatedSensor::kDefaultFrameDuration;
+  int32_t sensor_sensitivity_ = EmulatedSensor::kDefaultSensitivity;
+  bool report_frame_duration_ = false;
+  bool report_sensitivity_ = false;
+  bool report_exposure_time_ = false;
+  std::set<int32_t> available_test_pattern_modes_;
+  bool report_rolling_shutter_skew_ = false;
+  bool report_neutral_color_point_ = false;
+  bool report_green_split_ = false;
+  bool report_noise_profile_ = false;
 
-    // android.sensor.*
-    std::pair<int32_t, int32_t> mSensorSensitivityRange;
-    std::pair<nsecs_t, nsecs_t> mSensorExposureTimeRange;
-    nsecs_t mSensorMaxFrameDuration = EmulatedSensor::kSupportedFrameDurationRange[1];
-    nsecs_t mSensorExposureTime = EmulatedSensor::kDefaultExposureTime;
-    nsecs_t mSensorFrameDuration = EmulatedSensor::kDefaultFrameDuration;
-    int32_t mSensorSensitivity = EmulatedSensor::kDefaultSensitivity;
-    bool mReportFrameDuration = false;
-    bool mReportSensitivity = false;
-    bool mReportExposureTime = false;
-    std::set<int32_t> mAvailableTestPatternModes;
-    bool mReportRollingShutterSkew = false;
-    bool mReportNeutralColorPoint = false;
-    bool mReportGreenSplit = false;
-    bool mReportNoiseProfile = false;
+  // android.scaler.*
+  int32_t scaler_crop_region_default_[4] = {0, 0, 0, 0};
 
-    // android.scaler.*
-    int32_t mScalerCropRegionDefault[4] = {0, 0, 0, 0};
+  // android.statistics.*
+  std::set<uint8_t> available_hot_pixel_map_modes_;
+  std::set<uint8_t> available_lens_shading_map_modes_;
+  std::set<uint8_t> available_face_detect_modes_;
+  uint8_t current_scene_flicker_ = ANDROID_STATISTICS_SCENE_FLICKER_NONE;
+  bool report_scene_flicker_ = false;
 
-    // android.statistics.*
-    std::set<uint8_t> mAvailableHotPixelMapModes;
-    std::set<uint8_t> mAvailableLensShadingMapModes;
-    std::set<uint8_t> mAvailableFaceDetectModes;
-    uint8_t mCurrentSceneFlicker = ANDROID_STATISTICS_SCENE_FLICKER_NONE;
-    bool mReportSceneFlicker = false;
+  // android.tonemap.*
+  std::set<uint8_t> available_tonemap_modes_;
 
-    // android.tonemap.*
-    std::set<uint8_t> mAvailableTonemapModes;
+  // android.info.*
+  uint8_t supported_hw_level_ = 0;
+  static const size_t kTemplateCount =
+      static_cast<size_t>(RequestTemplate::kManual) + 1;
+  std::unique_ptr<HalCameraMetadata> default_requests_[kTemplateCount];
 
-    // android.info.*
-    uint8_t mSupportedHWLevel = 0;
-    static const size_t kTemplateCount = static_cast<size_t>(RequestTemplate::kManual) + 1;
-    std::unique_ptr<HalCameraMetadata> mDefaultRequests[kTemplateCount];
+  // android.lens.*
+  float minimum_focus_distance_ = 0.f;
+  float aperture_ = 0.f;
+  float focal_length_ = 0.f;
+  float focus_distance_ = 0.f;
+  bool report_focus_distance_ = false;
+  uint8_t lens_state_ = ANDROID_LENS_STATE_STATIONARY;
+  bool report_focus_range_ = false;
+  float filter_density_ = 0.f;
+  bool report_filter_density_ = false;
+  std::set<uint8_t> available_ois_modes_;
+  uint8_t ois_mode_ = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_OFF;
+  bool report_ois_mode_ = false;
+  float pose_rotation_[5] = {.0f};
+  float pose_translation_[3] = {.0f};
+  float distortion_[5] = {.0f};
+  float intrinsic_calibration_[5] = {.0f};
+  bool report_pose_rotation_ = false;
+  bool report_pose_translation_ = false;
+  bool report_distortion_ = false;
+  bool report_intrinsic_calibration_ = false;
+  int32_t shading_map_size_[2] = {0};
 
-    // android.lens.*
-    float mMinimumFocusDistance = 0.f;
-    float mAperture = 0.f;
-    float mFocalLength = 0.f;
-    float mFocusDistance = 0.f;
-    bool mReportFocusDistance = false;
-    uint8_t mLensState = ANDROID_LENS_STATE_STATIONARY;
-    bool mReportFocusRange = false;
-    float mFilterDensity = 0.f;
-    bool mReportFilterDensity = false;
-    std::set<uint8_t> mAvailableOISModes;
-    uint8_t mOISMode = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_OFF;
-    bool mReportOISMode = false;
-    float mPoseRotation[5] = {.0f};
-    float mPoseTranslation[3] = {.0f};
-    float mDistortion[5] = {.0f};
-    float mIntrinsicCalibration[5] = {.0f};
-    bool mReportPoseRotation = false;
-    bool mReportPoseTranslation = false;
-    bool mReportDistortion = false;
-    bool mReportIntrinsicCalibration = false;
-    int32_t mShadingMapSize[2] = {0};
+  // android.hotpixel.*
+  std::set<uint8_t> available_hot_pixel_modes_;
 
-    //android.hotpixel.*
-    std::set<uint8_t> mAvailableHotPixelModes;
+  uint32_t camera_id_;
 
-    uint32_t mCameraId;
-
-    EmulatedRequestState(const EmulatedRequestState&) = delete;
-    EmulatedRequestState& operator = (const EmulatedRequestState&) = delete;
+  EmulatedRequestState(const EmulatedRequestState&) = delete;
+  EmulatedRequestState& operator=(const EmulatedRequestState&) = delete;
 };
 
 }  // namespace android

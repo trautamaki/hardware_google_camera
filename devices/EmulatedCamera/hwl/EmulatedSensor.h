@@ -75,20 +75,18 @@
 #ifndef HW_EMULATOR_CAMERA2_SENSOR_H
 #define HW_EMULATOR_CAMERA2_SENSOR_H
 
-#include "utils/Mutex.h"
-#include "utils/Thread.h"
-#include "utils/Timers.h"
-
-#include "Base.h"
-#include "EmulatedScene.h"
-#include "JpegCompressor.h"
-#include "HandleImporter.h"
-
 #include <hwl_types.h>
 
 #include <functional>
 
+#include "Base.h"
+#include "EmulatedScene.h"
+#include "HandleImporter.h"
+#include "JpegCompressor.h"
+#include "utils/Mutex.h"
 #include "utils/StreamConfigurationMap.h"
+#include "utils/Thread.h"
+#include "utils/Timers.h"
 
 namespace android {
 
@@ -100,204 +98,208 @@ using google_camera_hal::StreamConfiguration;
 /*
  * Default to sRGB with D65 white point
  */
-struct colorFilterXYZ {
-    float rX = 3.2406f;
-    float rY = -1.5372f;
-    float rZ = -0.4986f;
-    float grX = -0.9689f;
-    float grY = 1.8758f;
-    float grZ = 0.0415f;
-    float gbX = -0.9689f;
-    float gbY = 1.8758f;
-    float gbZ = 0.0415f;
-    float bX = 0.0557f;
-    float bY = -0.2040f;
-    float bZ = 1.0570f;
+struct ColorFilterXYZ {
+  float rX = 3.2406f;
+  float rY = -1.5372f;
+  float rZ = -0.4986f;
+  float grX = -0.9689f;
+  float grY = 1.8758f;
+  float grZ = 0.0415f;
+  float gbX = -0.9689f;
+  float gbY = 1.8758f;
+  float gbZ = 0.0415f;
+  float bX = 0.0557f;
+  float bY = -0.2040f;
+  float bZ = 1.0570f;
 };
 
 struct SensorCharacteristics {
-    size_t width = 0;
-    size_t height = 0;
-    nsecs_t exposureTimeRange[2] = {0};
-    nsecs_t frameDurationRange[2] = {0};
-    int32_t sensitivityRange[2] = {0};
-    camera_metadata_enum_android_sensor_info_color_filter_arrangement colorArangement =
-            ANDROID_SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB;
-    colorFilterXYZ colorFilter;
-    uint32_t maxRawValue = 0;
-    uint32_t blackLevelPattern[4] = {0};
-    uint32_t maxRawStreams = 0;
-    uint32_t maxProcessedStreams = 0;
-    uint32_t maxStallingStreams = 0;
-    uint32_t maxInputStreams = 0;
-    uint32_t physicalSize[2] = {0};
-    bool isFlashSupported = false;
-    uint32_t lensShadingMapSize[2] = {0};
-    uint32_t maxPipelineDepth = 0;
+  size_t width = 0;
+  size_t height = 0;
+  nsecs_t exposure_time_range[2] = {0};
+  nsecs_t frame_duration_range[2] = {0};
+  int32_t sensitivity_range[2] = {0};
+  camera_metadata_enum_android_sensor_info_color_filter_arrangement
+      color_arangement = ANDROID_SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB;
+  ColorFilterXYZ color_filter;
+  uint32_t max_raw_value = 0;
+  uint32_t black_level_pattern[4] = {0};
+  uint32_t max_raw_streams = 0;
+  uint32_t max_processed_streams = 0;
+  uint32_t max_stalling_streams = 0;
+  uint32_t max_input_streams = 0;
+  uint32_t physical_size[2] = {0};
+  bool is_flash_supported = false;
+  uint32_t lens_shading_map_size[2] = {0};
+  uint32_t max_pipeline_depth = 0;
 };
 
 class EmulatedSensor : private Thread, public virtual RefBase {
-public:
-    EmulatedSensor();
-    ~EmulatedSensor();
+ public:
+  EmulatedSensor();
+  ~EmulatedSensor();
 
-    static android_pixel_format_t overrideFormat(android_pixel_format_t format) {
-        if (format ==  HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
-            return HAL_PIXEL_FORMAT_YCBCR_420_888;
-        }
-
-        return format;
+  static android_pixel_format_t OverrideFormat(android_pixel_format_t format) {
+    if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+      return HAL_PIXEL_FORMAT_YCBCR_420_888;
     }
 
-    static bool isReprocessPathSupported(android_pixel_format_t inputFormat,
-            android_pixel_format_t outputFormat) {
-        if ((HAL_PIXEL_FORMAT_YCBCR_420_888 == inputFormat) &&
-                ((HAL_PIXEL_FORMAT_YCBCR_420_888 == outputFormat) ||
-                (HAL_PIXEL_FORMAT_BLOB == outputFormat))) {
-            return true;
-        }
+    return format;
+  }
 
-        return false;
+  static bool IsReprocessPathSupported(android_pixel_format_t input_format,
+                                       android_pixel_format_t output_format) {
+    if ((HAL_PIXEL_FORMAT_YCBCR_420_888 == input_format) &&
+        ((HAL_PIXEL_FORMAT_YCBCR_420_888 == output_format) ||
+         (HAL_PIXEL_FORMAT_BLOB == output_format))) {
+      return true;
     }
 
-    static bool areCharacteristicsSupported(const SensorCharacteristics& characteristics);
-    static bool isStreamCombinationSupported(const StreamConfiguration& config,
-            StreamConfigurationMap& map, const SensorCharacteristics& sensorChars);
+    return false;
+  }
 
-    /*
-     * Power control
-     */
+  static bool AreCharacteristicsSupported(
+      const SensorCharacteristics& characteristics);
+  static bool IsStreamCombinationSupported(
+      const StreamConfiguration& config, StreamConfigurationMap& map,
+      const SensorCharacteristics& sensor_chars);
 
-    status_t startUp(SensorCharacteristics characteristics);
-    status_t shutDown();
+  /*
+   * Power control
+   */
 
-    /*
-     * Settings control
-     */
-    struct SensorSettings {
-        nsecs_t exposureTime = 0;
-        nsecs_t frameDuration = 0;
-        uint32_t gain = 0; // ISO
-        uint32_t lensShadingMapMode;
-        bool reportNeutralColorPoint = false;
-        bool reportGreenSplit = false;
-        bool reportNoiseProfile = false;
-    };
+  status_t StartUp(SensorCharacteristics characteristics);
+  status_t ShutDown();
 
-    void setCurrentRequest(SensorSettings settings, std::unique_ptr<HwlPipelineResult> result,
-            std::unique_ptr<Buffers> inputBuffers, std::unique_ptr<Buffers> outputBuffers);
+  /*
+   * Settings control
+   */
+  struct SensorSettings {
+    nsecs_t exposure_time = 0;
+    nsecs_t frame_duration = 0;
+    uint32_t gain = 0;  // ISO
+    uint32_t lens_shading_map_mode;
+    bool report_neutral_color_point = false;
+    bool report_green_split = false;
+    bool report_noise_profile = false;
+  };
 
-    status_t flush();
+  void SetCurrentRequest(SensorSettings settings,
+                         std::unique_ptr<HwlPipelineResult> result,
+                         std::unique_ptr<Buffers> input_buffers,
+                         std::unique_ptr<Buffers> output_buffers);
 
-    /*
-     * Synchronizing with sensor operation (vertical sync)
-     */
+  status_t Flush();
 
-    // Wait until the sensor outputs its next vertical sync signal, meaning it
-    // is starting readout of its latest frame of data. Returns true if vertical
-    // sync is signaled, false if the wait timed out.
-    bool waitForVSync(nsecs_t reltime);
+  /*
+   * Synchronizing with sensor operation (vertical sync)
+   */
 
-    static const nsecs_t kSupportedExposureTimeRange[2];
-    static const nsecs_t kSupportedFrameDurationRange[2];
-    static const int32_t kSupportedSensitivityRange[2];
-    static const uint8_t kSupportedColorFilterArrangement;
-    static const uint32_t kDefaultMaxRawValue;
-    static const nsecs_t kDefaultExposureTime;
-    static const int32_t kDefaultSensitivity;
-    static const nsecs_t kDefaultFrameDuration;
-    static const uint32_t kDefaultBlackLevelPattern[4];
-    static const camera_metadata_rational kDefaultColorTransform[9];
-    static const float kDefaultColorCorrectionGains[4];
-    static const float kDefaultToneMapCurveRed[4];
-    static const float kDefaultToneMapCurveGreen[4];
-    static const float kDefaultToneMapCurveBlue[4];
-    static const uint8_t kPipelineDepth;
+  // Wait until the sensor outputs its next vertical sync signal, meaning it
+  // is starting readout of its latest frame of data. Returns true if vertical
+  // sync is signaled, false if the wait timed out.
+  bool WaitForVSync(nsecs_t rel_time);
 
-private:
-    /**
-     * Sensor characteristics
-     */
-    SensorCharacteristics mChars;
+  static const nsecs_t kSupportedExposureTimeRange[2];
+  static const nsecs_t kSupportedFrameDurationRange[2];
+  static const int32_t kSupportedSensitivityRange[2];
+  static const uint8_t kSupportedColorFilterArrangement;
+  static const uint32_t kDefaultMaxRawValue;
+  static const nsecs_t kDefaultExposureTime;
+  static const int32_t kDefaultSensitivity;
+  static const nsecs_t kDefaultFrameDuration;
+  static const uint32_t kDefaultBlackLevelPattern[4];
+  static const camera_metadata_rational kDefaultColorTransform[9];
+  static const float kDefaultColorCorrectionGains[4];
+  static const float kDefaultToneMapCurveRed[4];
+  static const float kDefaultToneMapCurveGreen[4];
+  static const float kDefaultToneMapCurveBlue[4];
+  static const uint8_t kPipelineDepth;
 
-    float kBaseGainFactor;
+ private:
+  /**
+   * Sensor characteristics
+   */
+  SensorCharacteristics chars_;
 
-    // While each row has to read out, reset, and then expose, the (reset +
-    // expose) sequence can be overlapped by other row readouts, so the final
-    // minimum frame duration is purely a function of row readout time, at least
-    // if there's a reasonable number of rows.
-    nsecs_t mRowReadoutTime;
+  float base_gain_factor_;
 
+  // While each row has to read out, reset, and then expose, the (reset +
+  // expose) sequence can be overlapped by other row readouts, so the final
+  // minimum frame duration is purely a function of row readout time, at least
+  // if there's a reasonable number of rows.
+  nsecs_t row_readout_time_;
 
-    static const nsecs_t kMinVerticalBlank;
+  static const nsecs_t kMinVerticalBlank;
 
-    // Sensor sensitivity, approximate
+  // Sensor sensitivity, approximate
 
-    static const float kSaturationVoltage;
-    static const uint32_t kSaturationElectrons;
-    static const float kVoltsPerLuxSecond;
-    static const float kElectronsPerLuxSecond;
+  static const float kSaturationVoltage;
+  static const uint32_t kSaturationElectrons;
+  static const float kVoltsPerLuxSecond;
+  static const float kElectronsPerLuxSecond;
 
-    static const float kReadNoiseStddevBeforeGain;  // In electrons
-    static const float kReadNoiseStddevAfterGain;   // In raw digital units
-    static const float kReadNoiseVarBeforeGain;
-    static const float kReadNoiseVarAfterGain;
-    static const camera_metadata_rational kNeutralColorPoint[3];
-    static const float kGreenSplit;
+  static const float kReadNoiseStddevBeforeGain;  // In electrons
+  static const float kReadNoiseStddevAfterGain;   // In raw digital units
+  static const float kReadNoiseVarBeforeGain;
+  static const float kReadNoiseVarAfterGain;
+  static const camera_metadata_rational kNeutralColorPoint[3];
+  static const float kGreenSplit;
 
-    static const uint32_t kMaxRAWStreams;
-    static const uint32_t kMaxProcessedStreams;
-    static const uint32_t kMaxStallingStreams;
-    static const uint32_t kMaxInputStreams;
-    static const uint32_t kMaxLensShadingMapSize[2];
-    static const int32_t kFixedBitPrecision;
-    static const int32_t kSaturationPoint;
+  static const uint32_t kMaxRAWStreams;
+  static const uint32_t kMaxProcessedStreams;
+  static const uint32_t kMaxStallingStreams;
+  static const uint32_t kMaxInputStreams;
+  static const uint32_t kMaxLensShadingMapSize[2];
+  static const int32_t kFixedBitPrecision;
+  static const int32_t kSaturationPoint;
 
-    std::vector<float> mLensShadingMap;
-    std::vector<int32_t> mGammaTable;
+  std::vector<float> lens_shading_map_;
+  std::vector<int32_t> gamma_table_;
 
-    Mutex mControlMutex;  // Lock before accessing control parameters
-    // Start of control parameters
-    Condition mVSync;
-    bool mGotVSync;
-    SensorSettings mCurrentSettings;
-    std::unique_ptr<HwlPipelineResult> mCurrentResult;
-    std::unique_ptr<Buffers> mCurrentOutputBuffers;
-    std::unique_ptr<Buffers> mCurrentInputBuffers;
-    std::unique_ptr<JpegCompressor> mJpegCompressor;
+  Mutex control_mutex_;  // Lock before accessing control parameters
+  // Start of control parameters
+  Condition vsync_;
+  bool got_vsync_;
+  SensorSettings current_settings_;
+  std::unique_ptr<HwlPipelineResult> current_result_;
+  std::unique_ptr<Buffers> current_output_buffers_;
+  std::unique_ptr<Buffers> current_input_buffers_;
+  std::unique_ptr<JpegCompressor> jpeg_compressor_;
 
-    // End of control parameters
+  // End of control parameters
 
-    /**
-     * Inherited Thread virtual overrides, and members only used by the
-     * processing thread
-     */
-    bool threadLoop() override;
+  /**
+   * Inherited Thread virtual overrides, and members only used by the
+   * processing thread
+   */
+  bool threadLoop() override;
 
-    nsecs_t mNextCaptureTime;
+  nsecs_t next_capture_time_;
 
-    std::unique_ptr<EmulatedScene> mScene;
+  std::unique_ptr<EmulatedScene> scene_;
 
-    void captureRaw(uint8_t *img, uint32_t gain, uint32_t width);
-    enum RGBLayout { RGB, RGBA, ARGB };
-    void captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
-            RGBLayout layout, uint32_t gain);
-    void captureYUV420(YCbCrPlanes yuvLayout, uint32_t width, uint32_t height, uint32_t gain);
-    void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height,
-            uint32_t stride);
+  void CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width);
+  enum RGBLayout { RGB, RGBA, ARGB };
+  void CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,
+                  uint32_t stride, RGBLayout layout, uint32_t gain);
+  void CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width, uint32_t height,
+                     uint32_t gain);
+  void CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width,
+                    uint32_t height, uint32_t stride);
 
-    struct YUV420Frame {
-        uint32_t width = 0;
-        uint32_t height = 0;
-        YCbCrPlanes planes;
-    };
+  struct YUV420Frame {
+    uint32_t width = 0;
+    uint32_t height = 0;
+    YCbCrPlanes planes;
+  };
 
-    status_t processYUV420(const YUV420Frame& input, const YUV420Frame& output, uint32_t gain,
-            bool reprocessRequest);
+  status_t ProcessYUV420(const YUV420Frame& input, const YUV420Frame& output,
+                         uint32_t gain, bool reprocess_request);
 
-    inline int32_t applysRGBGamma(int32_t value, int32_t saturation);
+  inline int32_t ApplysRGBGamma(int32_t value, int32_t saturation);
 
-    bool waitForVSyncLocked(nsecs_t reltime);
+  bool WaitForVSyncLocked(nsecs_t reltime);
 };
 
 }  // namespace android

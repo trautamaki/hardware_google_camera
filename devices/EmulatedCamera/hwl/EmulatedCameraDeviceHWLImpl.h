@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2019 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,10 @@
 #define EMULATOR_CAMERA_HAL_HWL_CAMERA_DEVICE_HWL_H
 
 #include <camera_device_hwl.h>
+#include <hal_types.h>
+
 #include "EmulatedSensor.h"
 #include "EmulatedTorchState.h"
-#include <hal_types.h>
 #include "utils/StreamConfigurationMap.h"
 
 namespace android {
@@ -34,50 +35,51 @@ using google_camera_hal::StreamConfiguration;
 using google_camera_hal::TorchMode;
 
 class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
-public:
-    static std::unique_ptr<CameraDeviceHwl> Create(uint32_t cameraId,
-            std::unique_ptr<HalCameraMetadata> staticMeta,
-            std::shared_ptr<EmulatedTorchState> torchState);
+ public:
+  static std::unique_ptr<CameraDeviceHwl> Create(
+      uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
+      std::shared_ptr<EmulatedTorchState> torch_state);
 
-    virtual ~EmulatedCameraDeviceHwlImpl() = default;
+  virtual ~EmulatedCameraDeviceHwlImpl() = default;
 
-    // Override functions in CameraDeviceHwl.
-    uint32_t GetCameraId() const override;
+  // Override functions in CameraDeviceHwl.
+  uint32_t GetCameraId() const override;
 
-    status_t GetResourceCost(CameraResourceCost* cost) const override;
+  status_t GetResourceCost(CameraResourceCost* cost) const override;
 
-    status_t GetCameraCharacteristics(
-            std::unique_ptr<HalCameraMetadata>* characteristics) const override;
+  status_t GetCameraCharacteristics(
+      std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
-    status_t GetPhysicalCameraCharacteristics(
-            uint32_t physical_camera_id,
-            std::unique_ptr<HalCameraMetadata>* characteristics) const override;
+  status_t GetPhysicalCameraCharacteristics(
+      uint32_t physical_camera_id,
+      std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
-    status_t SetTorchMode(TorchMode mode) override;
+  status_t SetTorchMode(TorchMode mode) override;
 
-    status_t DumpState(int fd) override;
+  status_t DumpState(int fd) override;
 
-    status_t CreateCameraDeviceSessionHwl(
-            CameraBufferAllocatorHwl* camera_allocator_hwl,
-            std::unique_ptr<CameraDeviceSessionHwl>* session) override;
+  status_t CreateCameraDeviceSessionHwl(
+      CameraBufferAllocatorHwl* camera_allocator_hwl,
+      std::unique_ptr<CameraDeviceSessionHwl>* session) override;
 
-    bool IsStreamCombinationSupported(const StreamConfiguration& stream_config) override;
+  bool IsStreamCombinationSupported(
+      const StreamConfiguration& stream_config) override;
 
-    // End of override functions in CameraDeviceHwl.
+  // End of override functions in CameraDeviceHwl.
 
-private:
-    const uint32_t mCameraId = 0;
+ private:
+  const uint32_t camera_id_ = 0;
 
-    EmulatedCameraDeviceHwlImpl(uint32_t camera_id,
-            std::unique_ptr<HalCameraMetadata> staticMeta,
-            std::shared_ptr<EmulatedTorchState> torchState);
+  EmulatedCameraDeviceHwlImpl(uint32_t camera_id,
+                              std::unique_ptr<HalCameraMetadata> static_meta,
+                              std::shared_ptr<EmulatedTorchState> torch_state);
 
-    status_t initialize();
+  status_t Initialize();
 
-    std::unique_ptr<HalCameraMetadata> mStaticMetadata;
-    std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
-    std::shared_ptr<EmulatedTorchState> mTorchState;
-    SensorCharacteristics mSensorChars;
+  std::unique_ptr<HalCameraMetadata> static_metadata_;
+  std::unique_ptr<StreamConfigurationMap> stream_coniguration_map_;
+  std::shared_ptr<EmulatedTorchState> torch_state_;
+  SensorCharacteristics sensor_chars_;
 };
 
 }  // namespace android

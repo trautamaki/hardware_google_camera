@@ -17,8 +17,10 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "EmulatedScene"
 #include "EmulatedScene.h"
+
 #include <stdlib.h>
 #include <utils/Log.h>
+
 #include <cmath>
 
 // TODO: This should probably be done host-side in OpenGL for speed and better
@@ -43,29 +45,30 @@ namespace android {
 const int EmulatedScene::kSceneWidth = 20;
 const int EmulatedScene::kSceneHeight = 20;
 
-const uint8_t EmulatedScene::kScene[EmulatedScene::kSceneWidth * EmulatedScene::kSceneHeight] = {
-        //      5         10        15        20
-        K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
-        K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
-        K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
-        K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
-        K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,  // 5
-        K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
-        K, K, K, K, K, K, K, K, H, H, H, H, H, H, H, H, H, H, H, H,
-        K, K, K, K, K, K, K, K, H, H, H, H, H, H, H, C, C, H, H, H,
-        K, K, K, K, K, K, H, H, H, H, H, H, H, H, H, C, C, H, H, H,
-        H, K, K, K, K, K, H, R, R, R, R, R, R, R, R, R, R, R, R, H,  // 10
-        H, K, K, K, K, H, H, R, R, R, R, R, R, R, R, R, R, R, R, H,
-        H, H, H, K, K, H, H, R, R, R, R, R, R, R, R, R, R, R, R, H,
-        H, H, H, K, K, H, H, H, W, W, W, W, W, W, W, W, W, W, H, H,
-        S, S, S, G, G, S, S, S, W, W, W, W, W, W, W, W, W, W, S, S,
-        S, G, G, G, G, S, S, S, W, I, I, W, D, D, W, I, I, W, S, S,  // 15
-        G, G, G, G, G, G, S, S, W, I, I, W, D, D, W, I, I, W, S, S,
-        G, G, G, G, G, G, G, G, W, W, W, W, D, D, W, W, W, W, G, G,
-        G, G, G, G, G, G, G, G, W, W, W, W, D, D, W, W, W, W, G, G,
-        G, G, G, G, G, G, G, G, S, S, S, S, S, S, S, S, S, S, G, G,
-        G, G, G, G, G, G, G, G, S, S, S, S, S, S, S, S, S, S, G, G,  // 20
-        //      5         10        15        20
+const uint8_t EmulatedScene::kScene[EmulatedScene::kSceneWidth *
+                                    EmulatedScene::kSceneHeight] = {
+    //      5         10        15        20
+    K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
+    K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
+    K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
+    K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
+    K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,  // 5
+    K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K, K,
+    K, K, K, K, K, K, K, K, H, H, H, H, H, H, H, H, H, H, H, H,
+    K, K, K, K, K, K, K, K, H, H, H, H, H, H, H, C, C, H, H, H,
+    K, K, K, K, K, K, H, H, H, H, H, H, H, H, H, C, C, H, H, H,
+    H, K, K, K, K, K, H, R, R, R, R, R, R, R, R, R, R, R, R, H,  // 10
+    H, K, K, K, K, H, H, R, R, R, R, R, R, R, R, R, R, R, R, H,
+    H, H, H, K, K, H, H, R, R, R, R, R, R, R, R, R, R, R, R, H,
+    H, H, H, K, K, H, H, H, W, W, W, W, W, W, W, W, W, W, H, H,
+    S, S, S, G, G, S, S, S, W, W, W, W, W, W, W, W, W, W, S, S,
+    S, G, G, G, G, S, S, S, W, I, I, W, D, D, W, I, I, W, S, S,  // 15
+    G, G, G, G, G, G, S, S, W, I, I, W, D, D, W, I, I, W, S, S,
+    G, G, G, G, G, G, G, G, W, W, W, W, D, D, W, W, W, W, G, G,
+    G, G, G, G, G, G, G, G, W, W, W, W, D, D, W, W, W, W, G, G,
+    G, G, G, G, G, G, G, G, S, S, S, S, S, S, S, S, S, S, G, G,
+    G, G, G, G, G, G, G, G, S, S, S, S, S, S, S, S, S, S, G, G,  // 20
+    //      5         10        15        20
 };
 
 #undef G
@@ -80,234 +83,272 @@ const uint8_t EmulatedScene::kScene[EmulatedScene::kSceneWidth * EmulatedScene::
 #undef K
 #undef M
 
-EmulatedScene::EmulatedScene(int sensorWidthPx, int sensorHeightPx, float sensorSensitivity) :
-        mSensorWidth(sensorWidthPx), mSensorHeight(sensorHeightPx),
-        mHour(12), mExposureDuration(0.033f), mSensorSensitivity(sensorSensitivity) {
-    // Map scene to sensor pixels
-    if (mSensorWidth > mSensorHeight) {
-        mMapDiv = (mSensorWidth / (kSceneWidth + 1)) + 1;
-    } else {
-        mMapDiv = (mSensorHeight / (kSceneHeight + 1)) + 1;
-    }
-    mOffsetX = (kSceneWidth * mMapDiv - mSensorWidth) / 2;
-    mOffsetY = (kSceneHeight * mMapDiv - mSensorHeight) / 2;
+EmulatedScene::EmulatedScene(int sensor_width_px, int sensor_height_px,
+                             float sensor_sensitivity)
+    : sensor_width_(sensor_width_px),
+      sensor_height_(sensor_height_px),
+      hour_(12),
+      exposure_duration_(0.033f),
+      sensor_sensitivity_(sensor_sensitivity) {
+  // Map scene to sensor pixels
+  if (sensor_width_ > sensor_height_) {
+    map_div_ = (sensor_width_ / (kSceneWidth + 1)) + 1;
+  } else {
+    map_div_ = (sensor_height_ / (kSceneHeight + 1)) + 1;
+  }
+  offset_x_ = (kSceneWidth * map_div_ - sensor_width_) / 2;
+  offset_y_ = (kSceneHeight * map_div_ - sensor_height_) / 2;
 
-    // Assume that sensor filters are sRGB primaries to start
-    mFilterR[0] = 3.2406f;
-    mFilterR[1] = -1.5372f;
-    mFilterR[2] = -0.4986f;
-    mFilterGr[0] = -0.9689f;
-    mFilterGr[1] = 1.8758f;
-    mFilterGr[2] = 0.0415f;
-    mFilterGb[0] = -0.9689f;
-    mFilterGb[1] = 1.8758f;
-    mFilterGb[2] = 0.0415f;
-    mFilterB[0] = 0.0557f;
-    mFilterB[1] = -0.2040f;
-    mFilterB[2] = 1.0570f;
+  // Assume that sensor filters are sRGB primaries to start
+  filter_r_[0] = 3.2406f;
+  filter_r_[1] = -1.5372f;
+  filter_r_[2] = -0.4986f;
+  filter_gr_[0] = -0.9689f;
+  filter_gr_[1] = 1.8758f;
+  filter_gr_[2] = 0.0415f;
+  filter_gb_[0] = -0.9689f;
+  filter_gb_[1] = 1.8758f;
+  filter_gb_[2] = 0.0415f;
+  filter_b_[0] = 0.0557f;
+  filter_b_[1] = -0.2040f;
+  filter_b_[2] = 1.0570f;
 }
 
-EmulatedScene::~EmulatedScene() {}
-
-void EmulatedScene::setColorFilterXYZ(float rX, float rY, float rZ, float grX,
-        float grY, float grZ, float gbX, float gbY,
-        float gbZ, float bX, float bY, float bZ) {
-    mFilterR[0] = rX;
-    mFilterR[1] = rY;
-    mFilterR[2] = rZ;
-    mFilterGr[0] = grX;
-    mFilterGr[1] = grY;
-    mFilterGr[2] = grZ;
-    mFilterGb[0] = gbX;
-    mFilterGb[1] = gbY;
-    mFilterGb[2] = gbZ;
-    mFilterB[0] = bX;
-    mFilterB[1] = bY;
-    mFilterB[2] = bZ;
+EmulatedScene::~EmulatedScene() {
 }
 
-void EmulatedScene::setHour(int hour) {
-    ALOGV("Hour set to: %d", hour);
-    mHour = hour % 24;
+void EmulatedScene::SetColorFilterXYZ(float rX, float rY, float rZ, float grX,
+                                      float grY, float grZ, float gbX, float gbY,
+                                      float gbZ, float bX, float bY, float bZ) {
+  filter_r_[0] = rX;
+  filter_r_[1] = rY;
+  filter_r_[2] = rZ;
+  filter_gr_[0] = grX;
+  filter_gr_[1] = grY;
+  filter_gr_[2] = grZ;
+  filter_gb_[0] = gbX;
+  filter_gb_[1] = gbY;
+  filter_gb_[2] = gbZ;
+  filter_b_[0] = bX;
+  filter_b_[1] = bY;
+  filter_b_[2] = bZ;
 }
 
-int EmulatedScene::getHour() const { return mHour; }
+void EmulatedScene::SetHour(int hour) {
+  ALOGV("Hour set to: %d", hour);
+  hour_ = hour % 24;
+}
 
-void EmulatedScene::setExposureDuration(float seconds) { mExposureDuration = seconds; }
+int EmulatedScene::GetHour() const {
+  return hour_;
+}
 
-void EmulatedScene::calculateScene(nsecs_t time) {
-    // Calculate time fractions for interpolation
-    int timeIdx = mHour / kTimeStep;
-    int nextTimeIdx = (timeIdx + 1) % (24 / kTimeStep);
-    const nsecs_t kOneHourInNsec = 1e9 * 60 * 60;
-    nsecs_t timeSinceIdx = (mHour - timeIdx * kTimeStep) * kOneHourInNsec + time;
-    float timeFrac = timeSinceIdx / (float)(kOneHourInNsec * kTimeStep);
+void EmulatedScene::SetExposureDuration(float seconds) {
+  exposure_duration_ = seconds;
+}
 
-    // Determine overall sunlight levels
-    float sunLux = kSunlight[timeIdx] * (1 - timeFrac) + kSunlight[nextTimeIdx] * timeFrac;
-    ALOGV("Sun lux: %f", sunLux);
+void EmulatedScene::CalculateScene(nsecs_t time) {
+  // Calculate time fractions for interpolation
+  int time_idx = hour_ / kTimeStep;
+  int next_time_idx = (time_idx + 1) % (24 / kTimeStep);
+  const nsecs_t kOneHourInNsec = 1e9 * 60 * 60;
+  nsecs_t time_since_idx =
+      (hour_ - time_idx * kTimeStep) * kOneHourInNsec + time;
+  float time_frac = time_since_idx / (float)(kOneHourInNsec * kTimeStep);
 
-    float sunShadeLux = sunLux * (kDaylightShadeIllum / kDirectSunIllum);
+  // Determine overall sunlight levels
+  float sun_lux = kSunlight[time_idx] * (1 - time_frac) +
+                  kSunlight[next_time_idx] * time_frac;
+  ALOGV("Sun lux: %f", sun_lux);
 
-    // Determine sun/shade illumination chromaticity
-    float currentSunXY[2];
-    float currentShadeXY[2];
+  float sun_shade_lux = sun_lux * (kDaylightShadeIllum / kDirectSunIllum);
 
-    const float *prevSunXY, *nextSunXY;
-    const float *prevShadeXY, *nextShadeXY;
-    if (kSunlight[timeIdx] == kSunsetIllum || kSunlight[timeIdx] == kTwilightIllum) {
-        prevSunXY = kSunsetXY;
-        prevShadeXY = kSunsetXY;
-    } else {
-        prevSunXY = kDirectSunlightXY;
-        prevShadeXY = kDaylightXY;
-    }
-    if (kSunlight[nextTimeIdx] == kSunsetIllum || kSunlight[nextTimeIdx] == kTwilightIllum) {
-        nextSunXY = kSunsetXY;
-        nextShadeXY = kSunsetXY;
-    } else {
-        nextSunXY = kDirectSunlightXY;
-        nextShadeXY = kDaylightXY;
-    }
-    currentSunXY[0] = prevSunXY[0] * (1 - timeFrac) + nextSunXY[0] * timeFrac;
-    currentSunXY[1] = prevSunXY[1] * (1 - timeFrac) + nextSunXY[1] * timeFrac;
+  // Determine sun/shade illumination chromaticity
+  float current_sun_xy[2];
+  float current_shade_xy[2];
 
-    currentShadeXY[0] = prevShadeXY[0] * (1 - timeFrac) + nextShadeXY[0] * timeFrac;
-    currentShadeXY[1] = prevShadeXY[1] * (1 - timeFrac) + nextShadeXY[1] * timeFrac;
+  const float *prev_sun_xy, *next_sun_xy;
+  const float *prev_shade_xy, *next_shade_xy;
+  if (kSunlight[time_idx] == kSunsetIllum ||
+      kSunlight[time_idx] == kTwilightIllum) {
+    prev_sun_xy = kSunsetXY;
+    prev_shade_xy = kSunsetXY;
+  } else {
+    prev_sun_xy = kDirectSunlightXY;
+    prev_shade_xy = kDaylightXY;
+  }
+  if (kSunlight[next_time_idx] == kSunsetIllum ||
+      kSunlight[next_time_idx] == kTwilightIllum) {
+    next_sun_xy = kSunsetXY;
+    next_shade_xy = kSunsetXY;
+  } else {
+    next_sun_xy = kDirectSunlightXY;
+    next_shade_xy = kDaylightXY;
+  }
+  current_sun_xy[0] =
+      prev_sun_xy[0] * (1 - time_frac) + next_sun_xy[0] * time_frac;
+  current_sun_xy[1] =
+      prev_sun_xy[1] * (1 - time_frac) + next_sun_xy[1] * time_frac;
 
-    ALOGV("Sun XY: %f, %f, Shade XY: %f, %f", currentSunXY[0], currentSunXY[1],
-            currentShadeXY[0], currentShadeXY[1]);
+  current_shade_xy[0] =
+      prev_shade_xy[0] * (1 - time_frac) + next_shade_xy[0] * time_frac;
+  current_shade_xy[1] =
+      prev_shade_xy[1] * (1 - time_frac) + next_shade_xy[1] * time_frac;
 
+  ALOGV("Sun XY: %f, %f, Shade XY: %f, %f", current_sun_xy[0],
+        current_sun_xy[1], current_shade_xy[0], current_shade_xy[1]);
+
+  // Converting for xyY to XYZ:
+  // X = Y / y * x
+  // Y = Y
+  // Z = Y / y * (1 - x - y);
+  float sun_xyz[3] = {sun_lux / current_sun_xy[1] * current_sun_xy[0], sun_lux,
+                      sun_lux / current_sun_xy[1] *
+                          (1 - current_sun_xy[0] - current_sun_xy[1])};
+  float sun_shade_xyz[3] = {
+      sun_shade_lux / current_shade_xy[1] * current_shade_xy[0], sun_shade_lux,
+      sun_shade_lux / current_shade_xy[1] *
+          (1 - current_shade_xy[0] - current_shade_xy[1])};
+  ALOGV("Sun XYZ: %f, %f, %f", sun_xyz[0], sun_xyz[1], sun_xyz[2]);
+  ALOGV("Sun shade XYZ: %f, %f, %f", sun_shade_xyz[0], sun_shade_xyz[1],
+        sun_shade_xyz[2]);
+
+  // Determine moonlight levels
+  float moon_lux = kMoonlight[time_idx] * (1 - time_frac) +
+                   kMoonlight[next_time_idx] * time_frac;
+  float moonshade_lux = moon_lux * (kDaylightShadeIllum / kDirectSunIllum);
+
+  float moon_xyz[3] = {
+      moon_lux / kMoonlightXY[1] * kMoonlightXY[0], moon_lux,
+      moon_lux / kMoonlightXY[1] * (1 - kMoonlightXY[0] - kMoonlightXY[1])};
+  float moon_shade_xyz[3] = {
+      moonshade_lux / kMoonlightXY[1] * kMoonlightXY[0], moonshade_lux,
+      moonshade_lux / kMoonlightXY[1] * (1 - kMoonlightXY[0] - kMoonlightXY[1])};
+
+  // Determine starlight level
+  const float kClearNightXYZ[3] = {
+      kClearNightIllum / kMoonlightXY[1] * kMoonlightXY[0], kClearNightIllum,
+      kClearNightIllum / kMoonlightXY[1] *
+          (1 - kMoonlightXY[0] - kMoonlightXY[1])};
+
+  // Calculate direct and shaded light
+  float direct_illum_xyz[3] = {
+      sun_xyz[0] + moon_xyz[0] + kClearNightXYZ[0],
+      sun_xyz[1] + moon_xyz[1] + kClearNightXYZ[1],
+      sun_xyz[2] + moon_xyz[2] + kClearNightXYZ[2],
+  };
+
+  float shade_illum_xyz[3] = {kClearNightXYZ[0], kClearNightXYZ[1],
+                              kClearNightXYZ[2]};
+
+  shade_illum_xyz[0] += (hour_ < kSunOverhead) ? sun_xyz[0] : sun_shade_xyz[0];
+  shade_illum_xyz[1] += (hour_ < kSunOverhead) ? sun_xyz[1] : sun_shade_xyz[1];
+  shade_illum_xyz[2] += (hour_ < kSunOverhead) ? sun_xyz[2] : sun_shade_xyz[2];
+
+  // Moon up period covers 23->0 transition, shift for simplicity
+  int adj_hour = (hour_ + 12) % 24;
+  int adj_moon_overhead = (kMoonOverhead + 12) % 24;
+  shade_illum_xyz[0] +=
+      (adj_hour < adj_moon_overhead) ? moon_xyz[0] : moon_shade_xyz[0];
+  shade_illum_xyz[1] +=
+      (adj_hour < adj_moon_overhead) ? moon_xyz[1] : moon_shade_xyz[1];
+  shade_illum_xyz[2] +=
+      (adj_hour < adj_moon_overhead) ? moon_xyz[2] : moon_shade_xyz[2];
+
+  ALOGV("Direct XYZ: %f, %f, %f", direct_illum_xyz[0], direct_illum_xyz[1],
+        direct_illum_xyz[2]);
+  ALOGV("Shade XYZ: %f, %f, %f", shade_illum_xyz[0], shade_illum_xyz[1],
+        shade_illum_xyz[2]);
+
+  for (int i = 0; i < NUM_MATERIALS; i++) {
     // Converting for xyY to XYZ:
     // X = Y / y * x
     // Y = Y
     // Z = Y / y * (1 - x - y);
-    float sunXYZ[3] = { sunLux / currentSunXY[1] * currentSunXY[0], sunLux,
-            sunLux / currentSunXY[1] * (1 - currentSunXY[0] - currentSunXY[1])};
-    float sunShadeXYZ[3] = {sunShadeLux / currentShadeXY[1] * currentShadeXY[0],
-            sunShadeLux,
-            sunShadeLux / currentShadeXY[1] * (1 - currentShadeXY[0] - currentShadeXY[1])};
-    ALOGV("Sun XYZ: %f, %f, %f", sunXYZ[0], sunXYZ[1], sunXYZ[2]);
-    ALOGV("Sun shade XYZ: %f, %f, %f", sunShadeXYZ[0], sunShadeXYZ[1], sunShadeXYZ[2]);
+    float mat_xyz[3] = {
+        kMaterials_xyY[i][2] / kMaterials_xyY[i][1] * kMaterials_xyY[i][0],
+        kMaterials_xyY[i][2],
+        kMaterials_xyY[i][2] / kMaterials_xyY[i][1] *
+            (1 - kMaterials_xyY[i][0] - kMaterials_xyY[i][1])};
 
-    // Determine moonlight levels
-    float moonLux = kMoonlight[timeIdx] * (1 - timeFrac) + kMoonlight[nextTimeIdx] * timeFrac;
-    float moonShadeLux = moonLux * (kDaylightShadeIllum / kDirectSunIllum);
+    if (kMaterialsFlags[i] == 0 || kMaterialsFlags[i] & kSky) {
+      mat_xyz[0] *= direct_illum_xyz[0];
+      mat_xyz[1] *= direct_illum_xyz[1];
+      mat_xyz[2] *= direct_illum_xyz[2];
+    } else if (kMaterialsFlags[i] & kShadowed) {
+      mat_xyz[0] *= shade_illum_xyz[0];
+      mat_xyz[1] *= shade_illum_xyz[1];
+      mat_xyz[2] *= shade_illum_xyz[2];
+    }  // else if (kMaterialsFlags[i] * kSelfLit), do nothing
 
-    float moonXYZ[3] = {moonLux / kMoonlightXY[1] * kMoonlightXY[0], moonLux,
-            moonLux / kMoonlightXY[1] * (1 - kMoonlightXY[0] - kMoonlightXY[1])};
-    float moonShadeXYZ[3] = {moonShadeLux / kMoonlightXY[1] * kMoonlightXY[0], moonShadeLux,
-            moonShadeLux / kMoonlightXY[1] * (1 - kMoonlightXY[0] - kMoonlightXY[1])};
+    ALOGV("Mat %d XYZ: %f, %f, %f", i, mat_xyz[0], mat_xyz[1], mat_xyz[2]);
+    float lux_to_electrons =
+        sensor_sensitivity_ * exposure_duration_ / (kAperture * kAperture);
+    current_colors_[i * NUM_CHANNELS + 0] =
+        (filter_r_[0] * mat_xyz[0] + filter_r_[1] * mat_xyz[1] +
+         filter_r_[2] * mat_xyz[2]) *
+        lux_to_electrons;
+    current_colors_[i * NUM_CHANNELS + 1] =
+        (filter_gr_[0] * mat_xyz[0] + filter_gr_[1] * mat_xyz[1] +
+         filter_gr_[2] * mat_xyz[2]) *
+        lux_to_electrons;
+    current_colors_[i * NUM_CHANNELS + 2] =
+        (filter_gb_[0] * mat_xyz[0] + filter_gb_[1] * mat_xyz[1] +
+         filter_gb_[2] * mat_xyz[2]) *
+        lux_to_electrons;
+    current_colors_[i * NUM_CHANNELS + 3] =
+        (filter_b_[0] * mat_xyz[0] + filter_b_[1] * mat_xyz[1] +
+         filter_b_[2] * mat_xyz[2]) *
+        lux_to_electrons;
 
-    // Determine starlight level
-    const float kClearNightXYZ[3] = {kClearNightIllum / kMoonlightXY[1] * kMoonlightXY[0],
-            kClearNightIllum,
-            kClearNightIllum / kMoonlightXY[1] * (1 - kMoonlightXY[0] - kMoonlightXY[1])};
+    ALOGV("Color %d RGGB: %d, %d, %d, %d", i,
+          current_colors_[i * NUM_CHANNELS + 0],
+          current_colors_[i * NUM_CHANNELS + 1],
+          current_colors_[i * NUM_CHANNELS + 2],
+          current_colors_[i * NUM_CHANNELS + 3]);
+  }
+  // Shake viewpoint; horizontal and vertical sinusoids at roughly
+  // human handshake frequencies
+  handshake_x_ =
+      (kFreq1Magnitude * std::sin(kHorizShakeFreq1 * time_since_idx) +
+       kFreq2Magnitude * std::sin(kHorizShakeFreq2 * time_since_idx)) *
+      map_div_ * kShakeFraction;
 
-    // Calculate direct and shaded light
-    float directIllumXYZ[3] = {
-            sunXYZ[0] + moonXYZ[0] + kClearNightXYZ[0],
-            sunXYZ[1] + moonXYZ[1] + kClearNightXYZ[1],
-            sunXYZ[2] + moonXYZ[2] + kClearNightXYZ[2],
-    };
+  handshake_y_ = (kFreq1Magnitude * std::sin(kVertShakeFreq1 * time_since_idx) +
+                  kFreq2Magnitude * std::sin(kVertShakeFreq2 * time_since_idx)) *
+                 map_div_ * kShakeFraction;
 
-    float shadeIllumXYZ[3] = {kClearNightXYZ[0], kClearNightXYZ[1], kClearNightXYZ[2]};
-
-    shadeIllumXYZ[0] += (mHour < kSunOverhead) ? sunXYZ[0] : sunShadeXYZ[0];
-    shadeIllumXYZ[1] += (mHour < kSunOverhead) ? sunXYZ[1] : sunShadeXYZ[1];
-    shadeIllumXYZ[2] += (mHour < kSunOverhead) ? sunXYZ[2] : sunShadeXYZ[2];
-
-    // Moon up period covers 23->0 transition, shift for simplicity
-    int adjHour = (mHour + 12) % 24;
-    int adjMoonOverhead = (kMoonOverhead + 12) % 24;
-    shadeIllumXYZ[0] += (adjHour < adjMoonOverhead) ? moonXYZ[0] : moonShadeXYZ[0];
-    shadeIllumXYZ[1] += (adjHour < adjMoonOverhead) ? moonXYZ[1] : moonShadeXYZ[1];
-    shadeIllumXYZ[2] += (adjHour < adjMoonOverhead) ? moonXYZ[2] : moonShadeXYZ[2];
-
-    ALOGV("Direct XYZ: %f, %f, %f", directIllumXYZ[0], directIllumXYZ[1], directIllumXYZ[2]);
-    ALOGV("Shade XYZ: %f, %f, %f", shadeIllumXYZ[0], shadeIllumXYZ[1], shadeIllumXYZ[2]);
-
-    for (int i = 0; i < NUM_MATERIALS; i++) {
-        // Converting for xyY to XYZ:
-        // X = Y / y * x
-        // Y = Y
-        // Z = Y / y * (1 - x - y);
-        float matXYZ[3] = {
-                kMaterials_xyY[i][2] / kMaterials_xyY[i][1] * kMaterials_xyY[i][0],
-                kMaterials_xyY[i][2],
-                kMaterials_xyY[i][2] / kMaterials_xyY[i][1] *
-                    (1 - kMaterials_xyY[i][0] - kMaterials_xyY[i][1])};
-
-        if (kMaterialsFlags[i] == 0 || kMaterialsFlags[i] & kSky) {
-            matXYZ[0] *= directIllumXYZ[0];
-            matXYZ[1] *= directIllumXYZ[1];
-            matXYZ[2] *= directIllumXYZ[2];
-        } else if (kMaterialsFlags[i] & kShadowed) {
-            matXYZ[0] *= shadeIllumXYZ[0];
-            matXYZ[1] *= shadeIllumXYZ[1];
-            matXYZ[2] *= shadeIllumXYZ[2];
-        }  // else if (kMaterialsFlags[i] * kSelfLit), do nothing
-
-        ALOGV("Mat %d XYZ: %f, %f, %f", i, matXYZ[0], matXYZ[1], matXYZ[2]);
-        float luxToElectrons = mSensorSensitivity * mExposureDuration / (kAperture * kAperture);
-        mCurrentColors[i * NUM_CHANNELS + 0] = (mFilterR[0] * matXYZ[0] + mFilterR[1] * matXYZ[1] +
-                 mFilterR[2] * matXYZ[2]) * luxToElectrons;
-        mCurrentColors[i * NUM_CHANNELS + 1] =
-                (mFilterGr[0] * matXYZ[0] + mFilterGr[1] * matXYZ[1] +
-                 mFilterGr[2] * matXYZ[2]) * luxToElectrons;
-        mCurrentColors[i * NUM_CHANNELS + 2] =
-                (mFilterGb[0] * matXYZ[0] + mFilterGb[1] * matXYZ[1] + mFilterGb[2] * matXYZ[2]) *
-                luxToElectrons;
-        mCurrentColors[i * NUM_CHANNELS + 3] = (mFilterB[0] * matXYZ[0] + mFilterB[1] * matXYZ[1] +
-                 mFilterB[2] * matXYZ[2]) * luxToElectrons;
-
-        ALOGV("Color %d RGGB: %d, %d, %d, %d", i,
-                mCurrentColors[i * NUM_CHANNELS + 0],
-                mCurrentColors[i * NUM_CHANNELS + 1],
-                mCurrentColors[i * NUM_CHANNELS + 2],
-                mCurrentColors[i * NUM_CHANNELS + 3]);
-    }
-    // Shake viewpoint; horizontal and vertical sinusoids at roughly
-    // human handshake frequencies
-    mHandshakeX = (kFreq1Magnitude * std::sin(kHorizShakeFreq1 * timeSinceIdx) +
-                kFreq2Magnitude * std::sin(kHorizShakeFreq2 * timeSinceIdx)) *
-                mMapDiv * kShakeFraction;
-
-    mHandshakeY = (kFreq1Magnitude * std::sin(kVertShakeFreq1 * timeSinceIdx) +
-            kFreq2Magnitude * std::sin(kVertShakeFreq2 * timeSinceIdx)) *
-            mMapDiv * kShakeFraction;
-
-    // Set starting pixel
-    setReadoutPixel(0, 0);
+  // Set starting pixel
+  SetReadoutPixel(0, 0);
 }
 
-void EmulatedScene::setReadoutPixel(int x, int y) {
-    mCurrentX = x;
-    mCurrentY = y;
-    mSubX = (x + mOffsetX + mHandshakeX) % mMapDiv;
-    mSubY = (y + mOffsetY + mHandshakeY) % mMapDiv;
-    mSceneX = (x + mOffsetX + mHandshakeX) / mMapDiv;
-    mSceneY = (y + mOffsetY + mHandshakeY) / mMapDiv;
-    mSceneIdx = mSceneY * kSceneWidth + mSceneX;
-    mCurrentSceneMaterial = &(mCurrentColors[kScene[mSceneIdx]]);
+void EmulatedScene::SetReadoutPixel(int x, int y) {
+  current_x_ = x;
+  current_y_ = y;
+  sub_x_ = (x + offset_x_ + handshake_x_) % map_div_;
+  sub_y_ = (y + offset_y_ + handshake_y_) % map_div_;
+  scene_x_ = (x + offset_x_ + handshake_x_) / map_div_;
+  scene_y_ = (y + offset_y_ + handshake_y_) / map_div_;
+  scene_idx_ = scene_y_ * kSceneWidth + scene_x_;
+  current_scene_material_ = &(current_colors_[kScene[scene_idx_]]);
 }
 
-const uint32_t *EmulatedScene::getPixelElectrons() {
-    const uint32_t *pixel = mCurrentSceneMaterial;
-    mCurrentX++;
-    mSubX++;
-    if (mCurrentX >= mSensorWidth) {
-        mCurrentX = 0;
-        mCurrentY++;
-        if (mCurrentY >= mSensorHeight) mCurrentY = 0;
-        setReadoutPixel(mCurrentX, mCurrentY);
-    } else if (mSubX > mMapDiv) {
-        mSceneIdx++;
-        mSceneX++;
-        mCurrentSceneMaterial = &(mCurrentColors[kScene[mSceneIdx]]);
-        mSubX = 0;
-    }
-    return pixel;
+const uint32_t* EmulatedScene::GetPixelElectrons() {
+  const uint32_t* pixel = current_scene_material_;
+  current_x_++;
+  sub_x_++;
+  if (current_x_ >= sensor_width_) {
+    current_x_ = 0;
+    current_y_++;
+    if (current_y_ >= sensor_height_) current_y_ = 0;
+    SetReadoutPixel(current_x_, current_y_);
+  } else if (sub_x_ > map_div_) {
+    scene_idx_++;
+    scene_x_++;
+    current_scene_material_ = &(current_colors_[kScene[scene_idx_]]);
+    sub_x_ = 0;
+  }
+  return pixel;
 }
 
 // Handshake model constants.
@@ -318,38 +359,41 @@ const float EmulatedScene::kVertShakeFreq1 = 2 * M_PI * 3 / 1e9;    // 3 Hz
 const float EmulatedScene::kVertShakeFreq2 = 2 * M_PI * 11 / 1e9;   // 1 Hz
 const float EmulatedScene::kFreq1Magnitude = 5;
 const float EmulatedScene::kFreq2Magnitude = 1;
-const float EmulatedScene::kShakeFraction = 0.03;  // As a fraction of a scene tile
+const float EmulatedScene::kShakeFraction =
+    0.03;  // As a fraction of a scene tile
 
 // Aperture of imaging lens
 const float EmulatedScene::kAperture = 2.8;
 
 // Sun illumination levels through the day
-const float EmulatedScene::kSunlight[24 / kTimeStep] = {0,  // 00:00
-        0,
-        0,
-        kTwilightIllum,  // 06:00
-        kDirectSunIllum,
-        kDirectSunIllum,
-        kDirectSunIllum,  // 12:00
-        kDirectSunIllum,
-        kDirectSunIllum,
-        kSunsetIllum,  // 18:00
-        kTwilightIllum,
-        0};
+const float EmulatedScene::kSunlight[24 / kTimeStep] = {
+    0,  // 00:00
+    0,
+    0,
+    kTwilightIllum,  // 06:00
+    kDirectSunIllum,
+    kDirectSunIllum,
+    kDirectSunIllum,  // 12:00
+    kDirectSunIllum,
+    kDirectSunIllum,
+    kSunsetIllum,  // 18:00
+    kTwilightIllum,
+    0};
 
 // Moon illumination levels through the day
-const float EmulatedScene::kMoonlight[24 / kTimeStep] = {kFullMoonIllum,  // 00:00
-        kFullMoonIllum,
-        0,
-        0,  // 06:00
-        0,
-        0,
-        0,  // 12:00
-        0,
-        0,
-        0,  // 18:00
-        0,
-        kFullMoonIllum};
+const float EmulatedScene::kMoonlight[24 / kTimeStep] = {
+    kFullMoonIllum,  // 00:00
+    kFullMoonIllum,
+    0,
+    0,  // 06:00
+    0,
+    0,
+    0,  // 12:00
+    0,
+    0,
+    0,  // 18:00
+    0,
+    kFullMoonIllum};
 
 const int EmulatedScene::kSunOverhead = 12;
 const int EmulatedScene::kMoonOverhead = 0;
@@ -380,23 +424,22 @@ const uint8_t EmulatedScene::kSky = 0x04;
 // For non-self-lit materials, the Y component is normalized with 1=full
 // reflectance; for self-lit materials, it's the constant illuminance in lux.
 const float EmulatedScene::kMaterials_xyY[EmulatedScene::NUM_MATERIALS][3] = {
-        {0.3688f, 0.4501f, .1329f},                                  // GRASS
-        {0.3688f, 0.4501f, .1329f},                                  // GRASS_SHADOW
-        {0.3986f, 0.5002f, .4440f},                                  // HILL
-        {0.3262f, 0.5040f, .2297f},                                  // WALL
-        {0.4336f, 0.3787f, .1029f},                                  // ROOF
-        {0.3316f, 0.2544f, .0639f},                                  // DOOR
-        {0.3425f, 0.3577f, .0887f},                                  // CHIMNEY
-        {kIncandescentXY[0], kIncandescentXY[1], kLivingRoomIllum},  // WINDOW
-        {kDirectSunlightXY[0], kDirectSunlightXY[1], kDirectSunIllum},  // SUN
-        {kNoonSkyXY[0], kNoonSkyXY[1],
-         kDaylightShadeIllum / kDirectSunIllum},            // SKY
-        {kMoonlightXY[0], kMoonlightXY[1], kFullMoonIllum}  // MOON
+    {0.3688f, 0.4501f, .1329f},                                  // GRASS
+    {0.3688f, 0.4501f, .1329f},                                  // GRASS_SHADOW
+    {0.3986f, 0.5002f, .4440f},                                  // HILL
+    {0.3262f, 0.5040f, .2297f},                                  // WALL
+    {0.4336f, 0.3787f, .1029f},                                  // ROOF
+    {0.3316f, 0.2544f, .0639f},                                  // DOOR
+    {0.3425f, 0.3577f, .0887f},                                  // CHIMNEY
+    {kIncandescentXY[0], kIncandescentXY[1], kLivingRoomIllum},  // WINDOW
+    {kDirectSunlightXY[0], kDirectSunlightXY[1], kDirectSunIllum},  // SUN
+    {kNoonSkyXY[0], kNoonSkyXY[1], kDaylightShadeIllum / kDirectSunIllum},  // SKY
+    {kMoonlightXY[0], kMoonlightXY[1], kFullMoonIllum}  // MOON
 };
 
 const uint8_t EmulatedScene::kMaterialsFlags[EmulatedScene::NUM_MATERIALS] = {
-        0,         kShadowed, kShadowed, kShadowed, kShadowed, kShadowed,
-        kShadowed, kSelfLit,  kSelfLit,  kSky,      kSelfLit,
+    0,         kShadowed, kShadowed, kShadowed, kShadowed, kShadowed,
+    kShadowed, kSelfLit,  kSelfLit,  kSky,      kSelfLit,
 };
 
 }  // namespace android

@@ -16,38 +16,39 @@
 
 //#define LOG_NDEBUG 0
 #define LOG_TAG "EmulatedTorchState"
-#include <log/log.h>
-
 #include "EmulatedTorchState.h"
+
+#include <log/log.h>
 
 namespace android {
 
 using android::google_camera_hal::TorchModeStatus;
 
-status_t EmulatedTorchState::setTorchMode(TorchMode mode) {
-    std::lock_guard<std::mutex> lock(mMutex);
-    if (mCameraOpen) {
-        ALOGE("%s: Camera device open, torch cannot be controlled using this API!",
-                __FUNCTION__);
-        return UNKNOWN_ERROR;
-    }
+status_t EmulatedTorchState::SetTorchMode(TorchMode mode) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (camera_open_) {
+    ALOGE("%s: Camera device open, torch cannot be controlled using this API!",
+          __FUNCTION__);
+    return UNKNOWN_ERROR;
+  }
 
-    mTorchCb(mCameraId, (mode == TorchMode::kOn) ? TorchModeStatus::kAvailableOn :
-            TorchModeStatus::kAvailableOff);
+  torch_cb_(camera_id_, (mode == TorchMode::kOn)
+                            ? TorchModeStatus::kAvailableOn
+                            : TorchModeStatus::kAvailableOff);
 
-    return OK;
+  return OK;
 }
 
-void EmulatedTorchState::acquireFlashHw() {
-    std::lock_guard<std::mutex> lock(mMutex);
-    mCameraOpen = true;
-    mTorchCb(mCameraId, TorchModeStatus::kNotAvailable);
+void EmulatedTorchState::AcquireFlashHw() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  camera_open_ = true;
+  torch_cb_(camera_id_, TorchModeStatus::kNotAvailable);
 }
 
-void EmulatedTorchState::releaseFlashHw() {
-    std::lock_guard<std::mutex> lock(mMutex);
-    mCameraOpen = false;
-    mTorchCb(mCameraId, TorchModeStatus::kAvailableOff);
+void EmulatedTorchState::ReleaseFlashHw() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  camera_open_ = false;
+  torch_cb_(camera_id_, TorchModeStatus::kAvailableOff);
 }
 
 }  // namespace android

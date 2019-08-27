@@ -17,6 +17,8 @@
 #ifndef HW_EMULATOR_CAMERA_JPEG_H
 #define HW_EMULATOR_CAMERA_JPEG_H
 
+#include <hwl_types.h>
+
 #include <condition_variable>
 #include <mutex>
 #include <queue>
@@ -24,8 +26,6 @@
 
 #include "Base.h"
 #include "HandleImporter.h"
-
-#include <hwl_types.h>
 
 extern "C" {
 #include <jpeglib.h>
@@ -41,72 +41,73 @@ using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
 
 struct JpegYUV420Input {
-    uint32_t width, height;
-    bool bufferOwner;
-    YCbCrPlanes yuvPlanes;
+  uint32_t width, height;
+  bool buffer_owner;
+  YCbCrPlanes yuv_planes;
 
-    JpegYUV420Input() : width(0), height(0), bufferOwner(false) {}
-    ~JpegYUV420Input() {
-        if ((yuvPlanes.imgY != nullptr) && bufferOwner) {
-            delete [] yuvPlanes.imgY;
-            yuvPlanes = {};
-        }
+  JpegYUV420Input() : width(0), height(0), buffer_owner(false) {
+  }
+  ~JpegYUV420Input() {
+    if ((yuv_planes.img_y != nullptr) && buffer_owner) {
+      delete[] yuv_planes.img_y;
+      yuv_planes = {};
     }
+  }
 
-    JpegYUV420Input(const JpegYUV420Input&) = delete;
-    JpegYUV420Input& operator = (const JpegYUV420Input&) = delete;
+  JpegYUV420Input(const JpegYUV420Input&) = delete;
+  JpegYUV420Input& operator=(const JpegYUV420Input&) = delete;
 };
 
 struct JpegYUV420Job {
-    std::unique_ptr<JpegYUV420Input> input;
-    std::unique_ptr<SensorBuffer> output;
-    std::unique_ptr<HalCameraMetadata> resultMetadata;
+  std::unique_ptr<JpegYUV420Input> input;
+  std::unique_ptr<SensorBuffer> output;
+  std::unique_ptr<HalCameraMetadata> result_metadata;
 };
 
 class JpegCompressor {
-public:
-    JpegCompressor(std::unique_ptr<ExifUtils> exifUtils);
-    virtual ~JpegCompressor();
+ public:
+  JpegCompressor(std::unique_ptr<ExifUtils> exif_utils);
+  virtual ~JpegCompressor();
 
-    status_t queueYUV420(std::unique_ptr<JpegYUV420Job> job);
+  status_t QueueYUV420(std::unique_ptr<JpegYUV420Job> job);
 
-private:
-    std::mutex mMutex;
-    std::condition_variable mCondition;
-    bool mJpegDone = false;
-    std::thread mJpegProcessingThread;
-    std::queue<std::unique_ptr<JpegYUV420Job>> mPendingYUVJobs;
-    std::unique_ptr<ExifUtils> mExifUtils;
+ private:
+  std::mutex mutex_;
+  std::condition_variable condition_;
+  bool jpeg_done_ = false;
+  std::thread jpeg_processing_thread_;
+  std::queue<std::unique_ptr<JpegYUV420Job>> pending_yuv_jobs_;
+  std::unique_ptr<ExifUtils> exif_utils_;
 
-    j_common_ptr mJpegErrorInfo;
-    bool checkError(const char *msg);
-    void compressYUV420(std::unique_ptr<JpegYUV420Job> job);
-    struct YUV420Frame {
-        uint8_t *outputBuffer;
-        size_t outputBufferSize;
-        YCbCrPlanes yuvPlanes;
-        size_t width;
-        size_t height;
-        const uint8_t *app1Buffer;
-        size_t app1BufferSize;
-    };
-    size_t compressYUV420Frame(YUV420Frame frame);
-    void threadLoop();
+  j_common_ptr jpeg_error_info_;
+  bool CheckError(const char* msg);
+  void CompressYUV420(std::unique_ptr<JpegYUV420Job> job);
+  struct YUV420Frame {
+    uint8_t* output_buffer;
+    size_t output_buffer_size;
+    YCbCrPlanes yuv_planes;
+    size_t width;
+    size_t height;
+    const uint8_t* app1_buffer;
+    size_t app1_buffer_size;
+  };
+  size_t CompressYUV420Frame(YUV420Frame frame);
+  void ThreadLoop();
 
-    JpegCompressor(const JpegCompressor&) = delete;
-    JpegCompressor& operator = (const JpegCompressor&) = delete;
+  JpegCompressor(const JpegCompressor&) = delete;
+  JpegCompressor& operator=(const JpegCompressor&) = delete;
 };
 
 }  // namespace android
 
-template<>
+template <>
 struct std::default_delete<jpeg_compress_struct> {
-    inline void operator() (jpeg_compress_struct *cinfo) const {
-        if (cinfo != nullptr) {
-            jpeg_destroy_compress(cinfo);
-            delete cinfo;
-        }
+  inline void operator()(jpeg_compress_struct* cinfo) const {
+    if (cinfo != nullptr) {
+      jpeg_destroy_compress(cinfo);
+      delete cinfo;
     }
+  }
 };
 
 #endif

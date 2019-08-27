@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2019 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,10 @@
 #ifndef EMULATOR_CAMERA_HAL_HWL_CAMERA_DEVICE_SESSION_HWL_IMPL_H
 #define EMULATOR_CAMERA_HAL_HWL_CAMERA_DEVICE_SESSION_HWL_IMPL_H
 
+#include <camera_device_session_hwl.h>
+
 #include <set>
 
-#include <camera_device_session_hwl.h>
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedRequestProcessor.h"
 #include "EmulatedTorchState.h"
@@ -29,93 +30,110 @@ namespace android {
 
 using google_camera_hal::CameraDeviceHwl;
 using google_camera_hal::CameraDeviceSessionHwl;
+using google_camera_hal::HalStream;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineRequest;
 using google_camera_hal::HwlSessionCallback;
 using google_camera_hal::StreamConfiguration;
 using google_camera_hal::RequestTemplate;
 using google_camera_hal::SessionDataKey;
-using google_camera_hal::HalStream;
+using google_camera_hal::StreamConfiguration;
 
 // Implementation of CameraDeviceSessionHwl interface
 class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
-public:
-    static std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> Create(uint32_t cameraId,
-            std::unique_ptr<HalCameraMetadata> staticMeta,
-            std::shared_ptr<EmulatedTorchState> torchState);
+ public:
+  static std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> Create(
+      uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
+      std::shared_ptr<EmulatedTorchState> torch_state);
 
-    virtual ~EmulatedCameraDeviceSessionHwlImpl();
+  virtual ~EmulatedCameraDeviceSessionHwlImpl();
 
-    // Override functions in CameraDeviceSessionHwl
-    status_t ConstructDefaultRequestSettings(
-            RequestTemplate type,
-            std::unique_ptr<HalCameraMetadata>* default_settings) override;
+  // Override functions in CameraDeviceSessionHwl
+  status_t ConstructDefaultRequestSettings(
+      RequestTemplate type,
+      std::unique_ptr<HalCameraMetadata>* default_settings) override;
 
-    status_t PrepareConfigureStreams(
-            const StreamConfiguration& /*request_config*/) override { return OK; } // Noop for now
+  status_t PrepareConfigureStreams(
+      const StreamConfiguration& /*request_config*/) override {
+    return OK;
+  }  // Noop for now
 
-    status_t ConfigurePipeline(uint32_t physical_camera_id,
-            HwlPipelineCallback hwl_pipeline_callback, const StreamConfiguration& request_config,
-            const StreamConfiguration& overall_config, uint32_t* pipeline_id) override;
+  status_t ConfigurePipeline(uint32_t physical_camera_id,
+                             HwlPipelineCallback hwl_pipeline_callback,
+                             const StreamConfiguration& request_config,
+                             const StreamConfiguration& overall_config,
+                             uint32_t* pipeline_id) override;
 
-    status_t BuildPipelines() override;
+  status_t BuildPipelines() override;
 
-    status_t PreparePipeline(uint32_t /*pipeline_id*/, uint32_t /*frame_number*/) override {
-        return OK; } // Noop for now
+  status_t PreparePipeline(uint32_t /*pipeline_id*/,
+                           uint32_t /*frame_number*/) override {
+    return OK;
+  }  // Noop for now
 
-    status_t GetConfiguredHalStream(uint32_t pipeline_id,
-            std::vector<HalStream>* hal_streams) const override;
+  status_t GetConfiguredHalStream(
+      uint32_t pipeline_id, std::vector<HalStream>* hal_streams) const override;
 
-    void DestroyPipelines() override;
+  void DestroyPipelines() override;
 
-    status_t SubmitRequests(uint32_t frame_number,
-            const std::vector<HwlPipelineRequest>& requests) override;
+  status_t SubmitRequests(
+      uint32_t frame_number,
+      const std::vector<HwlPipelineRequest>& requests) override;
 
-    status_t Flush() override;
+  status_t Flush() override;
 
-    uint32_t GetCameraId() const override;
+  uint32_t GetCameraId() const override;
 
-    std::vector<uint32_t> GetPhysicalCameraIds() const override;
+  std::vector<uint32_t> GetPhysicalCameraIds() const override;
 
-    status_t GetCameraCharacteristics(
-            std::unique_ptr<HalCameraMetadata>* characteristics) const override;
+  status_t GetCameraCharacteristics(
+      std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
-    status_t GetPhysicalCameraCharacteristics(uint32_t physical_camera_id,
-            std::unique_ptr<HalCameraMetadata>* characteristics) const override;
+  status_t GetPhysicalCameraCharacteristics(
+      uint32_t physical_camera_id,
+      std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
-    status_t SetSessionData(SessionDataKey /*key*/, void* /*value*/) override {
-        return OK; } // Noop for now
+  status_t SetSessionData(SessionDataKey /*key*/, void* /*value*/) override {
+    return OK;
+  }  // Noop for now
 
-    status_t GetSessionData(SessionDataKey /*key*/, void** /*value*/) const override {
-        return OK; } // Noop for now
+  status_t GetSessionData(SessionDataKey /*key*/,
+                          void** /*value*/) const override {
+    return OK;
+  }  // Noop for now
 
-    void SetSessionCallback(const HwlSessionCallback& /*hwl_session_callback*/) override {}
+  void SetSessionCallback(
+      const HwlSessionCallback& /*hwl_session_callback*/) override {
+  }
 
-    status_t FilterResultMetadata(HalCameraMetadata* /*metadata*/) const override {
-        return OK; } // Noop for now
-    // End override functions in CameraDeviceSessionHwl
+  status_t FilterResultMetadata(HalCameraMetadata* /*metadata*/) const override {
+    return OK;
+  }  // Noop for now
 
-private:
+  // End override functions in CameraDeviceSessionHwl
 
-    status_t initialize(uint32_t cameraId, std::unique_ptr<HalCameraMetadata> staticMeta);
+ private:
+  status_t Initialize(uint32_t camera_id,
+                      std::unique_ptr<HalCameraMetadata> static_meta);
 
-    EmulatedCameraDeviceSessionHwlImpl(
-            std::shared_ptr<EmulatedTorchState> torchState) :
-        mMaxPipelineDepth(0), mTorchState(torchState) {}
+  EmulatedCameraDeviceSessionHwlImpl(
+      std::shared_ptr<EmulatedTorchState> torch_state)
+      : max_pipeline_depth_(0), torch_state_(torch_state) {
+  }
 
-    uint8_t mMaxPipelineDepth;
+  uint8_t max_pipeline_depth_;
 
-    // Protects the API entry points
-    mutable std::mutex mAPIMutex;
-    uint32_t mCameraId = 0;
-    bool mErrorState = false;
-    bool mPipelinesBuilt = false;
-    std::unique_ptr<HalCameraMetadata> mStaticMetadata;
-    std::vector<EmulatedPipeline> mPipelines;
-    std::unique_ptr<EmulatedRequestProcessor> mRequestProcessor;
-    std::unique_ptr<StreamConfigurationMap> mStreamConigurationMap;
-    SensorCharacteristics mSensorChars;
-    std::shared_ptr<EmulatedTorchState> mTorchState;
+  // Protects the API entry points
+  mutable std::mutex api_mutex_;
+  uint32_t camera_id_ = 0;
+  bool error_state_ = false;
+  bool pipelines_built_ = false;
+  std::unique_ptr<HalCameraMetadata> static_metadata_;
+  std::vector<EmulatedPipeline> pipelines_;
+  std::unique_ptr<EmulatedRequestProcessor> request_processor_;
+  std::unique_ptr<StreamConfigurationMap> stream_coniguration_map_;
+  SensorCharacteristics sensor_chars_;
+  std::shared_ptr<EmulatedTorchState> torch_state_;
 };
 
 }  // namespace android
