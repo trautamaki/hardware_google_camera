@@ -74,10 +74,11 @@ class JpegCompressor {
  private:
   std::mutex mutex_;
   std::condition_variable condition_;
-  bool jpeg_done_ = false;
+  std::atomic_bool jpeg_done_ = false;
   std::thread jpeg_processing_thread_;
   std::queue<std::unique_ptr<JpegYUV420Job>> pending_yuv_jobs_;
   std::unique_ptr<ExifUtils> exif_utils_;
+  std::string exif_make_, exif_model_;
 
   j_common_ptr jpeg_error_info_;
   bool CheckError(const char* msg);

@@ -71,7 +71,6 @@ struct SensorBuffer {
         camera_id(0),
         format(HAL_PIXEL_FORMAT_RGBA_8888),
         dataSpace(HAL_DATASPACE_UNKNOWN),
-        stream_buffer{0},
         acquire_fence_fd(-1),
         is_input(false),
         plane{} {

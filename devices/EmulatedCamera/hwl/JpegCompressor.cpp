@@ -34,6 +34,17 @@ using google_camera_hal::NotifyMessage;
 JpegCompressor::JpegCompressor(std::unique_ptr<ExifUtils> exif_utils)
     : exif_utils_(std::move(exif_utils)) {
   ATRACE_CALL();
+  char value[PROPERTY_VALUE_MAX];
+  if (property_get("ro.product.vendor.manufacturer", value, "unknown") <= 0) {
+    ALOGW("%s: No Exif make data!", __FUNCTION__);
+  }
+  exif_make_ = std::string(value);
+
+  if (property_get("ro.product.vendor.model", value, "unknown") <= 0) {
+    ALOGW("%s: No Exif model data!", __FUNCTION__);
+  }
+  exif_model_ = std::string(value);
+
   jpeg_processing_thread_ = std::thread([this] { this->ThreadLoop(); });
 }
 
@@ -159,20 +170,8 @@ void JpegCompressor::CompressYUV420(std::unique_ptr<JpegYUV420Job> job) {
           }
         }
 
-        char value[PROPERTY_VALUE_MAX];
-        if (property_get("ro.product.vendor.manufacturer", value, "unknown") >
-            0) {
-          exif_utils_->SetMake(std::string(value));
-        } else {
-          ALOGW("%s: No Exif make data!", __FUNCTION__);
-        }
-
-        if (property_get("ro.product.vendor.model", value, "unknown") > 0) {
-          exif_utils_->SetModel(std::string(value));
-        } else {
-          ALOGW("%s: No Exif model data!", __FUNCTION__);
-        }
-
+        exif_utils_->SetMake(exif_make_);
+        exif_utils_->SetModel(exif_model_);
         if (exif_utils_->GenerateApp1(thumbnail_jpeg_buffer.empty()
                                           ? nullptr
                                           : thumbnail_jpeg_buffer.data(),
@@ -263,7 +262,7 @@ size_t JpegCompressor::CompressYUV420Frame(YUV420Frame frame) {
   };
 
   dmgr.empty_output_buffer = [](j_compress_ptr cinfo __unused) {
-    ALOGV("%s:%d Out of buffer", __FUNCTION__, __LINE__);
+    ALOGE("%s:%d Out of buffer", __FUNCTION__, __LINE__);
     return 0;
   };
 

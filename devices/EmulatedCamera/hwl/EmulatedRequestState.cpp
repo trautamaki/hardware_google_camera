@@ -60,9 +60,9 @@ T GetClosestValue(T val, T min, T max) {
 
 status_t EmulatedRequestState::Update3AMeteringRegion(
     uint32_t tag, const HalCameraMetadata& settings, int32_t* region /*out*/) {
-  if ((region == nullptr) && (tag != ANDROID_CONTROL_AE_REGIONS) &&
-      (tag != ANDROID_CONTROL_AF_REGIONS) &&
-      (tag != ANDROID_CONTROL_AWB_REGIONS)) {
+  if ((region == nullptr) || ((tag != ANDROID_CONTROL_AE_REGIONS) &&
+                              (tag != ANDROID_CONTROL_AF_REGIONS) &&
+                              (tag != ANDROID_CONTROL_AWB_REGIONS))) {
     return BAD_VALUE;
   }
 
@@ -170,7 +170,10 @@ status_t EmulatedRequestState::DoFakeAE() {
                       sensor_max_frame_duration_);
   sensor_frame_duration_ = (max_frame_duration + min_frame_duration) / 2;
 
-  // Use a different AE target exposure for face priority mode
+  // Face priority mode usually changes the AE algorithm behavior by
+  // using the regions of interest associated with detected faces.
+  // Try to emulate this behavior by slightly increasing the target exposure
+  // time compared to normal operation.
   if (exposure_compensation_supported_) {
     float max_ae_compensation = ::powf(
         2, exposure_compensation_range_[1] *
@@ -201,8 +204,8 @@ status_t EmulatedRequestState::DoFakeAE() {
       ae_state_ = ANDROID_CONTROL_AE_STATE_CONVERGED;
       ae_trigger_ = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL;
     } else if ((ae_frame_counter_ > kAEPrecaptureMinFrames) &&
-               ((ae_target_exposure_time_ - current_exposure_time_) <
-                ae_target_exposure_time_ / 10)) {
+               (abs(ae_target_exposure_time_ - current_exposure_time_) <
+                ae_target_exposure_time_ / kAETargetThreshold)) {
       // Done with precapture
       ae_frame_counter_ = 0;
       ae_state_ = ANDROID_CONTROL_AE_STATE_CONVERGED;
@@ -223,7 +226,7 @@ status_t EmulatedRequestState::DoFakeAE() {
       case ANDROID_CONTROL_AE_STATE_CONVERGED:
         ae_frame_counter_++;
         if (ae_frame_counter_ > kStableAeMaxFrames) {
-          float exposure_step = ((double)rand() / RAND_MAX) *
+          float exposure_step = ((double)rand_r(&rand_seed_) / RAND_MAX) *
                                     (kExposureWanderMax - kExposureWanderMin) +
                                 kExposureWanderMin;
           ae_target_exposure_time_ =
@@ -239,7 +242,7 @@ status_t EmulatedRequestState::DoFakeAE() {
             (ae_target_exposure_time_ - current_exposure_time_) *
             kExposureTrackRate;
         if (abs(ae_target_exposure_time_ - current_exposure_time_) <
-            ae_target_exposure_time_ / 10) {
+            ae_target_exposure_time_ / kAETargetThreshold) {
           // Close enough
           ae_state_ = ANDROID_CONTROL_AE_STATE_CONVERGED;
           ae_frame_counter_ = 0;
@@ -268,7 +271,7 @@ status_t EmulatedRequestState::ProcessAWB() {
   }
   if (((awb_mode_ == ANDROID_CONTROL_AWB_MODE_OFF) ||
        (control_mode_ == ANDROID_CONTROL_MODE_OFF)) &&
-      supports_manual_sensor_) {
+      supports_manual_post_processing_) {
     // TODO: Add actual manual support
   } else if (is_backward_compatible_) {
     camera_metadata_ro_entry_t entry;
@@ -279,7 +282,7 @@ status_t EmulatedRequestState::ProcessAWB() {
       awb_lock_ = ANDROID_CONTROL_AWB_LOCK_OFF;
     }
 
-    if (awb_lock_ == ANDROID_CONTROL_AE_LOCK_ON) {
+    if (awb_lock_ == ANDROID_CONTROL_AWB_LOCK_ON) {
       awb_state_ = ANDROID_CONTROL_AWB_STATE_LOCKED;
     } else {
       awb_state_ = ANDROID_CONTROL_AWB_STATE_CONVERGED;
@@ -310,9 +313,9 @@ status_t EmulatedRequestState::ProcessAF() {
         focus_distance_ = entry.data.f[0];
       } else {
         ALOGE(
-            "%s: Unsupported focus distance: %5.2f. It should be within "
+            "%s: Unsupported focus distance, It should be within "
             "[%5.2f, %5.2f]",
-            __FUNCTION__, entry.data.f[0], 0.f, minimum_focus_distance_);
+            __FUNCTION__, 0.f, minimum_focus_distance_);
       }
     }
 
@@ -346,12 +349,14 @@ status_t EmulatedRequestState::ProcessAF() {
       // Stay in 'inactive' until at least next frame
       return OK;
     default:
-      ALOGE("%s: Unknown af trigger value %d", __FUNCTION__, af_trigger_);
+      ALOGE("%s: Unknown AF trigger value", __FUNCTION__);
       return BAD_VALUE;
   }
 
-  // If we get down here, we're either in an autofocus mode
-  //  or in a continuous focus mode (and no other modes)
+  // If we get down here, we're either in ANDROID_CONTROL_AF_MODE_AUTO,
+  // ANDROID_CONTROL_AF_MODE_MACRO, ANDROID_CONTROL_AF_MODE_CONTINUOUS_VIDEO,
+  // ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE and no other modes like
+  // ANDROID_CONTROL_AF_MODE_OFF or ANDROID_CONTROL_AF_MODE_EDOF
   switch (af_state_) {
     case ANDROID_CONTROL_AF_STATE_INACTIVE:
       if (af_trigger_start) {
@@ -388,7 +393,7 @@ status_t EmulatedRequestState::ProcessAF() {
        */
       if (af_trigger_start) {
         // Randomly transition to focused or not focused
-        if (rand() % 3) {
+        if (rand_r(&rand_seed_) % 3) {
           af_state_ = ANDROID_CONTROL_AF_STATE_FOCUSED_LOCKED;
         } else {
           af_state_ = ANDROID_CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
@@ -401,7 +406,7 @@ status_t EmulatedRequestState::ProcessAF() {
        */
       else {
         // Randomly transition to passive focus
-        if (rand() % 3 == 0) {
+        if (rand_r(&rand_seed_) % 3 == 0) {
           af_state_ = ANDROID_CONTROL_AF_STATE_PASSIVE_FOCUSED;
         }
       }
@@ -410,7 +415,7 @@ status_t EmulatedRequestState::ProcessAF() {
     case ANDROID_CONTROL_AF_STATE_PASSIVE_FOCUSED:
       if (af_trigger_start) {
         // Randomly transition to focused or not focused
-        if (rand() % 3) {
+        if (rand_r(&rand_seed_) % 3) {
           af_state_ = ANDROID_CONTROL_AF_STATE_FOCUSED_LOCKED;
         } else {
           af_state_ = ANDROID_CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
@@ -422,7 +427,7 @@ status_t EmulatedRequestState::ProcessAF() {
       // Simulate AF sweep completing instantaneously
 
       // Randomly transition to focused or not focused
-      if (rand() % 3) {
+      if (rand_r(&rand_seed_) % 3) {
         af_state_ = ANDROID_CONTROL_AF_STATE_FOCUSED_LOCKED;
       } else {
         af_state_ = ANDROID_CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
@@ -498,10 +503,11 @@ status_t EmulatedRequestState::ProcessAE() {
           (entry.data.i64[0] <= sensor_exposure_time_range_.second)) {
         sensor_exposure_time_ = entry.data.i64[0];
       } else {
-        ALOGE("%s: Sensor exposure time: %" PRId64
-              " not within supported range[%" PRId64 ", %" PRId64 "]",
-              __FUNCTION__, entry.data.i64[0], sensor_exposure_time_range_.first,
-              sensor_exposure_time_range_.second);
+        ALOGE(
+            "%s: Sensor exposure time"
+            " not within supported range[%" PRId64 ", %" PRId64 "]",
+            __FUNCTION__, sensor_exposure_time_range_.first,
+            sensor_exposure_time_range_.second);
         // Use last valid value
       }
     }
@@ -513,11 +519,11 @@ status_t EmulatedRequestState::ProcessAE() {
           (entry.data.i64[0] <= sensor_max_frame_duration_)) {
         sensor_frame_duration_ = entry.data.i64[0];
       } else {
-        ALOGE("%s: Sensor frame duration : %" PRId64
-              " not within supported range[%" PRId64 ", %" PRId64 "]",
-              __FUNCTION__, entry.data.i64[0],
-              EmulatedSensor::kSupportedFrameDurationRange[0],
-              sensor_max_frame_duration_);
+        ALOGE(
+            "%s: Sensor frame duration "
+            " not within supported range[%" PRId64 ", %" PRId64 "]",
+            __FUNCTION__, EmulatedSensor::kSupportedFrameDurationRange[0],
+            sensor_max_frame_duration_);
         // Use last valid value
       }
     }
@@ -532,8 +538,8 @@ status_t EmulatedRequestState::ProcessAE() {
           (entry.data.i32[0] <= sensor_sensitivity_range_.second)) {
         sensor_sensitivity_ = entry.data.i32[0];
       } else {
-        ALOGE("%s: Sensor sensitivity: %d not within supported range[%d, %d]",
-              __FUNCTION__, entry.data.i32[0], sensor_sensitivity_range_.first,
+        ALOGE("%s: Sensor sensitivity not within supported range[%d, %d]",
+              __FUNCTION__, sensor_sensitivity_range_.first,
               sensor_sensitivity_range_.second);
         // Use last valid value
       }
@@ -548,12 +554,13 @@ status_t EmulatedRequestState::ProcessAE() {
     // Do AE compensation on the results of the AE
     ret = CompensateAE();
     if (ret != OK) {
-      ALOGE("%s: Failed duiring AE compensation: %d, (%s)", __FUNCTION__, ret,
+      ALOGE("%s: Failed during AE compensation: %d, (%s)", __FUNCTION__, ret,
             strerror(-ret));
     }
   } else {
-    ALOGI("%s: No emulation for AE mode: %d using previous sensor settings!",
-          __FUNCTION__, ae_mode_);
+    ALOGI(
+        "%s: No emulation for current AE mode using previous sensor settings!",
+        __FUNCTION__);
   }
 
   if (is_flash_supported_) {
@@ -569,8 +576,7 @@ status_t EmulatedRequestState::ProcessAE() {
         manual_flash_mode = true;
       }
     }
-    if (manual_flash_mode && ((ae_mode_ == ANDROID_CONTROL_AE_MODE_OFF) ||
-                              (ae_mode_ == ANDROID_CONTROL_AE_MODE_ON))) {
+    if (manual_flash_mode && !auto_ae_flash_mode) {
       flash_state_ = ANDROID_FLASH_STATE_FIRED;
     } else {
       bool is_still_capture = false;
@@ -607,8 +613,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
         available_control_modes_.end()) {
       control_mode_ = entry.data.u8[0];
     } else {
-      ALOGE("%s: Control mode: %d not supported!", __FUNCTION__,
-            entry.data.u8[0]);
+      ALOGE("%s: Unsupported control mode!", __FUNCTION__);
       return BAD_VALUE;
     }
   }
@@ -620,7 +625,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
         (available_scenes_.find(entry.data.u8[0]) != available_scenes_.end())) {
       scene_mode_ = entry.data.u8[0];
     } else {
-      ALOGE("%s: Scene mode: %d not supported!", __FUNCTION__, entry.data.u8[0]);
+      ALOGE("%s: Unsupported scene mode!", __FUNCTION__);
       return BAD_VALUE;
     }
   }
@@ -636,8 +641,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
           available_ae_modes_.end()) {
         ae_mode_ = entry.data.u8[0];
       } else {
-        ALOGE("%s: AE mode: %d not supported using last valid mode!",
-              __FUNCTION__, entry.data.u8[0]);
+        ALOGE("%s: Unsupported AE mode! Using last valid mode!", __FUNCTION__);
       }
     }
 
@@ -647,8 +651,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
           available_awb_modes_.end()) {
         awb_mode_ = entry.data.u8[0];
       } else {
-        ALOGE("%s: AWB mode: %d not supported using last valid mode!",
-              __FUNCTION__, entry.data.u8[0]);
+        ALOGE("%s: Unsupported AWB mode! Using last valid mode!", __FUNCTION__);
       }
     }
 
@@ -659,8 +662,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
         af_mode_changed_ = af_mode_ != entry.data.u8[0];
         af_mode_ = entry.data.u8[0];
       } else {
-        ALOGE("%s: AF mode: %d not supported using last valid mode!",
-              __FUNCTION__, entry.data.u8[0]);
+        ALOGE("%s: Unsupported AF mode! Using last valid mode!", __FUNCTION__);
       }
     }
   } else {
@@ -672,9 +674,9 @@ status_t EmulatedRequestState::InitializeSensorSettings(
       af_mode_ = it->second.af_mode;
     } else {
       ALOGW(
-          "%s: Scene %d has no scene overrides using the currently active 3A "
+          "%s: Current scene has no overrides! Using the currently active 3A "
           "modes!",
-          __FUNCTION__, scene_mode_);
+          __FUNCTION__);
     }
   }
 
@@ -699,8 +701,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
         available_lens_shading_map_modes_.end()) {
       sensor_settings->lens_shading_map_mode = entry.data.u8[0];
     } else {
-      ALOGE("%s: Lens shading map mode: %d not supported!", __FUNCTION__,
-            entry.data.u8[0]);
+      ALOGE("%s: Unsupported lens shading map mode!", __FUNCTION__);
     }
   }
 
@@ -926,21 +927,21 @@ status_t EmulatedRequestState::InitializeSensorDefaults() {
       available_results_.find(ANDROID_SENSOR_ROLLING_SHUTTER_SKEW) !=
       available_results_.end();
   report_sensitivity_ = available_results_.find(ANDROID_SENSOR_SENSITIVITY) !=
-                        available_requests_.end();
+                        available_results_.end();
   report_exposure_time_ =
       available_results_.find(ANDROID_SENSOR_EXPOSURE_TIME) !=
-      available_requests_.end();
+      available_results_.end();
   report_frame_duration_ =
       available_results_.find(ANDROID_SENSOR_FRAME_DURATION) !=
-      available_requests_.end();
+      available_results_.end();
   report_neutral_color_point_ =
       available_results_.find(ANDROID_SENSOR_NEUTRAL_COLOR_POINT) !=
-      available_requests_.end();
+      available_results_.end();
   report_green_split_ = available_results_.find(ANDROID_SENSOR_GREEN_SPLIT) !=
-                        available_requests_.end();
+                        available_results_.end();
   report_noise_profile_ =
       available_results_.find(ANDROID_SENSOR_NOISE_PROFILE) !=
-      available_requests_.end();
+      available_results_.end();
 
   if (is_raw_capable_ && !report_green_split_) {
     ALOGE("%s: RAW capable devices must be able to report the noise profile!",
@@ -962,7 +963,7 @@ status_t EmulatedRequestState::InitializeSensorDefaults() {
     return BAD_VALUE;
   }
   if (available_results_.find(ANDROID_SENSOR_TIMESTAMP) ==
-      available_requests_.end()) {
+      available_results_.end()) {
     ALOGE("%s: Sensor timestamp must always be part of the results!",
           __FUNCTION__);
     return BAD_VALUE;
@@ -1300,7 +1301,7 @@ status_t EmulatedRequestState::InitializeControlAWBDefaults() {
 }
 
 status_t EmulatedRequestState::InitializeBlackLevelDefaults() {
-  if (supported_hw_level_ >= ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) {
+  if (is_level_full_or_higher_) {
     if (available_requests_.find(ANDROID_BLACK_LEVEL_LOCK) ==
         available_requests_.end()) {
       ALOGE(
@@ -1435,10 +1436,10 @@ status_t EmulatedRequestState::InitializeControlAEDefaults() {
   }
 
   bool ae_comp_requests =
-      available_requests_.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) !=
+      available_requests_.find(ANDROID_CONTROL_AE_EXPOSURE_COMPENSATION) !=
       available_requests_.end();
   bool ae_comp_results =
-      available_results_.find(ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER) !=
+      available_results_.find(ANDROID_CONTROL_AE_EXPOSURE_COMPENSATION) !=
       available_results_.end();
   exposure_compensation_supported_ =
       ((exposure_compensation_range_[0] < 0) &&
@@ -1492,7 +1493,7 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
     return BAD_VALUE;
   }
 
-  // Capture intent must always be use configurable
+  // Capture intent must always be user configurable
   if (available_requests_.find(ANDROID_CONTROL_CAPTURE_INTENT) ==
       available_requests_.end()) {
     ALOGE("%s: Clients must be able to set the capture intent!", __FUNCTION__);
@@ -1594,7 +1595,7 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
       return BAD_VALUE;
     }
 
-    if ((supported_hw_level_ >= ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) &&
+    if ((is_level_full_or_higher_) &&
         ((max_ae_regions_ == 0) || (max_af_regions_ == 0))) {
       ALOGE(
           "%s: Full and higher level cameras must support at AF and AE "
@@ -1782,8 +1783,7 @@ status_t EmulatedRequestState::InitializeTonemapDefaults() {
       return BAD_VALUE;
     }
 
-    if ((supported_hw_level_ >= ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) &&
-        (available_tonemap_modes_.size() < 3)) {
+    if ((is_level_full_or_higher_) && (available_tonemap_modes_.size() < 3)) {
       ALOGE(
           "%s: Full and higher level cameras must support at least three or "
           "more tonemap modes",
@@ -2020,7 +2020,8 @@ status_t EmulatedRequestState::InitializeShadingDefaults() {
   if (supports_manual_post_processing_ &&
       (available_shading_modes_.size() < 2)) {
     ALOGE(
-        "%s: Devices capable of manual post-processing need to support aleast "
+        "%s: Devices capable of manual post-processing need to support at "
+        "least "
         "two"
         " lens shading modes!",
         __FUNCTION__);
@@ -2075,10 +2076,10 @@ status_t EmulatedRequestState::InitializeNoiseReductionDefaults() {
     return BAD_VALUE;
   }
 
-  if ((supported_hw_level_ >= ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) &&
+  if ((is_level_full_or_higher_) &&
       (available_noise_reduction_modes_.size() < 2)) {
     ALOGE(
-        "%s: Full and above device must support aleast two noise reduction "
+        "%s: Full and above device must support at least two noise reduction "
         "modes!",
         __FUNCTION__);
     return BAD_VALUE;
@@ -2102,12 +2103,12 @@ status_t EmulatedRequestState::InitializeNoiseReductionDefaults() {
 
     switch (static_cast<RequestTemplate>(idx)) {
       case RequestTemplate::kVideoRecord:  // Pass-through
+      case RequestTemplate::kVideoSnapshot:  // Pass-through
       case RequestTemplate::kPreview:
         if (is_fast_mode_supported) {
           noise_reduction_mode = ANDROID_NOISE_REDUCTION_MODE_FAST;
         }
         break;
-      case RequestTemplate::kVideoSnapshot:  // Pass-through
       case RequestTemplate::kStillCapture:
         if (is_hq_mode_supported) {
           noise_reduction_mode = ANDROID_NOISE_REDUCTION_MODE_HIGH_QUALITY;
@@ -2142,8 +2143,7 @@ status_t EmulatedRequestState::InitializeHotPixelDefaults() {
     return BAD_VALUE;
   }
 
-  if ((supported_hw_level_ >= ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) &&
-      (available_hot_pixel_modes_.size() < 2)) {
+  if ((is_level_full_or_higher_) && (available_hot_pixel_modes_.size() < 2)) {
     ALOGE(
         "%s: Full and higher level cameras must support at least fast and hq "
         "hotpixel modes",
@@ -2281,21 +2281,20 @@ status_t EmulatedRequestState::InitializeLensDefaults() {
 
   ret = static_metadata_->Get(ANDROID_LENS_POSE_ROTATION, &entry);
   if ((ret == OK) && (entry.count == ARRAY_SIZE(pose_rotation_))) {
-    memcpy(pose_rotation_, entry.data.f, ARRAY_SIZE(pose_rotation_));
+    memcpy(pose_rotation_, entry.data.f, sizeof(pose_rotation_));
   }
   ret = static_metadata_->Get(ANDROID_LENS_POSE_TRANSLATION, &entry);
   if ((ret == OK) && (entry.count == ARRAY_SIZE(pose_translation_))) {
-    memcpy(pose_translation_, entry.data.f, ARRAY_SIZE(pose_translation_));
+    memcpy(pose_translation_, entry.data.f, sizeof(pose_translation_));
   }
   ret = static_metadata_->Get(ANDROID_LENS_INTRINSIC_CALIBRATION, &entry);
   if ((ret == OK) && (entry.count == ARRAY_SIZE(intrinsic_calibration_))) {
-    memcpy(intrinsic_calibration_, entry.data.f,
-           ARRAY_SIZE(intrinsic_calibration_));
+    memcpy(intrinsic_calibration_, entry.data.f, sizeof(intrinsic_calibration_));
   }
 
   ret = static_metadata_->Get(ANDROID_LENS_DISTORTION, &entry);
   if ((ret == OK) && (entry.count == ARRAY_SIZE(distortion_))) {
-    memcpy(distortion_, entry.data.f, ARRAY_SIZE(distortion_));
+    memcpy(distortion_, entry.data.f, sizeof(distortion_));
   }
 
   report_focus_distance_ =
@@ -2353,6 +2352,9 @@ status_t EmulatedRequestState::InitializeInfoDefaults() {
   }
 
   supported_hw_level_ = entry.data.u8[0];
+  is_level_full_or_higher_ =
+      (supported_hw_level_ == ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) ||
+      (supported_hw_level_ == ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_3);
 
   return InitializeReprocessDefaults();
 }
@@ -2411,7 +2413,7 @@ status_t EmulatedRequestState::InitializeRequestDefaults() {
   ret = static_metadata_->Get(ANDROID_REQUEST_PIPELINE_MAX_DEPTH, &entry);
   if ((ret == OK) && (entry.count == 1)) {
     if (entry.data.u8[0] == 0) {
-      ALOGE("%s: Maximum request pipeline must have a non zero value!",
+      ALOGE("%s: Maximum request pipeline depth must have a non zero value!",
             __FUNCTION__);
       return BAD_VALUE;
     }

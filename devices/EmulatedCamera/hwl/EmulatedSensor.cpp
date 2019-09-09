@@ -392,10 +392,12 @@ void EmulatedSensor::SetCurrentRequest(SensorSettings settings,
 
 bool EmulatedSensor::WaitForVSyncLocked(nsecs_t reltime) {
   got_vsync_ = false;
-  auto res = vsync_.waitRelative(control_mutex_, reltime);
-  if (res != OK && res != TIMED_OUT) {
-    ALOGE("%s: Error waiting for VSync signal: %d", __FUNCTION__, res);
-    return false;
+  while (!got_vsync_) {
+    auto res = vsync_.waitRelative(control_mutex_, reltime);
+    if (res != OK && res != TIMED_OUT) {
+      ALOGE("%s: Error waiting for VSync signal: %d", __FUNCTION__, res);
+      return false;
+    }
   }
 
   return got_vsync_;
@@ -718,7 +720,7 @@ bool EmulatedSensor::threadLoop() {
   }
   nsecs_t end_real_time __unused = systemTime();
   ALOGVV("Frame cycle took %" PRIu64 "  ms, target %" PRIu64 " ms",
-         ns2ms(end_real_time - start_real_time), ns2ms(settings.frame_duration));
+         ns2ms(end_real_time - start_real_time), ns2ms(frame_duration));
 
   return true;
 };
@@ -756,7 +758,7 @@ void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width) {
       float photon_noise_var = electron_count * noise_var_gain;
       float noise_stddev = sqrtf_approx(read_noise_var + photon_noise_var);
       // Scaled to roughly match gaussian/uniform noise stddev
-      float noise_sample = std::rand() * (2.5 / (1.0 + RAND_MAX)) - 1.25;
+      float noise_sample = rand_r(&rand_seed_) * (2.5 / (1.0 + RAND_MAX)) - 1.25;
 
       raw_count += chars_.black_level_pattern[bayer_row[x & 0x1]];
       raw_count += noise_stddev * noise_sample;

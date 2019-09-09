@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#define LOG_TAG "EmulatedCameraDeviceSessionHwlImpl"
+#define LOG_TAG "EmulatedCameraDevSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
@@ -139,24 +138,25 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
   emulated_pipeline.streams.reserve(request_config.streams.size());
   for (const auto& stream : request_config.streams) {
     bool is_input = stream.stream_type == google_camera_hal::StreamType::kInput;
-    emulated_pipeline.streams.emplace(std::make_pair<uint32_t, EmulatedStream>(
+    emulated_pipeline.streams.emplace(
         stream.id,
-        {{.id = stream.id,
-          .override_format =
-              is_input ? stream.format
-                       : EmulatedSensor::OverrideFormat(stream.format),
-          .producer_usage = is_input ? 0
-                                     : GRALLOC_USAGE_SW_WRITE_OFTEN |
-                                           GRALLOC_USAGE_SW_READ_OFTEN,
-          .consumer_usage = 0,
-          .max_buffers = max_pipeline_depth_,
-          .override_data_space = stream.data_space,
-          .is_physical_camera_stream = stream.is_physical_camera_stream,
-          .physical_camera_id = stream.physical_camera_id},
-         .width = stream.width,
-         .height = stream.height,
-         .is_input = is_input,
-         .buffer_size = stream.buffer_size}));
+        EmulatedStream(
+            {{.id = stream.id,
+              .override_format =
+                  is_input ? stream.format
+                           : EmulatedSensor::OverrideFormat(stream.format),
+              .producer_usage = is_input ? 0
+                                         : GRALLOC_USAGE_SW_WRITE_OFTEN |
+                                               GRALLOC_USAGE_SW_READ_OFTEN,
+              .consumer_usage = 0,
+              .max_buffers = max_pipeline_depth_,
+              .override_data_space = stream.data_space,
+              .is_physical_camera_stream = stream.is_physical_camera_stream,
+              .physical_camera_id = stream.physical_camera_id},
+             .width = stream.width,
+             .height = stream.height,
+             .is_input = is_input,
+             .buffer_size = stream.buffer_size}));
   }
 
   pipelines_.push_back(emulated_pipeline);

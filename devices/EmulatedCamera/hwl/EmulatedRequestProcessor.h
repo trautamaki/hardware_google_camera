@@ -76,10 +76,8 @@ class EmulatedRequestProcessor {
  private:
   void RequestProcessorLoop();
 
-  std::mutex process_mutex_;
-  std::condition_variable request_condition_;
   std::thread request_thread_;
-  bool processor_done_ = false;
+  std::atomic_bool processor_done_ = false;
 
   // helper methods
   static uint32_t inline AlignTo(uint32_t value, uint32_t alignment) {
@@ -106,10 +104,13 @@ class EmulatedRequestProcessor {
   std::unique_ptr<Buffers> AcquireBuffers(Buffers* buffers);
   void NotifyFailedRequest(const PendingRequest& request);
 
+  std::mutex process_mutex_;
+  std::condition_variable request_condition_;
   std::queue<PendingRequest> pending_requests_;
   uint32_t camera_id_;
   sp<EmulatedSensor> sensor_;
-  std::unique_ptr<EmulatedRequestState> request_state_;
+  std::unique_ptr<EmulatedRequestState>
+      request_state_;  // Stores and handles 3A and related camera states.
   std::unique_ptr<HalCameraMetadata> last_settings_;
 
   EmulatedRequestProcessor(const EmulatedRequestProcessor&) = delete;

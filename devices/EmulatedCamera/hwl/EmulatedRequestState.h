@@ -160,7 +160,7 @@ class EmulatedRequestState {
   std::unordered_map<uint8_t, SceneOverride> scene_overrides_;
   std::vector<FPSRange> available_fps_ranges_;
   int32_t exposure_compensation_range_[2] = {0, 0};
-  camera_metadata_rational exposure_compensation_step_ = {0, 0};
+  camera_metadata_rational exposure_compensation_step_ = {0, 1};
   bool exposure_compensation_supported_ = false;
   int32_t exposure_compensation_ = 0;
   int32_t ae_metering_region_[5] = {0, 0, 0, 0, 0};
@@ -188,10 +188,17 @@ class EmulatedRequestState {
   bool scenes_supported_ = false;
   size_t ae_frame_counter_ = 0;
   const size_t kAEPrecaptureMinFrames = 10;
-  const float kExposureTrackRate = .2f;
-  const size_t kStableAeMaxFrames = 100;
+  // Fake AE related constants
+  const float kExposureTrackRate = .2f;  // This is the rate at which the fake
+                                         // AE will reach the calculated target
+  const size_t kStableAeMaxFrames =
+      100;  // The number of frames the fake AE will stay in converged state
+  // After fake AE switches to state searching the exposure
+  // time will wander randomly in region defined by min/max below.
   const float kExposureWanderMin = -2;
   const float kExposureWanderMax = 1;
+  const uint32_t kAETargetThreshold =
+      10;  // Defines a threshold for reaching the AE target
   int32_t post_raw_boost_ = 100;
   bool report_post_raw_boost_ = false;
   nsecs_t ae_target_exposure_time_ = EmulatedSensor::kDefaultExposureTime;
@@ -242,6 +249,8 @@ class EmulatedRequestState {
   static const size_t kTemplateCount =
       static_cast<size_t>(RequestTemplate::kManual) + 1;
   std::unique_ptr<HalCameraMetadata> default_requests_[kTemplateCount];
+  // Set to true if the camera device has HW level FULL or LEVEL3
+  bool is_level_full_or_higher_ = false;
 
   // android.lens.*
   float minimum_focus_distance_ = 0.f;
@@ -265,6 +274,8 @@ class EmulatedRequestState {
   bool report_distortion_ = false;
   bool report_intrinsic_calibration_ = false;
   int32_t shading_map_size_[2] = {0};
+
+  unsigned int rand_seed_ = 1;
 
   // android.hotpixel.*
   std::set<uint8_t> available_hot_pixel_modes_;

@@ -118,10 +118,10 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
   EmulatedCameraDeviceSessionHwlImpl(
       std::shared_ptr<EmulatedTorchState> torch_state)
-      : max_pipeline_depth_(0), torch_state_(torch_state) {
+      : torch_state_(torch_state) {
   }
 
-  uint8_t max_pipeline_depth_;
+  uint8_t max_pipeline_depth_ = 0;
 
   // Protects the API entry points
   mutable std::mutex api_mutex_;

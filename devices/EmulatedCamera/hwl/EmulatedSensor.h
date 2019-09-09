@@ -269,6 +269,8 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   // End of control parameters
 
+  unsigned int rand_seed_ = 1;
+
   /**
    * Inherited Thread virtual overrides, and members only used by the
    * processing thread

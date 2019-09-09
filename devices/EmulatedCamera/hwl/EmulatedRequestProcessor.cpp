@@ -120,14 +120,13 @@ std::unique_ptr<Buffers> EmulatedRequestProcessor::CreateSensorBuffers(
 
 void EmulatedRequestProcessor::NotifyFailedRequest(const PendingRequest& request) {
   if (request.output_buffers->at(0)->callback.notify != nullptr) {
+    auto output_buffer = std::move(request.output_buffers->at(0));
     NotifyMessage msg = {
         .type = MessageType::kError,
-        .message.error = {
-            .frame_number = request.output_buffers->at(0)->frame_number,
-            .error_stream_id = -1,
-            .error_code = ErrorCode::kErrorRequest}};
-    request.output_buffers->at(0)->callback.notify(
-        request.output_buffers->at(0)->pipeline_id, msg);
+        .message.error = {.frame_number = output_buffer->frame_number,
+                          .error_stream_id = -1,
+                          .error_code = ErrorCode::kErrorRequest}};
+    output_buffer->callback.notify(output_buffer->pipeline_id, msg);
   }
 }
 
@@ -156,12 +155,12 @@ status_t EmulatedRequestProcessor::GetBufferSizeAndStride(
   switch (stream.override_format) {
     case HAL_PIXEL_FORMAT_RGB_888:
       *stride = stream.width * 3;
-      *size = (*stride) * stream.width;
+      *size = (*stride) * stream.height;
       break;
     case HAL_PIXEL_FORMAT_RGBA_8888:
       *stride = stream.width * 4;
       ;
-      *size = (*stride) * stream.width;
+      *size = (*stride) * stream.height;
       break;
     case HAL_PIXEL_FORMAT_Y16:
       if (stream.override_data_space == HAL_DATASPACE_DEPTH) {
@@ -181,7 +180,7 @@ status_t EmulatedRequestProcessor::GetBufferSizeAndStride(
       break;
     case HAL_PIXEL_FORMAT_RAW16:
       *stride = stream.width * 2;
-      *size = (*stride) * stream.width;
+      *size = (*stride) * stream.height;
       break;
     default:
       return BAD_VALUE;
@@ -240,7 +239,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
         sensor_buffer->plane.img.buffer_size = buffer_size;
       } else {
         ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
-        return ret;
+        return BAD_VALUE;
       }
     } else {
       ALOGE("%s: Unsupported pixel format: 0x%x", __FUNCTION__,
@@ -284,7 +283,7 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
     buffer = nullptr;
   }
 
-  if (stream_buffer.acquire_fence != nullptr) {
+  if ((buffer.get() != nullptr) && (stream_buffer.acquire_fence != nullptr)) {
     auto fence_status = buffer->importer.importFence(
         stream_buffer.acquire_fence, buffer->acquire_fence_fd);
     if (!fence_status) {
@@ -330,7 +329,8 @@ std::unique_ptr<Buffers> EmulatedRequestProcessor::AcquireBuffers(
 void EmulatedRequestProcessor::RequestProcessorLoop() {
   ATRACE_CALL();
 
-  while (!processor_done_) {
+  bool vsync_status_ = true;
+  while (!processor_done_ && vsync_status_) {
     {
       std::lock_guard<std::mutex> lock(process_mutex_);
       if (!pending_requests_.empty()) {
@@ -380,7 +380,8 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
       }
     }
 
-    sensor_->WaitForVSync(EmulatedSensor::kSupportedFrameDurationRange[1]);
+    vsync_status_ =
+        sensor_->WaitForVSync(EmulatedSensor::kSupportedFrameDurationRange[1]);
   }
 }
 
