@@ -36,6 +36,9 @@ class EmulatedScene {
                 float sensor_sensitivity);
   ~EmulatedScene();
 
+  void Initialize(int sensor_width_px, int sensor_height_px,
+                  float sensor_sensitivity);
+
   // Set the filter coefficients for the red, green, and blue filters on the
   // sensor. Used as an optimization to pre-calculate various illuminance
   // values. Two different green filters can be provided, to account for
@@ -56,8 +59,8 @@ class EmulatedScene {
   void SetExposureDuration(float seconds);
 
   // Calculate scene information for current hour and the time offset since
-  // the hour. Must be called at least once before calling getLuminousExposure.
-  // Resets pixel readout location to 0,0
+  // the hour. Must be called at least once before calling
+  // getLuminousExposure. Resets pixel readout location to 0,0
   void CalculateScene(nsecs_t time);
 
   // Set sensor pixel readout location.
@@ -170,7 +173,7 @@ class EmulatedScene {
   static const uint8_t kMaterialsFlags[NUM_MATERIALS];
 
   static const uint8_t kScene[];
-};
+  };
 
 }  // namespace android
 

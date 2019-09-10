@@ -39,6 +39,7 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA,
 };
 
 const std::set<uint8_t> EmulatedRequestState::kSupportedHWLevels = {
@@ -2238,7 +2239,6 @@ status_t EmulatedRequestState::InitializeLensDefaults() {
 
   ret = static_metadata_->Get(ANDROID_LENS_INFO_AVAILABLE_FOCAL_LENGTHS, &entry);
   if ((ret == OK) && (entry.count > 0)) {
-    // TODO: add support for multiple focal lengths
     focal_length_ = entry.data.f[0];
   } else {
     ALOGE("%s: No available focal length!", __FUNCTION__);

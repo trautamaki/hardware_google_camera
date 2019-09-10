@@ -62,11 +62,12 @@ struct JpegYUV420Job {
   std::unique_ptr<JpegYUV420Input> input;
   std::unique_ptr<SensorBuffer> output;
   std::unique_ptr<HalCameraMetadata> result_metadata;
+  std::unique_ptr<ExifUtils> exif_utils;
 };
 
 class JpegCompressor {
  public:
-  JpegCompressor(std::unique_ptr<ExifUtils> exif_utils);
+  JpegCompressor();
   virtual ~JpegCompressor();
 
   status_t QueueYUV420(std::unique_ptr<JpegYUV420Job> job);
@@ -77,7 +78,6 @@ class JpegCompressor {
   std::atomic_bool jpeg_done_ = false;
   std::thread jpeg_processing_thread_;
   std::queue<std::unique_ptr<JpegYUV420Job>> pending_yuv_jobs_;
-  std::unique_ptr<ExifUtils> exif_utils_;
   std::string exif_make_, exif_model_;
 
   j_common_ptr jpeg_error_info_;

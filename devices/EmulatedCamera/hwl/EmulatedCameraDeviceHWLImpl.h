@@ -22,6 +22,7 @@
 
 #include "EmulatedSensor.h"
 #include "EmulatedTorchState.h"
+#include "utils/HWLUtils.h"
 #include "utils/StreamConfigurationMap.h"
 
 namespace android {
@@ -38,6 +39,7 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
  public:
   static std::unique_ptr<CameraDeviceHwl> Create(
       uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
+      PhysicalDeviceMapPtr physical_devices,
       std::shared_ptr<EmulatedTorchState> torch_state);
 
   virtual ~EmulatedCameraDeviceHwlImpl() = default;
@@ -68,16 +70,18 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
   // End of override functions in CameraDeviceHwl.
 
  private:
-  const uint32_t camera_id_ = 0;
-
   EmulatedCameraDeviceHwlImpl(uint32_t camera_id,
                               std::unique_ptr<HalCameraMetadata> static_meta,
+                              PhysicalDeviceMapPtr physical_devices,
                               std::shared_ptr<EmulatedTorchState> torch_state);
 
   status_t Initialize();
 
+  const uint32_t camera_id_ = 0;
+
   std::unique_ptr<HalCameraMetadata> static_metadata_;
   std::unique_ptr<StreamConfigurationMap> stream_coniguration_map_;
+  PhysicalDeviceMapPtr physical_device_map_;
   std::shared_ptr<EmulatedTorchState> torch_state_;
   SensorCharacteristics sensor_chars_;
 };

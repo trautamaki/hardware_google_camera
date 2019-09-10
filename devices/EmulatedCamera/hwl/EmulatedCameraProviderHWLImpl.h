@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2019 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,12 +62,15 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
 
  private:
   status_t Initialize();
-  status_t ParseCharacteristics(const Json::Value& root);
+  uint32_t ParseCharacteristics(const Json::Value& root, ssize_t id);
   status_t GetTagFromName(const char* name, uint32_t* tag);
 
   static const char* kConfigurationFileLocation[];
 
   std::vector<std::unique_ptr<HalCameraMetadata>> static_metadata_;
+  // Logical to physical camera Id mapping. Empty value vector in case
+  // of regular non-logical device.
+  std::unordered_map<uint32_t, std::vector<uint32_t>> camera_id_map_;
   HwlTorchModeStatusChangeFunc torch_cb_;
 };
 

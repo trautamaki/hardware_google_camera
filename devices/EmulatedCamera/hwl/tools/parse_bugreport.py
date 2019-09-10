@@ -38,10 +38,11 @@ def storeJsonConfigration(filePath, chars):
 
 """
 Parse media.camera dump section and populate the camera
-characteristics dictionary.
+characteristics list of dictionaries.
 """
-def parseCameraDump(deviceId, cameraDumpPath, chars):
+def parseCameraDump(deviceId, cameraDumpPath, tagList):
     deviceRegExp = "== Camera HAL device device@[0-9]+\.[0-9]+/{0} \(v3.".format(deviceId)
+    physicalDeviceRegExp = "Physical camera [0-9] characteristics:"
     tagRegExp = " {4}android[a-zA-Z0-9\.]+ \([a-z0-9]+\): "
     tagValueRegExp = "[^a-zA-Z0-9-\._]"
     with open(cameraDumpPath, "r") as file:
@@ -50,45 +51,51 @@ def parseCameraDump(deviceId, cameraDumpPath, chars):
             print "Camera device id: {0} not found".format(deviceId)
             sys.exit()
 
-        tags = re.split(tagRegExp, devices[1])
-        tagsContent = re.findall(tagRegExp, devices[1])
-        i = 0;
-        parseEnd = False
-        for tag in tags[1:]:
-            if parseEnd:
-                break
-
-            lines = tag.splitlines()
-            if len(lines) < 2:
-                print "Empty tag entry, skipping!"
-                continue
-            tagName = tagsContent[i].split()[0]
-
-            if tagName is None or len(tagName) < 1:
-                print "Invalid tag found, skipping!"
-                continue
-
-            i += 1
-            for line in lines[1:]:
-                if line.startswith('== Camera HAL device device'):
-                    parseEnd = True
+        physicalDevices = re.split(physicalDeviceRegExp, devices[1])
+        physicalIdx = 0
+        for physicalDevice in physicalDevices:
+            physicalIdx += 1
+            tags = re.split(tagRegExp, physicalDevice)
+            tagsContent = re.findall(tagRegExp, physicalDevice)
+            i = 0;
+            parseEnd = False
+            deviceChars = dict()
+            for tag in tags[1:]:
+                if parseEnd:
                     break
 
-                values = re.split(r' {8}', line)
-                if len(values) == 2:
-                    key = tagName
-                    tagValues = filter(None, re.split(tagValueRegExp, values[1]))
-                    if chars.has_key(key):
-                        chars[key] = chars[key] + tagValues
+                lines = tag.splitlines()
+                if len(lines) < 2:
+                    print "Empty tag entry, skipping!"
+                    continue
+                tagName = tagsContent[i].split()[0]
+
+                if tagName is None or len(tagName) < 1:
+                    print "Invalid tag found, skipping!"
+                    continue
+
+                i += 1
+                for line in lines[1:]:
+                    if line.startswith('== Camera HAL device device'):
+                        parseEnd = True
+                        break
+
+                    values = re.split(r' {8}', line)
+                    if len(values) == 2:
+                        key = tagName
+                        tagValues = filter(None, re.split(tagValueRegExp, values[1]))
+                        if deviceChars.has_key(key):
+                            deviceChars[key] = deviceChars[key] + tagValues
+                        else:
+                            deviceChars[key] = tagValues
                     else:
-                        chars[key] = tagValues
-                else:
-                    break
+                        break
+            tagList.append(deviceChars)
     os.remove(cameraDumpPath)
 
 if __name__ == '__main__':
     argc = len(sys.argv)
-    deviceId = "legacy/0"
+    deviceId = ""
     bugreportPath = ""
     configPath = ""
     if argc >= 4:
@@ -110,7 +117,7 @@ if __name__ == '__main__':
             print("Camera dump not found in bugreport!")
             sys.exit()
 
-        chars = dict()
-        parseCameraDump(deviceId, bugzip.extract(cameraDumpFile), chars)
-        storeJsonConfigration(configPath, chars)
+        tagList = list()
+        parseCameraDump(deviceId, bugzip.extract(cameraDumpFile), tagList)
+        storeJsonConfigration(configPath, tagList)
 
