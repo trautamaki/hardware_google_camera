@@ -917,12 +917,33 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
                                        bool reprocess_request) {
   ATRACE_CALL();
   size_t input_width, input_height;
-  YCbCrPlanes yuv_planes;
-  std::vector<uint8_t> temp_yuv;
+  YCbCrPlanes input_planes, output_planes;
+  std::vector<uint8_t> temp_yuv, temp_output_uv, temp_input_uv;
   if (reprocess_request) {
     input_width = input.width;
     input_height = input.height;
-    yuv_planes = input.planes;
+    input_planes = input.planes;
+
+    // libyuv only supports planar YUV420 during scaling.
+    // Split the input U/V plane in separate planes if needed.
+    if (input_planes.cbcr_step == 2) {
+      temp_input_uv.resize(input_width * input_height / 2);
+      auto temp_uv_buffer = temp_input_uv.data();
+      input_planes.img_cb = temp_uv_buffer;
+      input_planes.img_cr = temp_uv_buffer + (input_width * input_height) / 4;
+      input_planes.cbcr_stride = input_width / 2;
+      if (input.planes.img_cb < input.planes.img_cr) {
+        libyuv::SplitUVPlane(input.planes.img_cb, input.planes.cbcr_stride,
+                             input_planes.img_cb, input_planes.cbcr_stride,
+                             input_planes.img_cr, input_planes.cbcr_stride,
+                             input_width / 2, input_height / 2);
+      } else {
+        libyuv::SplitUVPlane(input.planes.img_cr, input.planes.cbcr_stride,
+                             input_planes.img_cr, input_planes.cbcr_stride,
+                             input_planes.img_cb, input_planes.cbcr_stride,
+                             input_width / 2, input_height / 2);
+      }
+    }
   } else {
     // Generate the smallest possible frame with the expected AR and
     // then scale using libyuv.
@@ -931,25 +952,53 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
     input_height = EmulatedScene::kSceneHeight;
     temp_yuv.reserve((input_width * input_height * 3) / 2);
     auto temp_yuv_buffer = temp_yuv.data();
-    yuv_planes = {
+    input_planes = {
         .img_y = temp_yuv_buffer,
         .img_cb = temp_yuv_buffer + input_width * input_height,
         .img_cr = temp_yuv_buffer + (input_width * input_height * 5) / 4,
         .y_stride = static_cast<uint32_t>(input_width),
         .cbcr_stride = static_cast<uint32_t>(input_width) / 2,
         .cbcr_step = 1};
-    CaptureYUV420(yuv_planes, input_width, input_height, gain);
+    CaptureYUV420(input_planes, input_width, input_height, gain);
   }
 
-  auto ret = I420Scale(yuv_planes.img_y, yuv_planes.y_stride, yuv_planes.img_cb,
-                       yuv_planes.cbcr_stride, yuv_planes.img_cr,
-                       yuv_planes.cbcr_stride, input_width, input_height,
-                       output.planes.img_y, output.planes.y_stride,
-                       output.planes.img_cb, output.planes.cbcr_stride,
-                       output.planes.img_cr, output.planes.cbcr_stride,
-                       output.width, output.height, libyuv::kFilterNone);
+  output_planes = output.planes;
+  // libyuv only supports planar YUV420 during scaling.
+  // Treat the output UV space as planar first and then
+  // interleave in the second step.
+  if (output_planes.cbcr_step == 2) {
+    temp_output_uv.resize(output.width * output.height / 2);
+    auto temp_uv_buffer = temp_output_uv.data();
+    output_planes.img_cb = temp_uv_buffer;
+    output_planes.img_cr = temp_uv_buffer + output.width * output.height / 4;
+    output_planes.cbcr_stride = output.width / 2;
+  }
+
+  auto ret = I420Scale(
+      input_planes.img_y, input_planes.y_stride, input_planes.img_cb,
+      input_planes.cbcr_stride, input_planes.img_cr, input_planes.cbcr_stride,
+      input_width, input_height, output_planes.img_y, output_planes.y_stride,
+      output_planes.img_cb, output_planes.cbcr_stride, output_planes.img_cr,
+      output_planes.cbcr_stride, output.width, output.height,
+      libyuv::kFilterNone);
   if (ret != 0) {
     ALOGE("%s: Failed during YUV scaling: %d", __FUNCTION__, ret);
+    return ret;
+  }
+
+  // Merge U/V Planes for the interleaved case
+  if (output_planes.cbcr_step == 2) {
+    if (output.planes.img_cb < output.planes.img_cr) {
+      libyuv::MergeUVPlane(output_planes.img_cb, output_planes.cbcr_stride,
+                           output_planes.img_cr, output_planes.cbcr_stride,
+                           output.planes.img_cb, output.planes.cbcr_stride,
+                           output.width / 2, output.height / 2);
+    } else {
+      libyuv::MergeUVPlane(output_planes.img_cr, output_planes.cbcr_stride,
+                           output_planes.img_cb, output_planes.cbcr_stride,
+                           output.planes.img_cr, output.planes.cbcr_stride,
+                           output.width / 2, output.height / 2);
+    }
   }
 
   return ret;

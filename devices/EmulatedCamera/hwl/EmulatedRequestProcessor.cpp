@@ -20,6 +20,7 @@
 #include "EmulatedRequestProcessor.h"
 
 #include <HandleImporter.h>
+#include <hardware/gralloc.h>
 #include <log/log.h>
 #include <sync/sync.h>
 #include <utils/Timers.h>
@@ -198,10 +199,12 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
 
   auto width = static_cast<int32_t>(stream.width);
   auto height = static_cast<int32_t>(stream.height);
+  auto usage = stream.is_input
+                   ? GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN
+                   : stream.producer_usage;
   if (stream.override_format == HAL_PIXEL_FORMAT_YCBCR_420_888) {
     IMapper::Rect map_rect = {0, 0, width, height};
-    auto yuv_layout =
-        importer.lockYCbCr(buffer, stream.producer_usage, map_rect);
+    auto yuv_layout = importer.lockYCbCr(buffer, usage, map_rect);
     if ((yuv_layout.y != nullptr) && (yuv_layout.cb != nullptr) &&
         (yuv_layout.cr != nullptr)) {
       sensor_buffer->plane.img_y_crcb.img_y =
@@ -213,6 +216,15 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
       sensor_buffer->plane.img_y_crcb.y_stride = yuv_layout.yStride;
       sensor_buffer->plane.img_y_crcb.cbcr_stride = yuv_layout.cStride;
       sensor_buffer->plane.img_y_crcb.cbcr_step = yuv_layout.chromaStep;
+      if ((yuv_layout.chromaStep == 2) &&
+          std::abs(sensor_buffer->plane.img_y_crcb.img_cb -
+                   sensor_buffer->plane.img_y_crcb.img_cr) != 1) {
+        ALOGE("%s: Unsupported YUV layout, chroma step: %u U/V plane delta: %u",
+              __FUNCTION__, yuv_layout.chromaStep,
+              std::abs(sensor_buffer->plane.img_y_crcb.img_cb -
+                       sensor_buffer->plane.img_y_crcb.img_cr));
+        return BAD_VALUE;
+      }
     } else {
       ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
       return BAD_VALUE;
@@ -221,8 +233,8 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
     uint32_t buffer_size = 0, stride = 0;
     auto ret = GetBufferSizeAndStride(stream, &buffer_size, &stride);
     if (ret == OK) {
-      sensor_buffer->plane.img.img = static_cast<uint8_t*>(
-          importer.lock(buffer, stream.producer_usage, buffer_size));
+      sensor_buffer->plane.img.img =
+          static_cast<uint8_t*>(importer.lock(buffer, usage, buffer_size));
       if (sensor_buffer->plane.img.img != nullptr) {
         sensor_buffer->plane.img.stride = stride;
         sensor_buffer->plane.img.buffer_size = buffer_size;
