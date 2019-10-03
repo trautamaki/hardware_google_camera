@@ -64,6 +64,7 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   status_t Initialize();
   uint32_t ParseCharacteristics(const Json::Value& root, ssize_t id);
   status_t GetTagFromName(const char* name, uint32_t* tag);
+  status_t WaitForQemuSfFakeCameraPropertyAvailable();
 
   static const char* kConfigurationFileLocation[];
 

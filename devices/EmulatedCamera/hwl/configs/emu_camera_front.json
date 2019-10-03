@@ -278,7 +278,6 @@
   ], 
   "android.request.availableCapabilities": [
    "BACKWARD_COMPATIBLE", 
-   "RAW", 
    "READ_SENSOR_SETTINGS", 
    "MANUAL_SENSOR", 
    "BURST_CAPTURE", 
@@ -716,11 +715,7 @@
    "33", 
    "176", 
    "144", 
-   "33331760", 
-   "32", 
-   "1920", 
-   "1440", 
-   "33320000"
+   "33331760"
   ], 
   "android.scaler.availableStallDurations": [
    "33", 
@@ -785,10 +780,6 @@
    "164736"
   ], 
   "android.scaler.availableStreamConfigurations": [
-   "32", 
-   "1920", 
-   "1440", 
-   "OUTPUT", 
    "35", 
    "1920", 
    "1440", 
@@ -1176,8 +1167,7 @@
    "0"
   ], 
   "android.statistics.info.availableLensShadingMapModes": [
-   "0", 
-   "1"
+   "0"
   ], 
   "android.statistics.info.maxFaceCount": [
    "10"
@@ -1464,7 +1454,6 @@
   ], 
   "android.request.availableCapabilities": [
    "BACKWARD_COMPATIBLE", 
-   "RAW", 
    "READ_SENSOR_SETTINGS", 
    "MANUAL_SENSOR", 
    "BURST_CAPTURE", 
@@ -1900,11 +1889,7 @@
    "33", 
    "176", 
    "144", 
-   "33331760", 
-   "32", 
-   "1920", 
-   "1440", 
-   "33320000"
+   "33331760"
   ], 
   "android.scaler.availableStallDurations": [
    "33", 
@@ -2148,10 +2133,6 @@
    "33", 
    "176", 
    "144", 
-   "OUTPUT", 
-   "32", 
-   "1920", 
-   "1440", 
    "OUTPUT"
   ], 
   "android.scaler.croppingType": [
@@ -2364,8 +2345,7 @@
    "0"
   ], 
   "android.statistics.info.availableLensShadingMapModes": [
-   "0", 
-   "1"
+   "0"
   ], 
   "android.statistics.info.maxFaceCount": [
    "10"
@@ -2653,7 +2633,6 @@
   ], 
   "android.request.availableCapabilities": [
    "BACKWARD_COMPATIBLE", 
-   "RAW", 
    "READ_SENSOR_SETTINGS", 
    "MANUAL_SENSOR", 
    "BURST_CAPTURE", 
@@ -3089,11 +3068,7 @@
    "33", 
    "176", 
    "144", 
-   "33331760", 
-   "32", 
-   "1920", 
-   "1440", 
-   "33326886"
+   "33331760"
   ], 
   "android.scaler.availableStallDurations": [
    "33", 
@@ -3333,10 +3308,6 @@
    "35", 
    "176", 
    "144", 
-   "OUTPUT", 
-   "32", 
-   "1920", 
-   "1440", 
    "OUTPUT"
   ], 
   "android.scaler.croppingType": [
@@ -3549,8 +3520,7 @@
    "0"
   ], 
   "android.statistics.info.availableLensShadingMapModes": [
-   "0", 
-   "1"
+   "0"
   ], 
   "android.statistics.info.maxFaceCount": [
    "10"

@@ -20,6 +20,7 @@
 
 #include <android-base/file.h>
 #include <android-base/strings.h>
+#include <cutils/properties.h>
 #include <hardware/camera_common.h>
 #include <log/log.h>
 
@@ -464,14 +465,61 @@ uint32_t EmulatedCameraProviderHwlImpl::ParseCharacteristics(
   return id;
 }
 
+status_t EmulatedCameraProviderHwlImpl::WaitForQemuSfFakeCameraPropertyAvailable() {
+  // Camera service may start running before qemu-props sets
+  // qemu.sf.fake_camera to any of the follwing four values:
+  // "none,front,back,both"; so we need to wait.
+  int num_attempts = 100;
+  char prop[PROPERTY_VALUE_MAX];
+  bool timeout = true;
+  for (int i = 0; i < num_attempts; ++i) {
+    if (property_get("qemu.sf.fake_camera", prop, nullptr) != 0) {
+      timeout = false;
+      break;
+    }
+    usleep(5000);
+  }
+  if (timeout) {
+    ALOGE("timeout (%dms) waiting for property qemu.sf.fake_camera to be set\n",
+          5 * num_attempts);
+    return BAD_VALUE;
+  }
+  return OK;
+}
+
 status_t EmulatedCameraProviderHwlImpl::Initialize() {
   // GCH expects all physical ids to be bigger than the logical ones.
   // Resize 'static_metadata_' to fit all logical devices and insert them
   // accordingly, push any remaining physical cameras in the back.
   std::string config;
-  static_metadata_.resize(ARRAY_SIZE(kConfigurationFileLocation));
   size_t logical_id = 0;
-  for (const auto& config_path : kConfigurationFileLocation) {
+  std::vector<const char*> configurationFileLocation;
+  char prop[PROPERTY_VALUE_MAX];
+  if (!property_get_bool("ro.kernel.qemu", false)) {
+    for (const auto& iter : kConfigurationFileLocation) {
+      configurationFileLocation.emplace_back(iter);
+    }
+  } else {
+    // Android Studio Emulator
+    if (!property_get_bool("ro.kernel.qemu.legacy_fake_camera", false)) {
+      if (WaitForQemuSfFakeCameraPropertyAvailable() == OK) {
+        property_get("qemu.sf.fake_camera", prop, nullptr);
+        if (strcmp(prop, "both") == 0) {
+          configurationFileLocation.emplace_back(kConfigurationFileLocation[0]);
+          configurationFileLocation.emplace_back(kConfigurationFileLocation[1]);
+        } else if (strcmp(prop, "front") == 0) {
+          configurationFileLocation.emplace_back(kConfigurationFileLocation[1]);
+          logical_id = 1;
+        } else if (strcmp(prop, "back") == 0) {
+          configurationFileLocation.emplace_back(kConfigurationFileLocation[0]);
+          logical_id = 1;
+        }
+      }
+    }
+  }
+  static_metadata_.resize(sizeof(configurationFileLocation));
+
+  for (const auto& config_path : configurationFileLocation) {
     if (!android::base::ReadFileToString(config_path, &config)) {
       ALOGW("%s: Could not open configuration file: %s", __FUNCTION__,
             config_path);
@@ -629,5 +677,4 @@ status_t EmulatedCameraProviderHwlImpl::CreateBufferAllocatorHwl(
   // Currently not supported
   return INVALID_OPERATION;
 }
-
 }  // namespace android

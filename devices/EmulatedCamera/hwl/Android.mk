@@ -1,6 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 
-ifneq ($(filter vsoc_x86 vsoc_x86_64 vsoc_arm64,$(TARGET_BOARD_PLATFORM)),)
+ifneq ($(filter sdk_gphone_% vsoc_%,$(TARGET_BOARD_PLATFORM)$(TARGET_PRODUCT)),)
 
 include $(CLEAR_VARS)
 

@@ -172,8 +172,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
                   is_input ? stream.format
                            : EmulatedSensor::OverrideFormat(stream.format),
               .producer_usage = is_input ? 0
-                                         : GRALLOC_USAGE_SW_WRITE_OFTEN |
-                                               GRALLOC_USAGE_SW_READ_OFTEN,
+                                         : GRALLOC_USAGE_HW_CAMERA_WRITE |
+                                               GRALLOC_USAGE_HW_CAMERA_READ,
               .consumer_usage = 0,
               .max_buffers = max_pipeline_depth_,
               .override_data_space = stream.data_space,
