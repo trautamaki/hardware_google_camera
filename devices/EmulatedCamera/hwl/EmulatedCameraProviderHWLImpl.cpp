@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2013-2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
-#include "EmulatedLogicalRequestState.h"
 #include "EmulatedSensor.h"
 #include "EmulatedTorchState.h"
 #include "camera_common.h"
@@ -35,9 +34,9 @@ namespace android {
 
 // Location of the camera configuration files.
 const char* EmulatedCameraProviderHwlImpl::kConfigurationFileLocation[] = {
-    "/vendor/etc/config/emu_camera_back.json",
-    "/vendor/etc/config/emu_camera_front.json",
-    "/vendor/etc/config/emu_camera_depth.json",
+    "/vendor/etc/config/camera.json",
+    "/vendor/etc/config/camera_front.json",
+    "/vendor/etc/config/camera_depth.json",
 };
 
 std::unique_ptr<EmulatedCameraProviderHwlImpl>
@@ -178,7 +177,6 @@ status_t GetUInt8Value(const Json::Value& value, uint32_t tag_id,
       if ((int_value >= 0) && (int_value <= UINT8_MAX) && (errno == 0)) {
         *result = int_value;
       } else {
-        ALOGE("%s: Failed parsing tag id 0x%x", __func__, tag_id);
         return BAD_VALUE;
       }
     } else {
@@ -208,7 +206,6 @@ status_t GetInt32Value(const Json::Value& value, uint32_t tag_id,
       if ((int_value >= INT32_MIN) && (int_value <= INT32_MAX) && (errno == 0)) {
         *result = int_value;
       } else {
-        ALOGE("%s: Failed parsing tag id 0x%x", __func__, tag_id);
         return BAD_VALUE;
       }
     } else {
@@ -225,7 +222,7 @@ status_t GetInt32Value(const Json::Value& value, uint32_t tag_id,
   return OK;
 }
 
-status_t GetInt64Value(const Json::Value& value, uint32_t tag_id,
+status_t GetInt64Value(const Json::Value& value, uint32_t /*tag_id*/,
                        int64_t* result /*out*/) {
   if (result == nullptr) {
     return BAD_VALUE;
@@ -233,12 +230,9 @@ status_t GetInt64Value(const Json::Value& value, uint32_t tag_id,
 
   if (value.isString()) {
     errno = 0;
-    auto int_value = strtoll(value.asCString(), nullptr, 10);
+    auto int_value = strtol(value.asCString(), nullptr, 10);
     if ((int_value >= INT64_MIN) && (int_value <= INT64_MAX) && (errno == 0)) {
       *result = int_value;
-    } else {
-      ALOGE("%s: Failed parsing tag id 0x%x", __func__, tag_id);
-      return BAD_VALUE;
     }
   } else {
     ALOGE(
@@ -251,7 +245,7 @@ status_t GetInt64Value(const Json::Value& value, uint32_t tag_id,
   return OK;
 }
 
-status_t GetFloatValue(const Json::Value& value, uint32_t tag_id,
+status_t GetFloatValue(const Json::Value& value, uint32_t /*tag_id*/,
                        float* result /*out*/) {
   if (result == nullptr) {
     return BAD_VALUE;
@@ -262,9 +256,6 @@ status_t GetFloatValue(const Json::Value& value, uint32_t tag_id,
     auto float_value = strtof(value.asCString(), nullptr);
     if (errno == 0) {
       *result = float_value;
-    } else {
-      ALOGE("%s: Failed parsing tag id 0x%x", __func__, tag_id);
-      return BAD_VALUE;
     }
   } else {
     ALOGE(
@@ -277,7 +268,7 @@ status_t GetFloatValue(const Json::Value& value, uint32_t tag_id,
   return OK;
 }
 
-status_t GetDoubleValue(const Json::Value& value, uint32_t tag_id,
+status_t GetDoubleValue(const Json::Value& value, uint32_t /*tag_id*/,
                         double* result /*out*/) {
   if (result == nullptr) {
     return BAD_VALUE;
@@ -288,9 +279,6 @@ status_t GetDoubleValue(const Json::Value& value, uint32_t tag_id,
     auto double_value = strtod(value.asCString(), nullptr);
     if (errno == 0) {
       *result = double_value;
-    } else {
-      ALOGE("%s: Failed parsing tag id 0x%x", __func__, tag_id);
-      return BAD_VALUE;
     }
   } else {
     ALOGE(
@@ -394,11 +382,11 @@ status_t InsertRationalTag(const Json::Value& json_value, uint32_t tag_id,
   return ret;
 }
 
-uint32_t EmulatedCameraProviderHwlImpl::ParseCharacteristics(
-    const Json::Value& value, ssize_t id) {
+status_t EmulatedCameraProviderHwlImpl::ParseCharacteristics(
+    const Json::Value& value) {
   if (!value.isObject()) {
     ALOGE("%s: Configuration root is not an object", __FUNCTION__);
-    return BAD_VALUE;
+    return false;
   }
 
   auto static_meta = HalCameraMetadata::Create(1, 10);
@@ -450,27 +438,18 @@ uint32_t EmulatedCameraProviderHwlImpl::ParseCharacteristics(
     return BAD_VALUE;
   }
 
-  // Although we don't support HdrPlus, this data is still required by HWL
+  // TODO: This probably should not be expected by GCH from every HWL impl.
+  //       Adding anyhow to pass CTS
   int32_t payload_frames = 0;
   static_meta->Set(google_camera_hal::kHdrplusPayloadFrames, &payload_frames, 1);
 
-  if (id < 0) {
-    static_metadata_.push_back(std::move(static_meta));
-    id = static_metadata_.size() - 1;
-  } else {
-    static_metadata_[id] = std::move(static_meta);
-  }
+  static_metadata_.push_back(std::move(static_meta));
 
-  return id;
+  return OK;
 }
 
 status_t EmulatedCameraProviderHwlImpl::Initialize() {
-  // GCH expects all physical ids to be bigger than the logical ones.
-  // Resize 'static_metadata_' to fit all logical devices and insert them
-  // accordingly, push any remaining physical cameras in the back.
   std::string config;
-  static_metadata_.resize(ARRAY_SIZE(kConfigurationFileLocation));
-  size_t logical_id = 0;
   for (const auto& config_path : kConfigurationFileLocation) {
     if (!android::base::ReadFileToString(config_path, &config)) {
       ALOGW("%s: Could not open configuration file: %s", __FUNCTION__,
@@ -486,57 +465,10 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
       return BAD_VALUE;
     }
 
-    if (root.isArray()) {
-      auto device_iter = root.begin();
-      auto result_id = ParseCharacteristics(*device_iter, logical_id);
-      if (logical_id != result_id) {
-        return result_id;
-      }
-      device_iter++;
-
-      // The first device entry is always the logical camera followed by the
-      // physical devices. They must be at least 2.
-      camera_id_map_.emplace(logical_id, std::vector<uint32_t>());
-      if (root.size() >= 3) {
-        camera_id_map_[logical_id].reserve(root.size() - 1);
-        while (device_iter != root.end()) {
-          auto physical_id = ParseCharacteristics(*device_iter, /*id*/ -1);
-          if (physical_id < 0) {
-            return physical_id;
-          }
-          camera_id_map_[logical_id].push_back(physical_id);
-
-          device_iter++;
-        }
-
-        auto physical_devices = std::make_unique<PhysicalDeviceMap>();
-        for (const auto& physical_device_id : camera_id_map_[logical_id]) {
-          physical_devices->emplace(
-              physical_device_id,
-              HalCameraMetadata::Clone(
-                  static_metadata_[physical_device_id].get()));
-        }
-        auto updated_logical_chars =
-            EmulatedLogicalRequestState::AdaptLogicalCharacteristics(
-                HalCameraMetadata::Clone(static_metadata_[logical_id].get()),
-                std::move(physical_devices));
-        if (updated_logical_chars.get() != nullptr) {
-          static_metadata_[logical_id].swap(updated_logical_chars);
-        } else {
-          ALOGE("%s: Failed to updating logical camera characteristics!",
-                __FUNCTION__);
-          return BAD_VALUE;
-        }
-      }
-    } else {
-      auto result_id = ParseCharacteristics(root, logical_id);
-      if (result_id != logical_id) {
-        return result_id;
-      }
-      camera_id_map_.emplace(logical_id, std::vector<uint32_t>());
+    auto ret = ParseCharacteristics(root);
+    if (ret != OK) {
+      return ret;
     }
-
-    logical_id++;
   }
 
   return OK;
@@ -567,27 +499,26 @@ status_t EmulatedCameraProviderHwlImpl::GetVisibleCameraIds(
     return BAD_VALUE;
   }
 
-  for (const auto& device : camera_id_map_) {
-    camera_ids->push_back(device.first);
+  for (size_t cameraId = 0; cameraId < static_metadata_.size(); cameraId++) {
+    camera_ids->push_back(cameraId);
   }
 
   return OK;
 }
 
 status_t EmulatedCameraProviderHwlImpl::CreateCameraDeviceHwl(
-    uint32_t camera_id, std::unique_ptr<CameraDeviceHwl>* camera_device_hwl) {
+    uint32_t cameraId, std::unique_ptr<CameraDeviceHwl>* camera_device_hwl) {
   if (camera_device_hwl == nullptr) {
     ALOGE("%s: camera_device_hwl is nullptr.", __FUNCTION__);
     return BAD_VALUE;
   }
 
-  if (camera_id_map_.find(camera_id) == camera_id_map_.end()) {
-    ALOGE("%s: Invalid camera id: %u", __func__, camera_id);
+  if (cameraId >= static_metadata_.size()) {
     return BAD_VALUE;
   }
 
   std::unique_ptr<HalCameraMetadata> meta =
-      HalCameraMetadata::Clone(static_metadata_[camera_id].get());
+      HalCameraMetadata::Clone(static_metadata_[cameraId].get());
 
   std::shared_ptr<EmulatedTorchState> torch_state;
   camera_metadata_ro_entry entry;
@@ -600,17 +531,11 @@ status_t EmulatedCameraProviderHwlImpl::CreateCameraDeviceHwl(
   }
 
   if (flash_supported) {
-    torch_state = std::make_shared<EmulatedTorchState>(camera_id, torch_cb_);
+    torch_state = std::make_shared<EmulatedTorchState>(cameraId, torch_cb_);
   }
 
-  auto physical_devices = std::make_unique<PhysicalDeviceMap>();
-  for (const auto& physical_device_id : camera_id_map_[camera_id]) {
-    physical_devices->emplace(
-        physical_device_id,
-        HalCameraMetadata::Clone(static_metadata_[physical_device_id].get()));
-  }
   *camera_device_hwl = EmulatedCameraDeviceHwlImpl::Create(
-      camera_id, std::move(meta), std::move(physical_devices), torch_state);
+      cameraId, std::move(meta), torch_state);
   if (*camera_device_hwl == nullptr) {
     ALOGE("%s: Cannot create EmulatedCameraDeviceHWlImpl.", __FUNCTION__);
     return BAD_VALUE;
@@ -626,8 +551,9 @@ status_t EmulatedCameraProviderHwlImpl::CreateBufferAllocatorHwl(
     return BAD_VALUE;
   }
 
-  // Currently not supported
-  return INVALID_OPERATION;
+  // TODO: Initialize an emulated buffer allocator
+
+  return OK;
 }
 
 }  // namespace android

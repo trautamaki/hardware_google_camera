@@ -24,7 +24,6 @@
 #include "EmulatedCameraDeviceHWLImpl.h"
 #include "EmulatedRequestProcessor.h"
 #include "EmulatedTorchState.h"
-#include "multicam_coordinator_hwl.h"
 #include "utils/StreamConfigurationMap.h"
 
 namespace android {
@@ -32,15 +31,12 @@ namespace android {
 using google_camera_hal::CameraDeviceHwl;
 using google_camera_hal::CameraDeviceSessionHwl;
 using google_camera_hal::HalStream;
-using google_camera_hal::HwlOfflinePipelineRole;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineRequest;
 using google_camera_hal::HwlSessionCallback;
-using google_camera_hal::IMulticamCoordinatorHwl;
 using google_camera_hal::StreamConfiguration;
 using google_camera_hal::RequestTemplate;
 using google_camera_hal::SessionDataKey;
-using google_camera_hal::Stream;
 using google_camera_hal::StreamConfiguration;
 
 // Implementation of CameraDeviceSessionHwl interface
@@ -48,7 +44,6 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
  public:
   static std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> Create(
       uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
-      PhysicalDeviceMapPtr physical_devices,
       std::shared_ptr<EmulatedTorchState> torch_state);
 
   virtual ~EmulatedCameraDeviceSessionHwlImpl();
@@ -76,13 +71,6 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
     return OK;
   }  // Noop for now
 
-  status_t GetRequiredIntputStreams(const StreamConfiguration& /*overall_config*/,
-                                    HwlOfflinePipelineRole /*pipeline_role*/,
-                                    std::vector<Stream>* /*streams*/) override {
-    // N/A
-    return INVALID_OPERATION;
-  }
-
   status_t GetConfiguredHalStream(
       uint32_t pipeline_id, std::vector<HalStream>* hal_streams) const override;
 
@@ -105,9 +93,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
       uint32_t physical_camera_id,
       std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
-  status_t SetSessionData(SessionDataKey /*key*/
-                                    ,
-                                    void* /*value*/) override {
+  status_t SetSessionData(SessionDataKey /*key*/, void* /*value*/) override {
     return OK;
   }  // Noop for now
 
@@ -124,10 +110,6 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
     return OK;
   }  // Noop for now
 
-  std::unique_ptr<IMulticamCoordinatorHwl> CreateMulticamCoordinatorHwl()
-      override {
-    return nullptr;
-  }
   // End override functions in CameraDeviceSessionHwl
 
  private:
@@ -135,10 +117,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
                       std::unique_ptr<HalCameraMetadata> static_meta);
 
   EmulatedCameraDeviceSessionHwlImpl(
-      PhysicalDeviceMapPtr physical_devices,
       std::shared_ptr<EmulatedTorchState> torch_state)
-      : torch_state_(torch_state),
-        physical_device_map_(std::move(physical_devices)) {
+      : torch_state_(torch_state) {
   }
 
   uint8_t max_pipeline_depth_ = 0;
@@ -154,7 +134,6 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   std::unique_ptr<StreamConfigurationMap> stream_coniguration_map_;
   SensorCharacteristics sensor_chars_;
   std::shared_ptr<EmulatedTorchState> torch_state_;
-  PhysicalDeviceMapPtr physical_device_map_;
 };
 
 }  // namespace android
