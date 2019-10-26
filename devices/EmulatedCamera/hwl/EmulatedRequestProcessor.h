@@ -22,7 +22,7 @@
 #include <queue>
 #include <thread>
 
-#include "EmulatedLogicalRequestState.h"
+#include "EmulatedRequestState.h"
 #include "EmulatedSensor.h"
 #include "hwl_types.h"
 
@@ -56,7 +56,7 @@ struct PendingRequest {
 
 class EmulatedRequestProcessor {
  public:
-  EmulatedRequestProcessor(uint32_t camera_id, sp<EmulatedSensor> sensor);
+  EmulatedRequestProcessor(uint32_t cameraId, sp<EmulatedSensor> sensor);
   virtual ~EmulatedRequestProcessor();
 
   // Process given pipeline requests and invoke the respective callback in a
@@ -71,8 +71,7 @@ class EmulatedRequestProcessor {
 
   status_t Flush();
 
-  status_t Initialize(std::unique_ptr<HalCameraMetadata> static_meta,
-                      PhysicalDeviceMapPtr physical_devices);
+  status_t Initialize(std::unique_ptr<HalCameraMetadata> static_meta);
 
  private:
   void RequestProcessorLoop();
@@ -110,7 +109,7 @@ class EmulatedRequestProcessor {
   std::queue<PendingRequest> pending_requests_;
   uint32_t camera_id_;
   sp<EmulatedSensor> sensor_;
-  std::unique_ptr<EmulatedLogicalRequestState>
+  std::unique_ptr<EmulatedRequestState>
       request_state_;  // Stores and handles 3A and related camera states.
   std::unique_ptr<HalCameraMetadata> last_settings_;
 

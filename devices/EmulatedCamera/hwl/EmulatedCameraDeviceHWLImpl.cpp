@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2013-2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,9 @@ namespace android {
 
 std::unique_ptr<CameraDeviceHwl> EmulatedCameraDeviceHwlImpl::Create(
     uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
-    PhysicalDeviceMapPtr physical_devices,
     std::shared_ptr<EmulatedTorchState> torch_state) {
   auto device = std::unique_ptr<EmulatedCameraDeviceHwlImpl>(
       new EmulatedCameraDeviceHwlImpl(camera_id, std::move(static_meta),
-                                      std::move(physical_devices),
                                       torch_state));
 
   if (device == nullptr) {
@@ -55,12 +53,11 @@ std::unique_ptr<CameraDeviceHwl> EmulatedCameraDeviceHwlImpl::Create(
 
 EmulatedCameraDeviceHwlImpl::EmulatedCameraDeviceHwlImpl(
     uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
-    PhysicalDeviceMapPtr physical_devices,
     std::shared_ptr<EmulatedTorchState> torch_state)
     : camera_id_(camera_id),
       static_metadata_(std::move(static_meta)),
-      physical_device_map_(std::move(physical_devices)),
-      torch_state_(torch_state) {}
+      torch_state_(torch_state) {
+}
 
 uint32_t EmulatedCameraDeviceHwlImpl::GetCameraId() const {
   return camera_id_;
@@ -100,27 +97,9 @@ status_t EmulatedCameraDeviceHwlImpl::GetCameraCharacteristics(
 }
 
 status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
-    uint32_t physical_camera_id,
-    std::unique_ptr<HalCameraMetadata>* characteristics) const {
-  if (characteristics == nullptr) {
-    return BAD_VALUE;
-  }
-
-  if (physical_device_map_.get() == nullptr) {
-    ALOGE("%s: Camera %d is not a logical device!", __func__, camera_id_);
-    return NO_INIT;
-  }
-
-  if (physical_device_map_->find(physical_camera_id) ==
-      physical_device_map_->end()) {
-    ALOGE("%s: Physical camera id %d is not part of logical camera %d!",
-          __func__, physical_camera_id, camera_id_);
-    return NO_INIT;
-  }
-
-  *characteristics = HalCameraMetadata::Clone(
-      physical_device_map_->at(physical_camera_id).get());
-
+    uint32_t /*physical_camera_id*/,
+    std::unique_ptr<HalCameraMetadata>* /*characteristics*/) const {
+  // TODO: Logical camera support
   return OK;
 }
 
@@ -147,8 +126,7 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
   std::unique_ptr<HalCameraMetadata> meta =
       HalCameraMetadata::Clone(static_metadata_.get());
   *session = EmulatedCameraDeviceSessionHwlImpl::Create(
-      camera_id_, std::move(meta), ClonePhysicalDeviceMap(physical_device_map_),
-      torch_state_);
+      camera_id_, std::move(meta), torch_state_);
   if (*session == nullptr) {
     ALOGE("%s: Cannot create EmulatedCameraDeviceSessionHWlImpl.", __FUNCTION__);
     return BAD_VALUE;
