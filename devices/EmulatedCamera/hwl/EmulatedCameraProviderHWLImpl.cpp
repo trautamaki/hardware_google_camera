@@ -20,6 +20,7 @@
 
 #include <android-base/file.h>
 #include <android-base/strings.h>
+#include <hardware/camera_common.h>
 #include <log/log.h>
 
 #include "EmulatedCameraDeviceHWLImpl.h"
@@ -27,7 +28,6 @@
 #include "EmulatedLogicalRequestState.h"
 #include "EmulatedSensor.h"
 #include "EmulatedTorchState.h"
-#include "camera_common.h"
 #include "utils/HWLUtils.h"
 #include "vendor_tag_defs.h"
 

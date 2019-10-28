@@ -18,10 +18,10 @@
 #define LOG_TAG "EmulatedCameraDeviceHwlImpl"
 #include "EmulatedCameraDeviceHWLImpl.h"
 
+#include <hardware/camera_common.h>
 #include <log/log.h>
 
 #include "EmulatedCameraDeviceSessionHWLImpl.h"
-#include "camera_common.h"
 #include "utils/HWLUtils.h"
 
 namespace android {

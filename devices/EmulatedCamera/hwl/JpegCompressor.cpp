@@ -19,8 +19,8 @@
 
 #include "JpegCompressor.h"
 
-#include <camera3.h>
 #include <cutils/properties.h>
+#include <hardware/camera3.h>
 #include <libyuv.h>
 #include <utils/Log.h>
 #include <utils/Trace.h>
