@@ -631,6 +631,25 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  ret = request_settings_->Get(ANDROID_CONTROL_BOKEH_MODE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    bool bokeh_mode_valid = false;
+    for (const auto& bokeh_cap : available_bokeh_caps_) {
+      if (bokeh_cap.mode == entry.data.u8[0]) {
+        bokeh_mode_ = entry.data.u8[0];
+        bokeh_mode_valid = true;
+        break;
+      }
+    }
+    if (!bokeh_mode_valid) {
+      ALOGE("%s: Unsupported bokeh mode %d!", __FUNCTION__, entry.data.u8[0]);
+      return BAD_VALUE;
+    }
+    if (bokeh_mode_ != ANDROID_CONTROL_BOKEH_MODE_OFF) {
+      scene_mode_ = ANDROID_CONTROL_SCENE_MODE_FACE_PRIORITY;
+    }
+  }
+
   // 3A modes are active in case the scene is disabled or set to face priority
   // or the control mode is not using scenes
   if ((scene_mode_ == ANDROID_CONTROL_SCENE_MODE_DISABLED) ||
@@ -843,6 +862,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   if (report_scene_flicker_) {
     result->result_metadata->Set(ANDROID_STATISTICS_SCENE_FLICKER,
                                  &current_scene_flicker_, 1);
+  }
+  if (report_bokeh_mode_) {
+    result->result_metadata->Set(ANDROID_CONTROL_BOKEH_MODE, &bokeh_mode_, 1);
   }
 
   return result;
@@ -1542,6 +1564,9 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
     return BAD_VALUE;
   }
 
+  report_bokeh_mode_ = available_results_.find(ANDROID_CONTROL_BOKEH_MODE) !=
+                       available_results_.end();
+
   if (is_backward_compatible_) {
     ret = static_metadata_->Get(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST,
                                 &entry);
@@ -1581,6 +1606,46 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
     } else {
       ALOGE("%s: No available video stabilization modes!", __FUNCTION__);
       return BAD_VALUE;
+    }
+
+    ret = static_metadata_->Get(ANDROID_CONTROL_AVAILABLE_BOKEH_CAPABILITIES,
+                                &entry);
+    if ((ret == OK) && (entry.count > 0)) {
+      if (entry.count % 3 != 0) {
+        ALOGE("%s: Invalid bokeh capabilities!", __FUNCTION__);
+        return BAD_VALUE;
+      }
+      StreamConfigurationMap stream_configuration_map(*static_metadata_);
+      std::set<StreamSize> yuv_sizes = stream_configuration_map.GetOutputSizes(
+          HAL_PIXEL_FORMAT_YCBCR_420_888);
+      bool hasBokehOff = false;
+      for (size_t i = 0; i < entry.count; i += 3) {
+        BokehCapability bokeh(entry.data.i32[i], entry.data.i32[i + 1],
+                              entry.data.i32[i + 2]);
+        if (bokeh.mode < ANDROID_CONTROL_BOKEH_MODE_OFF ||
+            bokeh.mode > ANDROID_CONTROL_BOKEH_MODE_CONTINUOUS) {
+          ALOGE("%s: Invalid bokeh mode %d", __FUNCTION__, bokeh.mode);
+          return BAD_VALUE;
+        }
+        if (bokeh.mode == ANDROID_CONTROL_BOKEH_MODE_OFF) {
+          hasBokehOff = true;
+          if (bokeh.max_width != 0 || bokeh.max_height != 0) {
+            ALOGE("%s: Invalid max width or height for BOKEH_MODE_OFF",
+                  __FUNCTION__);
+            return BAD_VALUE;
+          }
+        } else if (yuv_sizes.find({bokeh.max_width, bokeh.max_height}) ==
+                   yuv_sizes.end()) {
+          ALOGE("%s: Invalid max width or height for bokeh mode %d",
+                __FUNCTION__, bokeh.mode);
+          return BAD_VALUE;
+        }
+        available_bokeh_caps_.push_back(bokeh);
+      }
+      if (!hasBokehOff) {
+        ALOGE("%s: Off bokeh mode not supported!", __FUNCTION__);
+        return BAD_VALUE;
+      }
     }
 
     ret = static_metadata_->Get(ANDROID_CONTROL_MAX_REGIONS, &entry);

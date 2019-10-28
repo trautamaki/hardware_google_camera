@@ -149,6 +149,16 @@ class EmulatedRequestState {
     }
   };
 
+  struct BokehCapability {
+    int32_t mode, max_width, max_height;
+    BokehCapability()
+        : mode(ANDROID_CONTROL_BOKEH_MODE_OFF), max_width(-1), max_height(-1) {
+    }
+    BokehCapability(int32_t m, int32_t w, int32_t h)
+        : mode(m), max_width(w), max_height(h) {
+    }
+  };
+
   std::set<uint8_t> available_control_modes_;
   std::set<uint8_t> available_ae_modes_;
   std::set<uint8_t> available_af_modes_;
@@ -157,6 +167,7 @@ class EmulatedRequestState {
   std::set<uint8_t> available_antibanding_modes_;
   std::set<uint8_t> available_effects_;
   std::set<uint8_t> available_vstab_modes_;
+  std::vector<BokehCapability> available_bokeh_caps_;
   std::unordered_map<uint8_t, SceneOverride> scene_overrides_;
   std::vector<FPSRange> available_fps_ranges_;
   int32_t exposure_compensation_range_[2] = {0, 0};
@@ -182,6 +193,7 @@ class EmulatedRequestState {
   uint8_t af_trigger_ = ANDROID_CONTROL_AF_TRIGGER_IDLE;
   uint8_t ae_trigger_ = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
   FPSRange ae_target_fps_ = {0, 0};
+  uint8_t bokeh_mode_ = ANDROID_CONTROL_BOKEH_MODE_OFF;
   static const int32_t kMinimumStreamingFPS = 20;
   bool ae_lock_available_ = false;
   bool report_ae_lock_ = false;
@@ -230,6 +242,7 @@ class EmulatedRequestState {
   bool report_neutral_color_point_ = false;
   bool report_green_split_ = false;
   bool report_noise_profile_ = false;
+  bool report_bokeh_mode_ = false;
 
   // android.scaler.*
   int32_t scaler_crop_region_default_[4] = {0, 0, 0, 0};
