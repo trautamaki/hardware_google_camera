@@ -31,6 +31,7 @@ namespace android {
 std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl>
 EmulatedCameraDeviceSessionHwlImpl::Create(
     uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
+    PhysicalDeviceMapPtr physical_devices,
     std::shared_ptr<EmulatedTorchState> torch_state) {
   ATRACE_CALL();
   if (static_meta.get() == nullptr) {
@@ -38,7 +39,8 @@ EmulatedCameraDeviceSessionHwlImpl::Create(
   }
 
   auto session = std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl>(
-      new EmulatedCameraDeviceSessionHwlImpl(torch_state));
+      new EmulatedCameraDeviceSessionHwlImpl(std::move(physical_devices),
+                                             torch_state));
   if (session == nullptr) {
     ALOGE("%s: Creating EmulatedCameraDeviceSessionHwlImpl failed",
           __FUNCTION__);
@@ -78,8 +80,21 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
     return ret;
   }
 
+  auto logical_chars = std::make_unique<LogicalCharacteristics>();
+  logical_chars->emplace(camera_id_, sensor_chars_);
+  for (const auto& it : *physical_device_map_) {
+    SensorCharacteristics physical_chars;
+    auto stat = GetSensorCharacteristics(it.second.get(), &physical_chars);
+    if (stat == OK) {
+      logical_chars->emplace(it.first, physical_chars);
+    } else {
+      ALOGE("%s: Unable to extract physical device: %u characteristics %s (%d)",
+            __FUNCTION__, it.first, strerror(-ret), ret);
+      return ret;
+    }
+  }
   sp<EmulatedSensor> emulated_sensor = new EmulatedSensor();
-  ret = emulated_sensor->StartUp(sensor_chars_);
+  ret = emulated_sensor->StartUp(camera_id_, std::move(logical_chars));
   if (ret != OK) {
     ALOGE("%s: Failed on sensor start up %s (%d)", __FUNCTION__, strerror(-ret),
           ret);
@@ -90,7 +105,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
       std::make_unique<EmulatedRequestProcessor>(camera_id_, emulated_sensor);
 
   return request_processor_->Initialize(
-      HalCameraMetadata::Clone(static_metadata_.get()));
+      HalCameraMetadata::Clone(static_metadata_.get()),
+      ClonePhysicalDeviceMap(physical_device_map_));
 }
 
 EmulatedCameraDeviceSessionHwlImpl::~EmulatedCameraDeviceSessionHwlImpl() {
@@ -128,6 +144,16 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
           request_config, *stream_coniguration_map_, sensor_chars_)) {
     ALOGE("%s: Stream combination not supported!", __FUNCTION__);
     return BAD_VALUE;
+  }
+
+  if ((physical_camera_id != camera_id_) &&
+      (physical_device_map_.get() != nullptr)) {
+    if (physical_device_map_->find(physical_camera_id) ==
+        physical_device_map_->end()) {
+      ALOGE("%s: Camera: %d doesn't include physical device with id: %u",
+            __FUNCTION__, camera_id_, physical_camera_id);
+      return BAD_VALUE;
+    }
   }
 
   *pipeline_id = pipelines_.size();
@@ -274,8 +300,18 @@ uint32_t EmulatedCameraDeviceSessionHwlImpl::GetCameraId() const {
 
 std::vector<uint32_t> EmulatedCameraDeviceSessionHwlImpl::GetPhysicalCameraIds()
     const {
-  // TODO: Logical camera support
-  return std::vector<uint32_t>{};
+  if ((physical_device_map_.get() == nullptr) ||
+      (physical_device_map_->empty())) {
+    return std::vector<uint32_t>{};
+  }
+
+  std::vector<uint32_t> ret;
+  ret.reserve(physical_device_map_->size());
+  for (const auto& it : *physical_device_map_) {
+    ret.push_back(it.first);
+  }
+
+  return ret;
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::GetCameraCharacteristics(
@@ -296,14 +332,29 @@ status_t EmulatedCameraDeviceSessionHwlImpl::GetCameraCharacteristics(
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::GetPhysicalCameraCharacteristics(
-    uint32_t /*physical_camera_id*/,
+    uint32_t physical_camera_id,
     std::unique_ptr<HalCameraMetadata>* characteristics) const {
   ATRACE_CALL();
   if (characteristics == nullptr) {
     return BAD_VALUE;
   }
 
-  // TODO: Add logical stream support
+  if (physical_device_map_.get() == nullptr) {
+    ALOGE("%s: Camera: %d doesn't have physical device support!", __FUNCTION__,
+          camera_id_);
+    return BAD_VALUE;
+  }
+
+  if (physical_device_map_->find(physical_camera_id) ==
+      physical_device_map_->end()) {
+    ALOGE("%s: Camera: %d doesn't include physical device with id: %u",
+          __FUNCTION__, camera_id_, physical_camera_id);
+    return BAD_VALUE;
+  }
+
+  (*characteristics) = HalCameraMetadata::Clone(
+      physical_device_map_->at(physical_camera_id).get());
+
   return OK;
 }
 

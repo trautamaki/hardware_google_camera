@@ -134,6 +134,9 @@ struct SensorCharacteristics {
   uint32_t max_pipeline_depth = 0;
 };
 
+// Maps logical/physical camera ids to sensor characteristics
+typedef std::unordered_map<uint32_t, SensorCharacteristics> LogicalCharacteristics;
+
 class EmulatedSensor : private Thread, public virtual RefBase {
  public:
   EmulatedSensor();
@@ -168,11 +171,12 @@ class EmulatedSensor : private Thread, public virtual RefBase {
    * Power control
    */
 
-  status_t StartUp(SensorCharacteristics characteristics);
+  status_t StartUp(uint32_t logical_camera_id,
+                   std::unique_ptr<LogicalCharacteristics> logical_chars);
   status_t ShutDown();
 
   /*
-   * Settings control
+   * Physical camera settings control
    */
   struct SensorSettings {
     nsecs_t exposure_time = 0;
@@ -184,7 +188,10 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     bool report_noise_profile = false;
   };
 
-  void SetCurrentRequest(SensorSettings settings,
+  // Maps physical and logical camera ids to individual device settings
+  typedef std::unordered_map<uint32_t, SensorSettings> LogicalCameraSettings;
+
+  void SetCurrentRequest(std::unique_ptr<LogicalCameraSettings> logical_settings,
                          std::unique_ptr<HwlPipelineResult> result,
                          std::unique_ptr<Buffers> input_buffers,
                          std::unique_ptr<Buffers> output_buffers);
@@ -208,6 +215,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static const nsecs_t kDefaultExposureTime;
   static const int32_t kDefaultSensitivity;
   static const nsecs_t kDefaultFrameDuration;
+  static const nsecs_t kReturnResultThreshod;
   static const uint32_t kDefaultBlackLevelPattern[4];
   static const camera_metadata_rational kDefaultColorTransform[9];
   static const float kDefaultColorCorrectionGains[4];
@@ -218,17 +226,11 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
  private:
   /**
-   * Sensor characteristics
+   * Logical characteristics
    */
-  SensorCharacteristics chars_;
+  std::unique_ptr<LogicalCharacteristics> chars_;
 
-  float base_gain_factor_;
-
-  // While each row has to read out, reset, and then expose, the (reset +
-  // expose) sequence can be overlapped by other row readouts, so the final
-  // minimum frame duration is purely a function of row readout time, at least
-  // if there's a reasonable number of rows.
-  nsecs_t row_readout_time_;
+  uint32_t logical_camera_id_ = 0;
 
   static const nsecs_t kMinVerticalBlank;
 
@@ -254,14 +256,13 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static const int32_t kFixedBitPrecision;
   static const int32_t kSaturationPoint;
 
-  std::vector<float> lens_shading_map_;
   std::vector<int32_t> gamma_table_;
 
   Mutex control_mutex_;  // Lock before accessing control parameters
   // Start of control parameters
   Condition vsync_;
   bool got_vsync_;
-  SensorSettings current_settings_;
+  std::unique_ptr<LogicalCameraSettings> current_settings_;
   std::unique_ptr<HwlPipelineResult> current_result_;
   std::unique_ptr<Buffers> current_output_buffers_;
   std::unique_ptr<Buffers> current_input_buffers_;
@@ -281,14 +282,16 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   std::unique_ptr<EmulatedScene> scene_;
 
-  void CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width);
+  void CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width,
+                  const SensorCharacteristics& chars);
   enum RGBLayout { RGB, RGBA, ARGB };
   void CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,
-                  uint32_t stride, RGBLayout layout, uint32_t gain);
+                  uint32_t stride, RGBLayout layout, uint32_t gain,
+                  const SensorCharacteristics& chars);
   void CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width, uint32_t height,
-                     uint32_t gain);
-  void CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width,
-                    uint32_t height, uint32_t stride);
+                     uint32_t gain, const SensorCharacteristics& chars);
+  void CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width, uint32_t height,
+                    uint32_t stride, const SensorCharacteristics& chars);
 
   struct YUV420Frame {
     uint32_t width = 0;
@@ -297,11 +300,23 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   };
 
   status_t ProcessYUV420(const YUV420Frame& input, const YUV420Frame& output,
-                         uint32_t gain, bool reprocess_request);
+                         uint32_t gain, bool reprocess_request,
+                         const SensorCharacteristics& chars);
 
   inline int32_t ApplysRGBGamma(int32_t value, int32_t saturation);
 
   bool WaitForVSyncLocked(nsecs_t reltime);
+  void CalculateAndAppendNoiseProfile(float gain /*in ISO*/,
+                                      float base_gain_factor,
+                                      HalCameraMetadata* result /*out*/);
+
+  void ReturnResults(HwlPipelineCallback callback,
+                     std::unique_ptr<LogicalCameraSettings> settings,
+                     std::unique_ptr<HwlPipelineResult> result);
+
+  static float GetBaseGainFactor(float max_raw_value) {
+    return max_raw_value / EmulatedSensor::kSaturationElectrons;
+  }
 };
 
 }  // namespace android

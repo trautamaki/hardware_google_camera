@@ -85,20 +85,7 @@ const uint8_t EmulatedScene::kScene[EmulatedScene::kSceneWidth *
 
 EmulatedScene::EmulatedScene(int sensor_width_px, int sensor_height_px,
                              float sensor_sensitivity)
-    : sensor_width_(sensor_width_px),
-      sensor_height_(sensor_height_px),
-      hour_(12),
-      exposure_duration_(0.033f),
-      sensor_sensitivity_(sensor_sensitivity) {
-  // Map scene to sensor pixels
-  if (sensor_width_ > sensor_height_) {
-    map_div_ = (sensor_width_ / (kSceneWidth + 1)) + 1;
-  } else {
-    map_div_ = (sensor_height_ / (kSceneHeight + 1)) + 1;
-  }
-  offset_x_ = (kSceneWidth * map_div_ - sensor_width_) / 2;
-  offset_y_ = (kSceneHeight * map_div_ - sensor_height_) / 2;
-
+    : hour_(12), exposure_duration_(0.033f) {
   // Assume that sensor filters are sRGB primaries to start
   filter_r_[0] = 3.2406f;
   filter_r_[1] = -1.5372f;
@@ -112,9 +99,28 @@ EmulatedScene::EmulatedScene(int sensor_width_px, int sensor_height_px,
   filter_b_[0] = 0.0557f;
   filter_b_[1] = -0.2040f;
   filter_b_[2] = 1.0570f;
+
+  Initialize(sensor_width_px, sensor_height_px, sensor_sensitivity);
 }
 
 EmulatedScene::~EmulatedScene() {
+}
+
+void EmulatedScene::Initialize(int sensor_width_px, int sensor_height_px,
+                               float sensor_sensitivity) {
+  sensor_width_ = sensor_width_px;
+  sensor_height_ = sensor_height_px;
+  sensor_sensitivity_ = sensor_sensitivity;
+
+  // Map scene to sensor pixels
+  if (sensor_width_ > sensor_height_) {
+    map_div_ = (sensor_width_ / (kSceneWidth + 1)) + 1;
+  }
+  else {
+    map_div_ = (sensor_height_ / (kSceneHeight + 1)) + 1;
+  }
+  offset_x_ = (kSceneWidth * map_div_ - sensor_width_) / 2;
+  offset_y_ = (kSceneHeight * map_div_ - sensor_height_) / 2;
 }
 
 void EmulatedScene::SetColorFilterXYZ(float rX, float rY, float rZ, float grX,

@@ -31,8 +31,7 @@ using google_camera_hal::ErrorCode;
 using google_camera_hal::MessageType;
 using google_camera_hal::NotifyMessage;
 
-JpegCompressor::JpegCompressor(std::unique_ptr<ExifUtils> exif_utils)
-    : exif_utils_(std::move(exif_utils)) {
+JpegCompressor::JpegCompressor() {
   ATRACE_CALL();
   char value[PROPERTY_VALUE_MAX];
   if (property_get("ro.product.vendor.manufacturer", value, "unknown") <= 0) {
@@ -110,9 +109,9 @@ void JpegCompressor::CompressYUV420(std::unique_ptr<JpegYUV420Job> job) {
   size_t app1_buffer_size = 0;
   std::vector<uint8_t> thumbnail_jpeg_buffer;
   size_t encoded_thumbnail_size = 0;
-  if ((exif_utils_.get() != nullptr) &&
+  if ((job->exif_utils.get() != nullptr) &&
       (job->result_metadata.get() != nullptr)) {
-    if (exif_utils_->Initialize()) {
+    if (job->exif_utils->Initialize()) {
       camera_metadata_ro_entry_t entry;
       size_t thumbnail_width = 0;
       size_t thumbnail_height = 0;
@@ -150,8 +149,8 @@ void JpegCompressor::CompressYUV420(std::unique_ptr<JpegYUV420Job> job) {
         }
       }
 
-      if (exif_utils_->SetFromMetadata(*job->result_metadata, job->input->width,
-                                       job->input->height)) {
+      if (job->exif_utils->SetFromMetadata(
+              *job->result_metadata, job->input->width, job->input->height)) {
         if (!thumb_yuv420_frame.empty()) {
           thumbnail_jpeg_buffer.resize(64 * 1024);  // APP1 is limited by 64k
           encoded_thumbnail_size = CompressYUV420Frame(
@@ -170,14 +169,14 @@ void JpegCompressor::CompressYUV420(std::unique_ptr<JpegYUV420Job> job) {
           }
         }
 
-        exif_utils_->SetMake(exif_make_);
-        exif_utils_->SetModel(exif_model_);
-        if (exif_utils_->GenerateApp1(thumbnail_jpeg_buffer.empty()
-                                          ? nullptr
-                                          : thumbnail_jpeg_buffer.data(),
-                                      encoded_thumbnail_size)) {
-          app1_buffer = exif_utils_->GetApp1Buffer();
-          app1_buffer_size = exif_utils_->GetApp1Length();
+        job->exif_utils->SetMake(exif_make_);
+        job->exif_utils->SetModel(exif_model_);
+        if (job->exif_utils->GenerateApp1(thumbnail_jpeg_buffer.empty()
+                                              ? nullptr
+                                              : thumbnail_jpeg_buffer.data(),
+                                          encoded_thumbnail_size)) {
+          app1_buffer = job->exif_utils->GetApp1Buffer();
+          app1_buffer_size = job->exif_utils->GetApp1Length();
         } else {
           ALOGE("%s: Unable to generate App1 buffer", __FUNCTION__);
         }

@@ -38,7 +38,7 @@ EmulatedRequestProcessor::EmulatedRequestProcessor(uint32_t camera_id,
                                                    sp<EmulatedSensor> sensor)
     : camera_id_(camera_id),
       sensor_(sensor),
-      request_state_(std::make_unique<EmulatedRequestState>(camera_id)) {
+      request_state_(std::make_unique<EmulatedLogicalRequestState>(camera_id)) {
   ATRACE_CALL();
   request_thread_ = std::thread([this] { this->RequestProcessorLoop(); });
 }
@@ -271,7 +271,9 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
   buffer->pipeline_id = pipeline_id;
   buffer->callback = callback;
   buffer->frame_number = frame_number;
-  buffer->camera_id = camera_id_;
+  buffer->camera_id = emulated_stream.is_physical_camera_stream
+                          ? emulated_stream.physical_camera_id
+                          : camera_id_;
   buffer->is_input = stream.is_input;
   // In case buffer processing is successful, flip this flag accordingly
   buffer->stream_buffer.status = BufferStatus::kError;
@@ -339,29 +341,53 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
         auto frame_number = request.output_buffers->at(0)->frame_number;
         auto notify_callback = request.output_buffers->at(0)->callback;
         auto pipeline_id = request.output_buffers->at(0)->pipeline_id;
-        EmulatedSensor::SensorSettings settings;
-
-        // Repeating requests usually include valid settings only during the
-        // initial call. Afterwards an invalid settings pointer means that there
-        // are no changes in the parameters and Hal should re-use the last valid
-        // values.
-        if (request.settings.get() != nullptr) {
-          ret = request_state_->InitializeSensorSettings(
-              HalCameraMetadata::Clone(request.settings.get()), &settings);
-          last_settings_ = HalCameraMetadata::Clone(request.settings.get());
-        } else {
-          ret = request_state_->InitializeSensorSettings(
-              HalCameraMetadata::Clone(last_settings_.get()), &settings);
-        }
 
         auto output_buffers = AcquireBuffers(request.output_buffers.get());
-        if (!output_buffers->empty() && (ret == OK)) {
-          auto result =
-              request_state_->InitializeResult(pipeline_id, frame_number);
-          auto input_buffers = AcquireBuffers(request.input_buffers.get());
-          sensor_->SetCurrentRequest(settings, std::move(result),
-                                     std::move(input_buffers),
-                                     std::move(output_buffers));
+        auto input_buffers = AcquireBuffers(request.input_buffers.get());
+        if (!output_buffers->empty()) {
+          std::unique_ptr<EmulatedSensor::LogicalCameraSettings> logical_settings =
+              std::make_unique<EmulatedSensor::LogicalCameraSettings>();
+
+          std::unique_ptr<std::set<uint32_t>> physical_camera_output_ids =
+              std::make_unique<std::set<uint32_t>>();
+          for (const auto& it : *output_buffers) {
+            if (it->camera_id != camera_id_) {
+              physical_camera_output_ids->emplace(it->camera_id);
+            }
+          }
+
+          // Repeating requests usually include valid settings only during the
+          // initial call. Afterwards an invalid settings pointer means that
+          // there are no changes in the parameters and Hal should re-use the
+          // last valid values.
+          // TODO: Add support for individual physical camera requests.
+          if (request.settings.get() != nullptr) {
+            ret = request_state_->InitializeLogicalSettings(
+                HalCameraMetadata::Clone(request.settings.get()),
+                std::move(physical_camera_output_ids), logical_settings.get());
+            last_settings_ = HalCameraMetadata::Clone(request.settings.get());
+          } else {
+            ret = request_state_->InitializeLogicalSettings(
+                HalCameraMetadata::Clone(last_settings_.get()),
+                std::move(physical_camera_output_ids), logical_settings.get());
+          }
+
+          if (ret == OK) {
+            auto result = request_state_->InitializeLogicalResult(pipeline_id,
+                                                                  frame_number);
+            sensor_->SetCurrentRequest(
+                std::move(logical_settings), std::move(result),
+                std::move(input_buffers), std::move(output_buffers));
+          } else {
+            NotifyMessage msg{.type = MessageType::kError,
+                              .message.error = {
+                                  .frame_number = frame_number,
+                                  .error_stream_id = -1,
+                                  .error_code = ErrorCode::kErrorResult,
+                              }};
+
+            notify_callback.notify(pipeline_id, msg);
+          }
         } else {
           // No further processing is needed, just fail the result which will
           // complete this request.
@@ -386,9 +412,11 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
 }
 
 status_t EmulatedRequestProcessor::Initialize(
-    std::unique_ptr<HalCameraMetadata> static_meta) {
+    std::unique_ptr<HalCameraMetadata> static_meta,
+    PhysicalDeviceMapPtr physical_devices) {
   std::lock_guard<std::mutex> lock(process_mutex_);
-  return request_state_->Initialize(std::move(static_meta));
+  return request_state_->Initialize(std::move(static_meta),
+                                    std::move(physical_devices));
 }
 
 status_t EmulatedRequestProcessor::GetDefaultRequest(

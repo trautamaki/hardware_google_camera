@@ -57,6 +57,9 @@ const int32_t EmulatedSensor::kSupportedSensitivityRange[2] = {100, 1600};
 const int32_t EmulatedSensor::kDefaultSensitivity = 100;  // ISO
 const nsecs_t EmulatedSensor::kDefaultExposureTime = ms2ns(15);
 const nsecs_t EmulatedSensor::kDefaultFrameDuration = ms2ns(33);
+// Deadline within we should return the results as soon as possible to
+// avoid skewing the frame cycle due to external delays.
+const nsecs_t EmulatedSensor::kReturnResultThreshod = 3 * kDefaultFrameDuration;
 
 // Sensor defaults
 const uint8_t EmulatedSensor::kSupportedColorFilterArrangement =
@@ -328,45 +331,45 @@ bool EmulatedSensor::IsStreamCombinationSupported(
   return true;
 }
 
-status_t EmulatedSensor::StartUp(SensorCharacteristics characteristics) {
-  ALOGV("%s: E", __FUNCTION__);
-
-  if (!AreCharacteristicsSupported(characteristics)) {
-    ALOGE("%s: Sensor characteristics not supported!", __FUNCTION__);
-    return BAD_VALUE;
-  }
-
-  std::unique_ptr<ExifUtils> exif_utils(ExifUtils::Create(characteristics));
-
+status_t EmulatedSensor::StartUp(
+    uint32_t logical_camera_id,
+    std::unique_ptr<LogicalCharacteristics> logical_chars) {
   if (isRunning()) {
     return OK;
   }
 
-  chars_ = characteristics;
-  scene_ = std::make_unique<EmulatedScene>(chars_.width, chars_.height,
-                                           kElectronsPerLuxSecond);
-  scene_->SetColorFilterXYZ(
-      chars_.color_filter.rX, chars_.color_filter.rY, chars_.color_filter.rZ,
-      chars_.color_filter.grX, chars_.color_filter.grY, chars_.color_filter.grZ,
-      chars_.color_filter.gbX, chars_.color_filter.gbY, chars_.color_filter.gbZ,
-      chars_.color_filter.bX, chars_.color_filter.bY, chars_.color_filter.bZ);
-  row_readout_time_ = chars_.frame_duration_range[0] / chars_.height;
-  base_gain_factor_ =
-      (float)chars_.max_raw_value / EmulatedSensor::kSaturationElectrons;
-  jpeg_compressor_ = std::make_unique<JpegCompressor>(std::move(exif_utils));
-
-  if ((chars_.lens_shading_map_size[0] > 0) &&
-      (chars_.lens_shading_map_size[1] > 0)) {
-    // Perfect lens, no actual shading needed.
-    lens_shading_map_.resize(
-        chars_.lens_shading_map_size[0] * chars_.lens_shading_map_size[1] * 4,
-        1.f);
+  if (logical_chars.get() == nullptr) {
+    return BAD_VALUE;
   }
+
+  auto device_chars = logical_chars->find(logical_camera_id);
+  if (device_chars == logical_chars->end()) {
+    ALOGE(
+        "%s: Logical camera id: %u absent from logical camera characteristics!",
+        __FUNCTION__, logical_camera_id);
+    return BAD_VALUE;
+  }
+
+  for (const auto& it : *logical_chars) {
+    if (!AreCharacteristicsSupported(it.second)) {
+      ALOGE("%s: Sensor characteristics for camera id: %u not supported!",
+            __FUNCTION__, it.first);
+      return BAD_VALUE;
+    }
+  }
+
+  logical_camera_id_ = logical_camera_id;
+  chars_ = std::move(logical_chars);
+  scene_ = std::make_unique<EmulatedScene>(device_chars->second.width,
+                                           device_chars->second.height,
+                                           kElectronsPerLuxSecond);
+  jpeg_compressor_ = std::make_unique<JpegCompressor>();
 
   auto res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);
   if (res != OK) {
     ALOGE("Unable to start up sensor capture thread: %d", res);
   }
+
   return res;
 }
 
@@ -379,12 +382,13 @@ status_t EmulatedSensor::ShutDown() {
   return res;
 }
 
-void EmulatedSensor::SetCurrentRequest(SensorSettings settings,
-                                       std::unique_ptr<HwlPipelineResult> result,
-                                       std::unique_ptr<Buffers> input_buffers,
-                                       std::unique_ptr<Buffers> output_buffers) {
+void EmulatedSensor::SetCurrentRequest(
+    std::unique_ptr<LogicalCameraSettings> logical_settings,
+    std::unique_ptr<HwlPipelineResult> result,
+    std::unique_ptr<Buffers> input_buffers,
+    std::unique_ptr<Buffers> output_buffers) {
   Mutex::Autolock lock(control_mutex_);
-  current_settings_ = settings;
+  current_settings_ = std::move(logical_settings);
   current_result_ = std::move(result);
   current_input_buffers_ = std::move(input_buffers);
   current_output_buffers_ = std::move(output_buffers);
@@ -415,8 +419,7 @@ status_t EmulatedSensor::Flush() {
 
   // First recreate the jpeg compressor. This will abort any ongoing processing
   // and flush any pending jobs.
-  std::unique_ptr<ExifUtils> exif_utils(ExifUtils::Create(chars_));
-  jpeg_compressor_ = std::make_unique<JpegCompressor>(std::move(exif_utils));
+  jpeg_compressor_ = std::make_unique<JpegCompressor>();
 
   // Then return any pending frames here
   if ((current_input_buffers_.get() != nullptr) &&
@@ -464,11 +467,11 @@ bool EmulatedSensor::threadLoop() {
   std::unique_ptr<Buffers> next_buffers;
   std::unique_ptr<Buffers> next_input_buffer;
   std::unique_ptr<HwlPipelineResult> next_result;
-  SensorSettings settings;
+  std::unique_ptr<LogicalCameraSettings> settings;
   HwlPipelineCallback callback = {nullptr, nullptr};
   {
     Mutex::Autolock lock(control_mutex_);
-    settings = current_settings_;
+    std::swap(settings, current_settings_);
     std::swap(next_buffers, current_output_buffers_);
     std::swap(next_input_buffer, current_input_buffers_);
     std::swap(next_result, current_result_);
@@ -479,13 +482,16 @@ bool EmulatedSensor::threadLoop() {
     vsync_.signal();
   }
 
-  if (settings.frame_duration == 0) {
-    settings.frame_duration = EmulatedSensor::kSupportedFrameDurationRange[0];
+  auto frame_duration = EmulatedSensor::kSupportedFrameDurationRange[0];
+  // Frame duration must always be the same among all physical devices
+  if ((settings.get() != nullptr) && (!settings->empty())) {
+    frame_duration = settings->begin()->second.frame_duration;
   }
+
   nsecs_t start_real_time = systemTime();
   // Stagefright cares about system time for timestamps, so base simulated
   // time on that.
-  nsecs_t frame_end_real_time = start_real_time + settings.frame_duration;
+  nsecs_t frame_end_real_time = start_real_time + frame_duration;
 
   /**
    * Stage 2: Capture new image
@@ -515,7 +521,7 @@ bool EmulatedSensor::threadLoop() {
     }
   }
 
-  if (next_buffers != nullptr) {
+  if ((next_buffers != nullptr) && (settings != nullptr)) {
     callback = next_buffers->at(0)->callback;
     if (callback.notify != nullptr) {
       NotifyMessage msg{
@@ -525,49 +531,52 @@ bool EmulatedSensor::threadLoop() {
               .timestamp_ns = static_cast<uint64_t>(next_capture_time_)}};
       callback.notify(next_result->pipeline_id, msg);
     }
-    ALOGVV("Starting next capture: Exposure: %f ms, gain: %d",
-           ns2ms(settings.exposureTime), gain);
-    scene_->SetExposureDuration((float)settings.exposure_time / 1e9);
-    scene_->CalculateScene(next_capture_time_);
-    next_result->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP,
-                                      &next_capture_time_, 1);
-    if (settings.lens_shading_map_mode ==
-        ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_ON) {
-      next_result->result_metadata->Set(ANDROID_STATISTICS_LENS_SHADING_MAP,
-                                        lens_shading_map_.data(),
-                                        lens_shading_map_.size());
-    }
-    if (settings.report_neutral_color_point) {
-      next_result->result_metadata->Set(ANDROID_SENSOR_NEUTRAL_COLOR_POINT,
-                                        kNeutralColorPoint,
-                                        ARRAY_SIZE(kNeutralColorPoint));
-    }
-    if (settings.report_green_split) {
-      next_result->result_metadata->Set(ANDROID_SENSOR_GREEN_SPLIT,
-                                        &kGreenSplit, 1);
-    }
-    if (settings.report_noise_profile) {
-      // TODO: pass the results as parameter to capture instead of re-calculating
-      float total_gain = settings.gain / 100.0 * base_gain_factor_;
-      float noise_var_gain = total_gain * total_gain;
-      float read_noise_var =
-          kReadNoiseVarBeforeGain * noise_var_gain + kReadNoiseVarAfterGain;
-      // Noise profile is the same across all 4 CFA channels
-      double noise_profile[2 * 4] = {
-          noise_var_gain, read_noise_var, noise_var_gain, read_noise_var,
-          noise_var_gain, read_noise_var, noise_var_gain, read_noise_var};
-      next_result->result_metadata->Set(ANDROID_SENSOR_NOISE_PROFILE,
-                                        noise_profile,
-                                        ARRAY_SIZE(noise_profile));
-    }
-
     auto b = next_buffers->begin();
     while (b != next_buffers->end()) {
+      auto device_settings = settings->find((*b)->camera_id);
+      if (device_settings == settings->end()) {
+        ALOGE("%s: Sensor settings absent for device: %d", __func__,
+              (*b)->camera_id);
+        b = next_buffers->erase(b);
+        continue;
+      }
+
+      auto device_chars = chars_->find((*b)->camera_id);
+      if (device_chars == chars_->end()) {
+        ALOGE("%s: Sensor characteristics absent for device: %d", __func__,
+              (*b)->camera_id);
+        b = next_buffers->erase(b);
+        continue;
+      }
+
+      ALOGVV("Starting next capture: Exposure: %" PRIu64 " ms, gain: %d",
+             ns2ms(device_settings->second.exposure_time),
+             device_settings->second.gain);
+
+      scene_->Initialize(device_chars->second.width,
+                         device_chars->second.height, kElectronsPerLuxSecond);
+      scene_->SetExposureDuration((float)device_settings->second.exposure_time /
+                                  1e9);
+      scene_->SetColorFilterXYZ(device_chars->second.color_filter.rX,
+                                device_chars->second.color_filter.rY,
+                                device_chars->second.color_filter.rZ,
+                                device_chars->second.color_filter.grX,
+                                device_chars->second.color_filter.grY,
+                                device_chars->second.color_filter.grZ,
+                                device_chars->second.color_filter.gbX,
+                                device_chars->second.color_filter.gbY,
+                                device_chars->second.color_filter.gbZ,
+                                device_chars->second.color_filter.bX,
+                                device_chars->second.color_filter.bY,
+                                device_chars->second.color_filter.bZ);
+      scene_->CalculateScene(next_capture_time_);
+
       (*b)->stream_buffer.status = BufferStatus::kOk;
       switch ((*b)->format) {
         case HAL_PIXEL_FORMAT_RAW16:
           if (!reprocess_request) {
-            CaptureRaw((*b)->plane.img.img, settings.gain, (*b)->width);
+            CaptureRaw((*b)->plane.img.img, device_settings->second.gain,
+                       (*b)->width, device_chars->second);
           } else {
             ALOGE("%s: Reprocess requests with output format %x no supported!",
                   __FUNCTION__, (*b)->format);
@@ -577,7 +586,8 @@ bool EmulatedSensor::threadLoop() {
         case HAL_PIXEL_FORMAT_RGB_888:
           if (!reprocess_request) {
             CaptureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
-                       (*b)->plane.img.stride, RGBLayout::RGB, settings.gain);
+                       (*b)->plane.img.stride, RGBLayout::RGB,
+                       device_settings->second.gain, device_chars->second);
           } else {
             ALOGE("%s: Reprocess requests with output format %x no supported!",
                   __FUNCTION__, (*b)->format);
@@ -587,7 +597,8 @@ bool EmulatedSensor::threadLoop() {
         case HAL_PIXEL_FORMAT_RGBA_8888:
           if (!reprocess_request) {
             CaptureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
-                       (*b)->plane.img.stride, RGBLayout::RGBA, settings.gain);
+                       (*b)->plane.img.stride, RGBLayout::RGBA,
+                       device_settings->second.gain, device_chars->second);
           } else {
             ALOGE("%s: Reprocess requests with output format %x no supported!",
                   __FUNCTION__, (*b)->format);
@@ -622,14 +633,17 @@ bool EmulatedSensor::threadLoop() {
                                    .height = jpeg_input->height,
                                    .planes = jpeg_input->yuv_planes};
 
-            auto ret = ProcessYUV420(yuv_input, yuv_output, settings.gain,
-                                     reprocess_request);
+            auto ret = ProcessYUV420(yuv_input, yuv_output,
+                                     device_settings->second.gain,
+                                     reprocess_request, device_chars->second);
             if (ret != 0) {
               (*b)->stream_buffer.status = BufferStatus::kError;
               break;
             }
 
             auto jpeg_job = std::make_unique<JpegYUV420Job>();
+            jpeg_job->exif_utils = std::unique_ptr<ExifUtils>(
+                ExifUtils::Create(device_chars->second));
             jpeg_job->input = std::move(jpeg_input);
             // If jpeg compression is successful, then the jpeg compressor
             // must set the corresponding status.
@@ -659,8 +673,9 @@ bool EmulatedSensor::threadLoop() {
           YUV420Frame yuv_output{.width = (*b)->width,
                                  .height = (*b)->height,
                                  .planes = (*b)->plane.img_y_crcb};
-          auto ret = ProcessYUV420(yuv_input, yuv_output, settings.gain,
-                                   reprocess_request);
+          auto ret =
+              ProcessYUV420(yuv_input, yuv_output, device_settings->second.gain,
+                            reprocess_request, device_chars->second);
           if (ret != 0) {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
@@ -668,8 +683,9 @@ bool EmulatedSensor::threadLoop() {
         case HAL_PIXEL_FORMAT_Y16:
           if (!reprocess_request) {
             if ((*b)->dataSpace == HAL_DATASPACE_DEPTH) {
-              CaptureDepth((*b)->plane.img.img, settings.gain, (*b)->width,
-                           (*b)->height, (*b)->plane.img.stride);
+              CaptureDepth((*b)->plane.img.img, device_settings->second.gain,
+                           (*b)->width, (*b)->height, (*b)->plane.img.stride,
+                           device_chars->second);
             } else {
               ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__,
                     (*b)->format, (*b)->dataSpace);
@@ -699,14 +715,25 @@ bool EmulatedSensor::threadLoop() {
     next_input_buffer->clear();
   }
 
-  if ((callback.process_pipeline_result != nullptr) &&
-      (next_result.get() != nullptr) &&
-      (next_result->result_metadata.get() != nullptr)) {
-    callback.process_pipeline_result(std::move(next_result));
+  nsecs_t work_done_real_time = systemTime();
+  // Returning the results at this point is not entirely correct from timing
+  // perspective. Under ideal conditions where 'ReturnResults' completes
+  // in less than 'time_accuracy' we need to return the results after the
+  // frame cycle expires. However under real conditions various system
+  // components like SurfaceFlinger, Encoder, LMK etc. could be consuming most
+  // of the resources and the duration of "ReturnResults" can get comparable to
+  // 'kDefaultFrameDuration'. This will skew the frame cycle and can result in
+  // potential frame drops. To avoid this scenario when we are running under
+  // tight deadlines (less than 'kReturnResultThreshod') try to return the
+  // results immediately. In all other cases with more relaxed deadlines
+  // the occasional bump during 'ReturnResults' should not have any
+  // noticeable effect.
+  if ((work_done_real_time + kReturnResultThreshod) > frame_end_real_time) {
+    ReturnResults(callback, std::move(settings), std::move(next_result));
   }
 
+  work_done_real_time = systemTime();
   ALOGVV("Sensor vertical blanking interval");
-  nsecs_t work_done_real_time = systemTime();
   const nsecs_t time_accuracy = 2e6;  // 2 ms of imprecision is ok
   if (work_done_real_time < frame_end_real_time - time_accuracy) {
     timespec t;
@@ -722,12 +749,120 @@ bool EmulatedSensor::threadLoop() {
   ALOGVV("Frame cycle took %" PRIu64 "  ms, target %" PRIu64 " ms",
          ns2ms(end_real_time - start_real_time), ns2ms(frame_duration));
 
+  ReturnResults(callback, std::move(settings), std::move(next_result));
+
   return true;
 };
 
-void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width) {
+void EmulatedSensor::ReturnResults(
+    HwlPipelineCallback callback,
+    std::unique_ptr<LogicalCameraSettings> settings,
+    std::unique_ptr<HwlPipelineResult> result) {
+  if ((callback.process_pipeline_result != nullptr) &&
+      (result.get() != nullptr) && (result->result_metadata.get() != nullptr)) {
+    auto logical_settings = settings->find(logical_camera_id_);
+    if (logical_settings == settings->end()) {
+      ALOGE("%s: Logical camera id: %u not found in settings!", __FUNCTION__,
+            logical_camera_id_);
+      return;
+    }
+    auto device_chars = chars_->find(logical_camera_id_);
+    if (device_chars == chars_->end()) {
+      ALOGE("%s: Sensor characteristics absent for device: %d", __func__,
+            logical_camera_id_);
+      return;
+    }
+
+    result->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP, &next_capture_time_,
+                                 1);
+    if (logical_settings->second.lens_shading_map_mode ==
+        ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_ON) {
+      if ((device_chars->second.lens_shading_map_size[0] > 0) &&
+          (device_chars->second.lens_shading_map_size[1] > 0)) {
+        // Perfect lens, no actual shading needed.
+        std::vector<float> lens_shading_map(
+            device_chars->second.lens_shading_map_size[0] *
+                device_chars->second.lens_shading_map_size[1] * 4,
+            1.f);
+
+        result->result_metadata->Set(ANDROID_STATISTICS_LENS_SHADING_MAP,
+                                     lens_shading_map.data(),
+                                     lens_shading_map.size());
+      }
+    }
+    if (logical_settings->second.report_neutral_color_point) {
+      result->result_metadata->Set(ANDROID_SENSOR_NEUTRAL_COLOR_POINT,
+                                   kNeutralColorPoint,
+                                   ARRAY_SIZE(kNeutralColorPoint));
+    }
+    if (logical_settings->second.report_green_split) {
+      result->result_metadata->Set(ANDROID_SENSOR_GREEN_SPLIT, &kGreenSplit, 1);
+    }
+
+    if (logical_settings->second.report_noise_profile) {
+      CalculateAndAppendNoiseProfile(
+          logical_settings->second.gain,
+          GetBaseGainFactor(device_chars->second.max_raw_value),
+          result->result_metadata.get());
+    }
+
+    if (!result->physical_camera_results.empty()) {
+      for (auto& it : result->physical_camera_results) {
+        auto physical_settings = settings->find(it.first);
+        if (physical_settings == settings->end()) {
+          ALOGE("%s: Physical settings for camera id: %u are absent!",
+                __FUNCTION__, it.first);
+          continue;
+        }
+
+        // Sensor timestamp for all physical devices must be the same.
+        it.second->Set(ANDROID_SENSOR_TIMESTAMP, &next_capture_time_, 1);
+        if (physical_settings->second.report_neutral_color_point) {
+          it.second->Set(ANDROID_SENSOR_NEUTRAL_COLOR_POINT, kNeutralColorPoint,
+                         ARRAY_SIZE(kNeutralColorPoint));
+        }
+        if (physical_settings->second.report_green_split) {
+          it.second->Set(ANDROID_SENSOR_GREEN_SPLIT, &kGreenSplit, 1);
+        }
+        if (physical_settings->second.report_noise_profile) {
+          auto device_chars = chars_->find(it.first);
+          if (device_chars == chars_->end()) {
+            ALOGE("%s: Sensor characteristics absent for device: %d", __func__,
+                  it.first);
+          }
+          CalculateAndAppendNoiseProfile(
+              physical_settings->second.gain,
+              GetBaseGainFactor(device_chars->second.max_raw_value),
+              it.second.get());
+        }
+      }
+    }
+
+    callback.process_pipeline_result(std::move(result));
+  }
+}
+
+void EmulatedSensor::CalculateAndAppendNoiseProfile(
+    float gain /*in ISO*/, float base_gain_factor,
+    HalCameraMetadata* result /*out*/) {
+  if (result != nullptr) {
+    float total_gain = gain / 100.0 * base_gain_factor;
+    float noise_var_gain = total_gain * total_gain;
+    float read_noise_var =
+        kReadNoiseVarBeforeGain * noise_var_gain + kReadNoiseVarAfterGain;
+    // Noise profile is the same across all 4 CFA channels
+    double noise_profile[2 * 4] = {
+        noise_var_gain, read_noise_var, noise_var_gain, read_noise_var,
+        noise_var_gain, read_noise_var, noise_var_gain, read_noise_var};
+    result->Set(ANDROID_SENSOR_NOISE_PROFILE, noise_profile,
+                ARRAY_SIZE(noise_profile));
+  }
+}
+
+void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width,
+                                const SensorCharacteristics& chars) {
   ATRACE_CALL();
-  float total_gain = gain / 100.0 * base_gain_factor_;
+  float total_gain = gain / 100.0 * GetBaseGainFactor(chars.max_raw_value);
   float noise_var_gain = total_gain * total_gain;
   float read_noise_var =
       kReadNoiseVarBeforeGain * noise_var_gain + kReadNoiseVarAfterGain;
@@ -736,10 +871,10 @@ void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width) {
   int bayer_select[4] = {EmulatedScene::R, EmulatedScene::Gr, EmulatedScene::Gb,
                          EmulatedScene::B};
   scene_->SetReadoutPixel(0, 0);
-  for (unsigned int y = 0; y < chars_.height; y++) {
+  for (unsigned int y = 0; y < chars.height; y++) {
     int* bayer_row = bayer_select + (y & 0x1) * 2;
     uint16_t* px = (uint16_t*)img + y * width;
-    for (unsigned int x = 0; x < chars_.width; x++) {
+    for (unsigned int x = 0; x < chars.width; x++) {
       uint32_t electron_count;
       electron_count = scene_->GetPixelElectrons()[bayer_row[x & 0x1]];
 
@@ -751,7 +886,7 @@ void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width) {
       // TODO: Better A/D saturation curve?
       uint16_t raw_count = electron_count * total_gain;
       raw_count =
-          (raw_count < chars_.max_raw_value) ? raw_count : chars_.max_raw_value;
+          (raw_count < chars.max_raw_value) ? raw_count : chars.max_raw_value;
 
       // Calculate noise value
       // TODO: Use more-correct Gaussian instead of uniform noise
@@ -760,7 +895,7 @@ void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width) {
       // Scaled to roughly match gaussian/uniform noise stddev
       float noise_sample = rand_r(&rand_seed_) * (2.5 / (1.0 + RAND_MAX)) - 1.25;
 
-      raw_count += chars_.black_level_pattern[bayer_row[x & 0x1]];
+      raw_count += chars.black_level_pattern[bayer_row[x & 0x1]];
       raw_count += noise_stddev * noise_sample;
 
       *px++ = raw_count;
@@ -772,19 +907,19 @@ void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width) {
 }
 
 void EmulatedSensor::CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,
-                                uint32_t stride, RGBLayout layout,
-                                uint32_t gain) {
+                                uint32_t stride, RGBLayout layout, uint32_t gain,
+                                const SensorCharacteristics& chars) {
   ATRACE_CALL();
-  float total_gain = gain / 100.0 * base_gain_factor_;
+  float total_gain = gain / 100.0 * GetBaseGainFactor(chars.max_raw_value);
   // In fixed-point math, calculate total scaling from electrons to 8bpp
-  int scale64x = 64 * total_gain * 255 / chars_.max_raw_value;
-  uint32_t inc_h = ceil((float)chars_.width / width);
-  uint32_t inc_v = ceil((float)chars_.height / height);
+  int scale64x = 64 * total_gain * 255 / chars.max_raw_value;
+  uint32_t inc_h = ceil((float)chars.width / width);
+  uint32_t inc_v = ceil((float)chars.height / height);
 
-  for (unsigned int y = 0, outy = 0; y < chars_.height; y += inc_v, outy++) {
+  for (unsigned int y = 0, outy = 0; y < chars.height; y += inc_v, outy++) {
     scene_->SetReadoutPixel(0, y);
     uint8_t* px = img + outy * stride;
-    for (unsigned int x = 0; x < chars_.width; x += inc_h) {
+    for (unsigned int x = 0; x < chars.width; x += inc_h) {
       uint32_t r_count, g_count, b_count;
       // TODO: Perfect demosaicing is a cheat
       const uint32_t* pixel = scene_->GetPixelElectrons();
@@ -824,13 +959,14 @@ void EmulatedSensor::CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,
 }
 
 void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
-                                   uint32_t height, uint32_t gain) {
+                                   uint32_t height, uint32_t gain,
+                                   const SensorCharacteristics& chars) {
   ATRACE_CALL();
-  float total_gain = gain / 100.0 * base_gain_factor_;
+  float total_gain = gain / 100.0 * GetBaseGainFactor(chars.max_raw_value);
   // Using fixed-point math with 6 bits of fractional precision.
   // In fixed-point math, calculate total scaling from electrons to 8bpp
   const int scale64x =
-      kFixedBitPrecision * total_gain * 255 / chars_.max_raw_value;
+      kFixedBitPrecision * total_gain * 255 / chars.max_raw_value;
   // Fixed-point coefficients for RGB-YUV transform
   // Based on JFIF RGB->YUV transform.
   // Cb/Cr offset scaled by 64x twice since they're applied post-multiply
@@ -842,9 +978,9 @@ void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
   const int scale_out_sq = scale_out * scale_out;  // after multiplies
 
   // inc = how many pixels to skip while reading every next pixel
-  uint32_t inc_h = ceil((float)chars_.width / width);
-  uint32_t inc_v = ceil((float)chars_.height / height);
-  for (unsigned int y = 0, out_y = 0; y < chars_.height; y += inc_v, out_y++) {
+  uint32_t inc_h = ceil((float)chars.width / width);
+  uint32_t inc_v = ceil((float)chars.height / height);
+  for (unsigned int y = 0, out_y = 0; y < chars.height; y += inc_v, out_y++) {
     uint8_t* px_y = yuv_layout.img_y + out_y * yuv_layout.y_stride;
     uint8_t* px_cb = yuv_layout.img_cb + (out_y / 2) * yuv_layout.cbcr_stride;
     uint8_t* px_cr = yuv_layout.img_cr + (out_y / 2) * yuv_layout.cbcr_stride;
@@ -887,18 +1023,19 @@ void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
 }
 
 void EmulatedSensor::CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width,
-                                  uint32_t height, uint32_t stride) {
+                                  uint32_t height, uint32_t stride,
+                                  const SensorCharacteristics& chars) {
   ATRACE_CALL();
-  float total_gain = gain / 100.0 * base_gain_factor_;
+  float total_gain = gain / 100.0 * GetBaseGainFactor(chars.max_raw_value);
   // In fixed-point math, calculate scaling factor to 13bpp millimeters
-  int scale64x = 64 * total_gain * 8191 / chars_.max_raw_value;
-  uint32_t inc_h = ceil((float)chars_.width / width);
-  uint32_t inc_v = ceil((float)chars_.height / height);
+  int scale64x = 64 * total_gain * 8191 / chars.max_raw_value;
+  uint32_t inc_h = ceil((float)chars.width / width);
+  uint32_t inc_v = ceil((float)chars.height / height);
 
-  for (unsigned int y = 0, out_y = 0; y < chars_.height; y += inc_v, out_y++) {
+  for (unsigned int y = 0, out_y = 0; y < chars.height; y += inc_v, out_y++) {
     scene_->SetReadoutPixel(0, y);
     uint16_t* px = ((uint16_t*)img) + out_y * stride;
-    for (unsigned int x = 0; x < chars_.width; x += inc_h) {
+    for (unsigned int x = 0; x < chars.width; x += inc_h) {
       uint32_t depth_count;
       // TODO: Make up real depth scene instead of using green channel
       // as depth
@@ -916,7 +1053,8 @@ void EmulatedSensor::CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width,
 
 status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
                                        const YUV420Frame& output, uint32_t gain,
-                                       bool reprocess_request) {
+                                       bool reprocess_request,
+                                       const SensorCharacteristics& chars) {
   ATRACE_CALL();
   size_t input_width, input_height;
   YCbCrPlanes input_planes, output_planes;
@@ -961,7 +1099,7 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
         .y_stride = static_cast<uint32_t>(input_width),
         .cbcr_stride = static_cast<uint32_t>(input_width) / 2,
         .cbcr_step = 1};
-    CaptureYUV420(input_planes, input_width, input_height, gain);
+    CaptureYUV420(input_planes, input_width, input_height, gain, chars);
   }
 
   output_planes = output.planes;
