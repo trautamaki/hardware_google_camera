@@ -220,8 +220,9 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
                    sensor_buffer->plane.img_y_crcb.img_cr) != 1) {
         ALOGE("%s: Unsupported YUV layout, chroma step: %u U/V plane delta: %u",
               __FUNCTION__, yuv_layout.chromaStep,
-              std::abs(sensor_buffer->plane.img_y_crcb.img_cb -
-                       sensor_buffer->plane.img_y_crcb.img_cr));
+              static_cast<unsigned>(
+                  std::abs(sensor_buffer->plane.img_y_crcb.img_cb -
+                           sensor_buffer->plane.img_y_crcb.img_cr)));
         return BAD_VALUE;
       }
     } else {
