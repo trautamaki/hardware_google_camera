@@ -273,7 +273,8 @@ bool EmulatedSensor::IsStreamCombinationSupported(
     } else {
       switch (stream.format) {
         case HAL_PIXEL_FORMAT_BLOB:
-          if (stream.data_space != HAL_DATASPACE_V0_JFIF) {
+          if ((stream.data_space != HAL_DATASPACE_V0_JFIF) &&
+              (stream.data_space != HAL_DATASPACE_UNKNOWN)) {
             ALOGE("%s: Unsupported Blob dataspace 0x%x", __FUNCTION__,
                   stream.data_space);
             return false;

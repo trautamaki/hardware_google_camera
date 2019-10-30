@@ -115,7 +115,7 @@ status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
       physical_device_map_->end()) {
     ALOGE("%s: Physical camera id %d is not part of logical camera %d!",
           __func__, physical_camera_id, camera_id_);
-    return NO_INIT;
+    return BAD_VALUE;
   }
 
   *characteristics = HalCameraMetadata::Clone(
