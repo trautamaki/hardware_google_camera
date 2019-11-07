@@ -97,6 +97,12 @@ void RgbirdDepthResultProcessor::ProcessResult(ProcessBlockResult block_result) 
   // buffers to internal stream manager and forward the depth buffer to the
   // framework right away.
   for (auto& buffer : result->input_buffers) {
+    // If the stream id is invalid. The input buffer is only a place holder
+    // corresponding to the input buffer metadata for the rgb pipeline.
+    if (buffer.stream_id == kInvalidStreamId) {
+      continue;
+    }
+
     status_t res = internal_stream_manager_->ReturnStreamBuffer(buffer);
     if (res != OK) {
       ALOGE(
