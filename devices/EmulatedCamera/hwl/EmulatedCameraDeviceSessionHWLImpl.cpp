@@ -158,8 +158,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
 
   *pipeline_id = pipelines_.size();
   EmulatedPipeline emulated_pipeline{.cb = hwl_pipeline_callback,
-                                     .pipeline_id = *pipeline_id,
-                                     .physical_camera_id = physical_camera_id};
+                                     .physical_camera_id = physical_camera_id,
+                                     .pipeline_id = *pipeline_id,};
 
   emulated_pipeline.streams.reserve(request_config.streams.size());
   for (const auto& stream : request_config.streams) {
@@ -181,8 +181,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
               .physical_camera_id = stream.physical_camera_id},
              .width = stream.width,
              .height = stream.height,
-             .is_input = is_input,
-             .buffer_size = stream.buffer_size}));
+             .buffer_size = stream.buffer_size,
+             .is_input = is_input,}));
   }
 
   pipelines_.push_back(emulated_pipeline);
