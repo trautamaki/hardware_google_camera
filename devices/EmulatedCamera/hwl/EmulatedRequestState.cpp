@@ -631,12 +631,15 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  float min_zoom = min_zoom_, max_zoom = max_zoom_;
   ret = request_settings_->Get(ANDROID_CONTROL_BOKEH_MODE, &entry);
   if ((ret == OK) && (entry.count == 1)) {
     bool bokeh_mode_valid = false;
     for (const auto& bokeh_cap : available_bokeh_caps_) {
       if (bokeh_cap.mode == entry.data.u8[0]) {
         bokeh_mode_ = entry.data.u8[0];
+        min_zoom = bokeh_cap.min_zoom;
+        max_zoom = bokeh_cap.max_zoom;
         bokeh_mode_valid = true;
         break;
       }
@@ -648,6 +651,12 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     if (bokeh_mode_ != ANDROID_CONTROL_BOKEH_MODE_OFF) {
       scene_mode_ = ANDROID_CONTROL_SCENE_MODE_FACE_PRIORITY;
     }
+  }
+
+  // Check zoom ratio range and override to supported range
+  ret = request_settings_->Get(ANDROID_CONTROL_ZOOM_RATIO, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    zoom_ratio_ = std::min(std::max(entry.data.f[0], min_zoom), max_zoom);
   }
 
   // 3A modes are active in case the scene is disabled or set to face priority
@@ -731,6 +740,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->report_neutral_color_point = report_neutral_color_point_;
   sensor_settings->report_green_split = report_green_split_;
   sensor_settings->report_noise_profile = report_noise_profile_;
+  sensor_settings->zoom_ratio = zoom_ratio_;
 
   return OK;
 }
@@ -863,10 +873,12 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
     result->result_metadata->Set(ANDROID_STATISTICS_SCENE_FLICKER,
                                  &current_scene_flicker_, 1);
   }
+  if (zoom_ratio_supported_) {
+    result->result_metadata->Set(ANDROID_CONTROL_ZOOM_RATIO, &zoom_ratio_, 1);
+  }
   if (report_bokeh_mode_) {
     result->result_metadata->Set(ANDROID_CONTROL_BOKEH_MODE, &bokeh_mode_, 1);
   }
-
   return result;
 }
 
@@ -1608,41 +1620,135 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
       return BAD_VALUE;
     }
 
-    ret = static_metadata_->Get(ANDROID_CONTROL_AVAILABLE_BOKEH_CAPABILITIES,
+    ret = static_metadata_->Get(ANDROID_SCALER_AVAILABLE_MAX_DIGITAL_ZOOM,
+                                &entry);
+    if ((ret == OK) && (entry.count > 0)) {
+      if (entry.count != 1) {
+        ALOGE("%s: Invalid max digital zoom capability!", __FUNCTION__);
+        return BAD_VALUE;
+      }
+      max_zoom_ = entry.data.f[0];
+    } else {
+      ALOGE("%s: No available max digital zoom", __FUNCTION__);
+      return BAD_VALUE;
+    }
+
+    ret = static_metadata_->Get(ANDROID_CONTROL_ZOOM_RATIO_RANGE, &entry);
+    if ((ret == OK) && (entry.count > 0)) {
+      if (entry.count != 2) {
+        ALOGE("%s: Invalid zoom ratio range capability!", __FUNCTION__);
+        return BAD_VALUE;
+      }
+
+      if (entry.data.f[1] != max_zoom_) {
+        ALOGE("%s: Max zoom ratio must be equal to max digital zoom",
+              __FUNCTION__);
+        return BAD_VALUE;
+      }
+
+      if (entry.data.f[1] < entry.data.f[0]) {
+        ALOGE("%s: Max zoom ratio must be larger than min zoom ratio",
+              __FUNCTION__);
+        return BAD_VALUE;
+      }
+
+      // Sanity check request and result keys
+      if (available_requests_.find(ANDROID_CONTROL_ZOOM_RATIO) ==
+          available_requests_.end()) {
+        ALOGE("%s: Zoom ratio tag must be available in available request keys",
+              __FUNCTION__);
+        return BAD_VALUE;
+      }
+      if (available_results_.find(ANDROID_CONTROL_ZOOM_RATIO) ==
+          available_results_.end()) {
+        ALOGE("%s: Zoom ratio tag must be available in available result keys",
+              __FUNCTION__);
+        return BAD_VALUE;
+      }
+
+      zoom_ratio_supported_ = true;
+      min_zoom_ = entry.data.f[0];
+    }
+
+    ret = static_metadata_->Get(ANDROID_CONTROL_AVAILABLE_BOKEH_MAX_SIZES,
                                 &entry);
     if ((ret == OK) && (entry.count > 0)) {
       if (entry.count % 3 != 0) {
         ALOGE("%s: Invalid bokeh capabilities!", __FUNCTION__);
         return BAD_VALUE;
       }
+
+      camera_metadata_ro_entry_t zoom_ratio_ranges_entry;
+      ret = static_metadata_->Get(
+          ANDROID_CONTROL_AVAILABLE_BOKEH_ZOOM_RATIO_RANGES,
+          &zoom_ratio_ranges_entry);
+      if (ret != OK ||
+          zoom_ratio_ranges_entry.count / 2 != entry.count / 3 - 1) {
+        ALOGE("%s: Invalid bokeh mode zoom ratio ranges.", __FUNCTION__);
+        return BAD_VALUE;
+      }
+
+      // Sanity check request and characteristics keys
+      if (available_requests_.find(ANDROID_CONTROL_BOKEH_MODE) ==
+          available_requests_.end()) {
+        ALOGE("%s: Bokeh mode must be configurable for this device",
+              __FUNCTION__);
+        return BAD_VALUE;
+      }
+      if (available_characteristics_.find(
+              ANDROID_CONTROL_AVAILABLE_BOKEH_MAX_SIZES) ==
+              available_characteristics_.end() ||
+          available_characteristics_.find(
+              ANDROID_CONTROL_AVAILABLE_BOKEH_ZOOM_RATIO_RANGES) ==
+              available_characteristics_.end()) {
+        ALOGE(
+            "%s: Bokeh maxSizes and zoomRatioRanges characteristics keys must "
+            "be available",
+            __FUNCTION__);
+        return BAD_VALUE;
+      }
+
+      // Derive available bokeh caps.
       StreamConfigurationMap stream_configuration_map(*static_metadata_);
       std::set<StreamSize> yuv_sizes = stream_configuration_map.GetOutputSizes(
           HAL_PIXEL_FORMAT_YCBCR_420_888);
-      bool hasBokehOff = false;
-      for (size_t i = 0; i < entry.count; i += 3) {
-        BokehCapability bokeh(entry.data.i32[i], entry.data.i32[i + 1],
-                              entry.data.i32[i + 2]);
-        if (bokeh.mode < ANDROID_CONTROL_BOKEH_MODE_OFF ||
-            bokeh.mode > ANDROID_CONTROL_BOKEH_MODE_CONTINUOUS) {
-          ALOGE("%s: Invalid bokeh mode %d", __FUNCTION__, bokeh.mode);
+      bool has_bokeh_off = false;
+      for (size_t i = 0, j = 0; i < entry.count; i += 3) {
+        int32_t mode = entry.data.i32[i];
+        int32_t max_width = entry.data.i32[i + 1];
+        int32_t max_height = entry.data.i32[i + 2];
+        float min_zoom_ratio, max_zoom_ratio;
+
+        if (mode < ANDROID_CONTROL_BOKEH_MODE_OFF ||
+            mode > ANDROID_CONTROL_BOKEH_MODE_CONTINUOUS) {
+          ALOGE("%s: Invalid bokeh mode %d", __FUNCTION__, mode);
           return BAD_VALUE;
         }
-        if (bokeh.mode == ANDROID_CONTROL_BOKEH_MODE_OFF) {
-          hasBokehOff = true;
-          if (bokeh.max_width != 0 || bokeh.max_height != 0) {
+
+        if (mode == ANDROID_CONTROL_BOKEH_MODE_OFF) {
+          has_bokeh_off = true;
+          if (max_width != 0 || max_height != 0) {
             ALOGE("%s: Invalid max width or height for BOKEH_MODE_OFF",
                   __FUNCTION__);
             return BAD_VALUE;
           }
-        } else if (yuv_sizes.find({bokeh.max_width, bokeh.max_height}) ==
-                   yuv_sizes.end()) {
+          min_zoom_ratio = min_zoom_;
+          max_zoom_ratio = max_zoom_;
+        } else if (yuv_sizes.find({max_width, max_height}) == yuv_sizes.end()) {
           ALOGE("%s: Invalid max width or height for bokeh mode %d",
-                __FUNCTION__, bokeh.mode);
+                __FUNCTION__, mode);
           return BAD_VALUE;
+        } else {
+          min_zoom_ratio = zoom_ratio_ranges_entry.data.f[j];
+          max_zoom_ratio = zoom_ratio_ranges_entry.data.f[j + 1];
+          j += 2;
         }
+
+        BokehCapability bokeh(mode, max_width, max_height, min_zoom_ratio,
+                              max_zoom_ratio);
         available_bokeh_caps_.push_back(bokeh);
       }
-      if (!hasBokehOff) {
+      if (!has_bokeh_off) {
         ALOGE("%s: Off bokeh mode not supported!", __FUNCTION__);
         return BAD_VALUE;
       }
@@ -1733,6 +1839,7 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
     uint8_t ae_lock = ANDROID_CONTROL_AE_LOCK_OFF;
     uint8_t awb_lock = ANDROID_CONTROL_AWB_LOCK_OFF;
     int32_t ae_target_fps[] = {ae_target_fps_.min_fps, ae_target_fps_.max_fps};
+    float zoom_ratio = 1.0f;
     switch (template_idx) {
       case RequestTemplate::kManual:
         intent = ANDROID_CONTROL_CAPTURE_INTENT_MANUAL;
@@ -1812,6 +1919,10 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
         if (exposure_compensation_supported_) {
           default_requests_[idx]->Set(ANDROID_CONTROL_AE_EXPOSURE_COMPENSATION,
                                       &exposure_compensation_, 1);
+        }
+        if (zoom_ratio_supported_) {
+          default_requests_[idx]->Set(ANDROID_CONTROL_ZOOM_RATIO, &zoom_ratio,
+                                      1);
         }
         bool is_auto_antbanding_supported =
             available_antibanding_modes_.find(

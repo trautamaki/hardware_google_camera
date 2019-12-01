@@ -634,9 +634,10 @@ bool EmulatedSensor::threadLoop() {
                                    .height = jpeg_input->height,
                                    .planes = jpeg_input->yuv_planes};
 
-            auto ret = ProcessYUV420(yuv_input, yuv_output,
-                                     device_settings->second.gain,
-                                     reprocess_request, device_chars->second);
+            auto ret = ProcessYUV420(
+                yuv_input, yuv_output, device_settings->second.gain,
+                reprocess_request, device_settings->second.zoom_ratio,
+                device_chars->second);
             if (ret != 0) {
               (*b)->stream_buffer.status = BufferStatus::kError;
               break;
@@ -674,9 +675,10 @@ bool EmulatedSensor::threadLoop() {
           YUV420Frame yuv_output{.width = (*b)->width,
                                  .height = (*b)->height,
                                  .planes = (*b)->plane.img_y_crcb};
-          auto ret =
-              ProcessYUV420(yuv_input, yuv_output, device_settings->second.gain,
-                            reprocess_request, device_chars->second);
+          auto ret = ProcessYUV420(
+              yuv_input, yuv_output, device_settings->second.gain,
+              reprocess_request, device_settings->second.zoom_ratio,
+              device_chars->second);
           if (ret != 0) {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
@@ -961,6 +963,7 @@ void EmulatedSensor::CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,
 
 void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
                                    uint32_t height, uint32_t gain,
+                                   float zoom_ratio,
                                    const SensorCharacteristics& chars) {
   ATRACE_CALL();
   float total_gain = gain / 100.0 * GetBaseGainFactor(chars.max_raw_value);
@@ -979,14 +982,19 @@ void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
   const int scale_out_sq = scale_out * scale_out;  // after multiplies
 
   // inc = how many pixels to skip while reading every next pixel
-  uint32_t inc_h = ceil((float)chars.width / width);
-  uint32_t inc_v = ceil((float)chars.height / height);
-  for (unsigned int y = 0, out_y = 0; y < chars.height; y += inc_v, out_y++) {
+  for (unsigned int out_y = 0; out_y < height; out_y++) {
     uint8_t* px_y = yuv_layout.img_y + out_y * yuv_layout.y_stride;
     uint8_t* px_cb = yuv_layout.img_cb + (out_y / 2) * yuv_layout.cbcr_stride;
     uint8_t* px_cr = yuv_layout.img_cr + (out_y / 2) * yuv_layout.cbcr_stride;
-    scene_->SetReadoutPixel(0, y);
     for (unsigned int out_x = 0; out_x < yuv_layout.y_stride; out_x++) {
+      int x = static_cast<int>(chars.width * (0.5f - 0.5f / zoom_ratio +
+                                              out_x / (width * zoom_ratio)));
+      int y = static_cast<int>(chars.height * (0.5f - 0.5f / zoom_ratio +
+                                               out_y / (height * zoom_ratio)));
+      x = std::min(std::max(x, 0), (int)chars.width - 1);
+      y = std::min(std::max(y, 0), (int)chars.height - 1);
+      scene_->SetReadoutPixel(x, y);
+
       int32_t r_count, g_count, b_count;
       // TODO: Perfect demosaicing is a cheat
       const uint32_t* pixel = scene_->GetPixelElectrons();
@@ -1015,9 +1023,6 @@ void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
         px_cr += yuv_layout.cbcr_step;
         px_cb += yuv_layout.cbcr_step;
       }
-
-      // Skip unprocessed pixels from sensor.
-      for (unsigned int j = 1; j < inc_h; j++) scene_->GetPixelElectrons();
     }
   }
   ALOGVV("YUV420 sensor image captured");
@@ -1054,7 +1059,7 @@ void EmulatedSensor::CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width,
 
 status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
                                        const YUV420Frame& output, uint32_t gain,
-                                       bool reprocess_request,
+                                       bool reprocess_request, float zoom_ratio,
                                        const SensorCharacteristics& chars) {
   ATRACE_CALL();
   size_t input_width, input_height;
@@ -1100,7 +1105,8 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
         .y_stride = static_cast<uint32_t>(input_width),
         .cbcr_stride = static_cast<uint32_t>(input_width) / 2,
         .cbcr_step = 1};
-    CaptureYUV420(input_planes, input_width, input_height, gain, chars);
+    CaptureYUV420(input_planes, input_width, input_height, gain, zoom_ratio,
+                  chars);
   }
 
   output_planes = output.planes;

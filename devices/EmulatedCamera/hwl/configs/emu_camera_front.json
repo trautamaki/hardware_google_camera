@@ -46,7 +46,7 @@
    "3", 
    "4"
   ], 
-  "android.control.availableBokehCapabilities": [
+  "android.control.availableBokehMaxSizes": [
    "0", 
    "0", 
    "0", 
@@ -56,6 +56,12 @@
    "2", 
    "1920", 
    "1440" 
+  ], 
+  "android.control.availableBokehZoomRatioRanges": [
+    "1.0", 
+    "1.0", 
+    "1.0", 
+    "1.0"
   ], 
   "android.control.availableEffects": [
    "0"
@@ -159,6 +165,10 @@
    "1", 
    "1", 
    "0"
+  ], 
+  "android.control.zoomRatioRange": [
+   "1.0", 
+   "8.0" 
   ], 
   "android.distortionCorrection.availableModes": [
    "0"
@@ -304,6 +314,8 @@
    "65574", 
    "65575", 
    "65579", 
+   "65580", 
+   "65582", 
    "1638402", 
    "1638401", 
    "1638403", 
@@ -410,7 +422,8 @@
    "65552", 
    "65553", 
    "65576", 
-   "65580", 
+   "65581", 
+   "65583", 
    "1769472", 
    "196608", 
    "262146", 
@@ -460,7 +473,8 @@
    "65570", 
    "65551", 
    "65576", 
-   "65580", 
+   "65581", 
+   "65583", 
    "196608", 
    "262146", 
    "262149", 
@@ -1231,7 +1245,7 @@
    "3", 
    "4"
   ], 
-  "android.control.availableBokehCapabilities": [
+  "android.control.availableBokehMaxSizes": [
    "0", 
    "0", 
    "0", 
@@ -1241,6 +1255,12 @@
    "2", 
    "1920", 
    "1440" 
+  ], 
+  "android.control.availableBokehZoomRatioRanges": [
+    "1.0", 
+    "1.0", 
+    "1.0", 
+    "1.0"
   ], 
   "android.control.availableEffects": [
    "0"
@@ -1343,6 +1363,10 @@
    "1", 
    "1", 
    "0"
+  ], 
+  "android.control.zoomRatioRange": [
+   "1.0", 
+   "8.0" 
   ], 
   "android.distortionCorrection.availableModes": [
    "0"
@@ -1479,6 +1503,8 @@
    "65574", 
    "65575", 
    "65579", 
+   "65580", 
+   "65582", 
    "1638402", 
    "1638401", 
    "1638403", 
@@ -1585,7 +1611,8 @@
    "65552", 
    "65553", 
    "65576", 
-   "65580", 
+   "65581", 
+   "65583", 
    "1769472", 
    "196608", 
    "262146", 
@@ -1635,7 +1662,8 @@
    "65570", 
    "65551", 
    "65576", 
-   "65580", 
+   "65581", 
+   "65583", 
    "196608", 
    "262146", 
    "262149", 
@@ -2409,7 +2437,7 @@
    "3", 
    "4"
   ], 
-  "android.control.availableBokehCapabilities": [
+  "android.control.availableBokehMaxSizes": [
    "0", 
    "0", 
    "0", 
@@ -2419,6 +2447,12 @@
    "2", 
    "1920", 
    "1440" 
+  ], 
+  "android.control.availableBokehZoomRatioRanges": [
+    "1.0", 
+    "1.0", 
+    "1.0", 
+    "1.0"
   ], 
   "android.control.availableEffects": [
    "0"
@@ -2522,6 +2556,10 @@
    "1", 
    "1", 
    "0"
+  ], 
+  "android.control.zoomRatioRange": [
+   "1.0", 
+   "8.0" 
   ], 
   "android.distortionCorrection.availableModes": [
    "0"
@@ -2658,6 +2696,8 @@
    "65574", 
    "65575", 
    "65579", 
+   "65580", 
+   "65582", 
    "1638402", 
    "1638401", 
    "1638403", 
@@ -2764,7 +2804,8 @@
    "65552", 
    "65553", 
    "65576", 
-   "65580", 
+   "65581", 
+   "65583", 
    "1769472", 
    "196608", 
    "262146", 
@@ -2814,7 +2855,8 @@
    "65570", 
    "65551", 
    "65576", 
-   "65580", 
+   "65581", 
+   "65583", 
    "196608", 
    "262146", 
    "262149", 
