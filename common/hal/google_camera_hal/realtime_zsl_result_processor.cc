@@ -249,5 +249,10 @@ void RealtimeZslResultProcessor::Notify(
   notify_(message);
 }
 
+status_t RealtimeZslResultProcessor::FlushPendingRequests() {
+  ATRACE_CALL();
+  return INVALID_OPERATION;
+}
+
 }  // namespace google_camera_hal
 }  // namespace android
