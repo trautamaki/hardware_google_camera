@@ -84,6 +84,11 @@ status_t RealtimeZslRequestProcessor::Initialize(
     return res;
   }
 
+  res = characteristics->Get(VendorTagIds::kHdrUsageMode, &entry);
+  if (res == OK) {
+    hdr_mode_ = static_cast<HdrMode>(entry.data.u8[0]);
+  }
+
   return OK;
 }
 
@@ -223,12 +228,22 @@ status_t RealtimeZslRequestProcessor::ProcessRequest(
     }
 
     if (block_request.settings != nullptr) {
+      bool enable_hybrid_ae =
+          (hdr_mode_ == HdrMode::kNonHdrplusMode ? false : true);
       result = hal_utils::ModifyRealtimeRequestForHdrplus(
-          block_request.settings.get());
+          block_request.settings.get(), enable_hybrid_ae);
       if (result != OK) {
         ALOGE("%s: ModifyRealtimeRequestForHdrplus (%d) fail", __FUNCTION__,
               request.frame_number);
         return UNKNOWN_ERROR;
+      }
+
+      if (hdr_mode_ != HdrMode::kHdrplusMode) {
+        uint8_t processing_mode =
+            static_cast<uint8_t>(ProcessingMode::kIntermediateProcessing);
+        block_request.settings->Set(VendorTagIds::kProcessingMode,
+                                    &processing_mode,
+                                    /*data_count=*/1);
       }
     }
   }

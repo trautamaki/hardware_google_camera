@@ -31,6 +31,7 @@
 #include "realtime_process_block.h"
 #include "realtime_zsl_request_processor.h"
 #include "realtime_zsl_result_processor.h"
+#include "vendor_tag_defs.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -449,6 +450,19 @@ status_t HdrplusCaptureSession::Initialize(
     return BAD_VALUE;
   }
 
+  std::unique_ptr<HalCameraMetadata> characteristics;
+  status_t res = device_session_hwl->GetCameraCharacteristics(&characteristics);
+  if (res != OK) {
+    ALOGE("%s: GetCameraCharacteristics failed.", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  camera_metadata_ro_entry entry;
+  res = characteristics->Get(VendorTagIds::kHdrUsageMode, &entry);
+  if (res == OK) {
+    hdr_mode_ = static_cast<HdrMode>(entry.data.u8[0]);
+  }
+
   for (auto stream : stream_config.streams) {
     if (utils::IsPreviewStream(stream)) {
       hal_preview_stream_id_ = stream.id;
@@ -483,9 +497,9 @@ status_t HdrplusCaptureSession::Initialize(
   std::unique_ptr<ProcessBlock> realtime_process_block;
   std::unique_ptr<ResultProcessor> realtime_result_processor;
 
-  status_t res = SetupRealtimeProcessChain(
-      stream_config, process_capture_result_, notify_, &realtime_process_block,
-      &realtime_result_processor, &raw_stream_id);
+  res = SetupRealtimeProcessChain(stream_config, process_capture_result_,
+                                  notify_, &realtime_process_block,
+                                  &realtime_result_processor, &raw_stream_id);
   if (res != OK) {
     ALOGE("%s: SetupRealtimeProcessChain fail: %s(%d)", __FUNCTION__,
           strerror(-res), res);
@@ -580,6 +594,14 @@ void HdrplusCaptureSession::ProcessCaptureResult(
     std::unique_ptr<CaptureResult> result) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);
+  if (result == nullptr) {
+    return;
+  }
+
+  if (result->result_metadata && hdr_mode_ != HdrMode::kHdrplusMode) {
+    device_session_hwl_->FilterResultMetadata(result->result_metadata.get());
+  }
+
   status_t res = result_dispatcher_->AddResult(std::move(result));
   if (res != OK) {
     ALOGE("%s: fail to AddResult", __FUNCTION__);

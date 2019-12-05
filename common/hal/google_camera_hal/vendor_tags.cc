@@ -93,6 +93,8 @@ status_t ModifyCharacteristicsKeys(HalCameraMetadata* metadata) {
   session_keys.push_back(VendorTagIds::kHdrPlusDisabled);
   // VendorTagIds::kHdrplusPayloadFrames
   characteristics_keys.push_back(VendorTagIds::kHdrplusPayloadFrames);
+  // VendorTagIds::kHdrUsageMode
+  characteristics_keys.push_back(VendorTagIds::kHdrUsageMode);
   // VendorTagIds::kProcessingMode
   request_keys.push_back(VendorTagIds::kProcessingMode);
   // VendorTagIds::kThermalThrottling

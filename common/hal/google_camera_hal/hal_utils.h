@@ -78,7 +78,8 @@ status_t SetEnableZslMetadata(HalCameraMetadata* metadata, bool enable);
 status_t SetHybridAeMetadata(HalCameraMetadata* metadata, bool enable);
 
 // Modify the request of realtime pipeline for HDR+
-status_t ModifyRealtimeRequestForHdrplus(HalCameraMetadata* metadata);
+status_t ModifyRealtimeRequestForHdrplus(HalCameraMetadata* metadata,
+                                         const bool hybrid_ae_enable = true);
 
 // Get ANDROID_STATISTICS_FACE_DETECT_MODE
 status_t GetFdMode(const CaptureRequest& request, uint8_t* face_detect_mode);

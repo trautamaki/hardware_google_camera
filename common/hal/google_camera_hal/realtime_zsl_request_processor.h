@@ -19,6 +19,7 @@
 
 #include "process_block.h"
 #include "request_processor.h"
+#include "vendor_tag_types.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -67,6 +68,8 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   int32_t raw_stream_id_ = -1;
   uint32_t active_array_width_ = 0;
   uint32_t active_array_height_ = 0;
+
+  HdrMode hdr_mode_ = HdrMode::kHdrplusMode;
 
   // If HDR+ ZSL is enabled.
   bool is_hdrplus_zsl_enabled_ = true;

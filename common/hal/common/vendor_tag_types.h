@@ -43,6 +43,17 @@ enum class ProcessingMode : uint8_t {
   kIntermediateProcessing
 };
 
+// Payload for com.google.internal.hdr.UsageMode to indicate usage mode
+// of project
+enum class HdrMode : uint8_t {
+  // Mode of default hdrplus engine flow
+  kHdrplusMode,
+  // Mode of non-hdrplus flow
+  kNonHdrplusMode,
+  // Mode of non-hdrplus + Hdrnet flow
+  kHdrnetMode
+};
+
 // Byte-pack any structures that are used as the payload of the vendor tags
 #pragma pack(push, 1)
 // Placeholder to define any structures used as payload for HAL vendor tags

@@ -493,14 +493,15 @@ status_t ForceLensShadingMapModeOn(HalCameraMetadata* metadata) {
   return OK;
 }
 
-status_t ModifyRealtimeRequestForHdrplus(HalCameraMetadata* metadata) {
+status_t ModifyRealtimeRequestForHdrplus(HalCameraMetadata* metadata,
+                                         const bool hybrid_ae_enable) {
   if (metadata == nullptr) {
     ALOGE("%s: metadata is nullptr", __FUNCTION__);
     return BAD_VALUE;
   }
 
-  // Enable hybrid AE
-  status_t result = SetHybridAeMetadata(metadata, true);
+  // Update hybrid AE
+  status_t result = SetHybridAeMetadata(metadata, hybrid_ae_enable);
   if (result != OK) {
     ALOGE("%s: SetHybridAeMetadata fail", __FUNCTION__);
     return result;

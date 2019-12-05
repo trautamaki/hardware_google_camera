@@ -45,6 +45,7 @@ enum VendorTagIds : uint32_t {
   kNonWarpedYuvStreamId,
   kSensorModeFullFov,
   kNonWarpedCropRegion,
+  kHdrUsageMode,
   // This should not be used as a vendor tag ID on its own, but as a placeholder
   // to indicate the end of currently defined vendor tag IDs
   kEndMarker
@@ -177,6 +178,15 @@ static const std::vector<VendorTag> kInternalVendorTags = {
     {.tag_id = VendorTagIds::kNonWarpedCropRegion,
      .tag_name = "NonWarpedCropRegion",
      .tag_type = CameraMetadataType::kInt32},
+    // Hdrplus usage mode
+    //
+    // Indicates the usage mode of hdrplus
+    //
+    // Present in: Characteristics
+    // Payload: HdrUsageMode
+    {.tag_id = VendorTagIds::kHdrUsageMode,
+     .tag_name = "hdr.UsageMode",
+     .tag_type = CameraMetadataType::kByte},
 };
 
 // Google Camera HAL vendor tag sections

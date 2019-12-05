@@ -24,6 +24,7 @@
 #include "request_processor.h"
 #include "result_dispatcher.h"
 #include "result_processor.h"
+#include "vendor_tag_types.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -144,6 +145,8 @@ class HdrplusCaptureSession : public CaptureSession {
   NotifyFunc device_session_notify_;
   // Use this stream id to check the request is HDR+ compatible
   int32_t hal_preview_stream_id_ = -1;
+
+  HdrMode hdr_mode_ = HdrMode::kHdrplusMode;
 };
 
 }  // namespace google_camera_hal
