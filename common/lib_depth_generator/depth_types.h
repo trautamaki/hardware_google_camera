@@ -85,7 +85,9 @@ struct DepthRequestInfo {
   const camera_metadata_t* color_buffer_metadata = nullptr;
 };
 
-// Callback function invoked to notify depth buffer readyness.
+// Callback function invoked to notify depth buffer readiness. This method must
+// be invoked by a thread different from the thread that enqueues the request to
+// avoid deadlock.
 using DepthResultCallbackFunction =
     std::function<void(DepthResultStatus result, uint32_t frame_number)>;
 
