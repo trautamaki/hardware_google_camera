@@ -214,6 +214,107 @@ bool IsLiveSnapshotConfigured(const StreamConfiguration& stream_config) {
   return (has_video_stream & has_jpeg_stream);
 }
 
+bool IsHighSpeedModeFpsCompatible(StreamConfigurationMode mode,
+                                  const HalCameraMetadata* old_session,
+                                  const HalCameraMetadata* new_session) {
+  if (mode != StreamConfigurationMode::kConstrainedHighSpeed) {
+    return false;
+  }
+
+  camera_metadata_ro_entry_t ae_target_fps_entry;
+  int32_t old_max_fps = 0;
+  int32_t new_max_fps = 0;
+
+  if (old_session->Get(ANDROID_CONTROL_AE_TARGET_FPS_RANGE,
+                       &ae_target_fps_entry) == OK) {
+    old_max_fps = ae_target_fps_entry.data.i32[1];
+  }
+  if (new_session->Get(ANDROID_CONTROL_AE_TARGET_FPS_RANGE,
+                       &ae_target_fps_entry) == OK) {
+    new_max_fps = ae_target_fps_entry.data.i32[1];
+  }
+
+  ALOGI("%s: HFR: old max fps: %d, new max fps: %d", __FUNCTION__, old_max_fps,
+        new_max_fps);
+
+  if (new_max_fps == old_max_fps) {
+    return true;
+  }
+
+  return false;
+}
+
+bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
+                                  const HalCameraMetadata* new_session) {
+  auto old_session_count = old_session->GetEntryCount();
+  auto new_session_count = new_session->GetEntryCount();
+  if (old_session_count == 0 || new_session_count == 0) {
+    ALOGI("No session paramerter");
+    return true;
+  }
+
+  if (old_session_count != new_session_count) {
+    ALOGI(
+        "Entry count has changed from %zu "
+        "to %zu",
+        old_session_count, new_session_count);
+    return false;
+  }
+
+  for (size_t entry_index = 0; entry_index < new_session_count; entry_index++) {
+    camera_metadata_ro_entry_t new_entry;
+    // Get the medata from new session first
+    if (new_session->GetByIndex(&new_entry, entry_index) != OK) {
+      ALOGW("Unable to get new session entry for index %zu", entry_index);
+      return false;
+    }
+
+    // Get the same tag from old session
+    camera_metadata_ro_entry_t old_entry;
+    if (old_session->Get(new_entry.tag, &old_entry) != OK) {
+      ALOGW("Unable to get old session tag 0x%x", new_entry.tag);
+      return false;
+    }
+
+    if (new_entry.count != old_entry.count) {
+      ALOGI(
+          "New entry count %zu doesn't "
+          "match old entry count %zu",
+          new_entry.count, old_entry.count);
+      return false;
+    }
+
+    if (new_entry.tag == ANDROID_CONTROL_AE_TARGET_FPS_RANGE) {
+      // Stream reconfiguration is not needed in case the upper
+      // framerate range remains unchanged. Any other modification
+      // to the session parameters must trigger new stream
+      // configuration.
+      int32_t old_min_fps = old_entry.data.i32[0];
+      int32_t old_max_fps = old_entry.data.i32[1];
+      int32_t new_min_fps = new_entry.data.i32[0];
+      int32_t new_max_fps = new_entry.data.i32[1];
+      if (old_max_fps == new_max_fps) {
+        ALOGI("%s: Ignore fps (%d, %d) to (%d, %d)", __FUNCTION__, old_min_fps,
+              old_max_fps, new_min_fps, new_max_fps);
+        continue;
+      }
+
+      return false;
+    } else {
+      // Same type and count, compare values
+      size_t type_size = camera_metadata_type_size[old_entry.type];
+      size_t entry_size = type_size * old_entry.count;
+      int32_t cmp = memcmp(new_entry.data.u8, old_entry.data.u8, entry_size);
+      if (cmp != 0) {
+        ALOGI("Session parameter value has changed");
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 }  // namespace utils
 }  // namespace google_camera_hal
 }  // namespace android
