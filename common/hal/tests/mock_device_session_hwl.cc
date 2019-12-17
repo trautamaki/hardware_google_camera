@@ -267,6 +267,17 @@ status_t FakeCameraDeviceSessionHwl::FilterResultMetadata(
   return OK;
 }
 
+status_t FakeCameraDeviceSessionHwl::IsReconfigurationRequired(
+    const HalCameraMetadata* /*old_session*/,
+    const HalCameraMetadata* /*new_session*/,
+    bool* reconfiguration_required) const {
+  if (reconfiguration_required == nullptr) {
+    return BAD_VALUE;
+  }
+  *reconfiguration_required = true;
+  return OK;
+}
+
 std::unique_ptr<IMulticamCoordinatorHwl>
 FakeCameraDeviceSessionHwl::CreateMulticamCoordinatorHwl() {
   // Multicam coordinator not supported in this mock

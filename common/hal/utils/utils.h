@@ -47,6 +47,19 @@ status_t GetFocalLength(const HalCameraMetadata* characteristics,
 // Return if LiveSnapshot is configured
 bool IsLiveSnapshotConfigured(const StreamConfiguration& stream_config);
 
+// Return true if max fps is the same at high speed mode
+bool IsHighSpeedModeFpsCompatible(StreamConfigurationMode mode,
+                                  const HalCameraMetadata* old_session,
+                                  const HalCameraMetadata* new_session);
+
+// This method is for IsReconfigurationRequired purpose
+// Return true if meet any condition below
+// 1. Any session entry count is zero
+// 2. All metadata are the same between old and new session.
+//    For ANDROID_CONTROL_AE_TARGET_FPS_RANGE, only compare max fps.
+bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
+                                  const HalCameraMetadata* new_session);
+
 }  // namespace utils
 }  // namespace google_camera_hal
 }  // namespace android

@@ -1342,115 +1342,17 @@ void CameraDeviceSession::AppendOutputIntentToSettingsLocked(
 status_t CameraDeviceSession::IsReconfigurationRequired(
     const HalCameraMetadata* old_session, const HalCameraMetadata* new_session,
     bool* reconfiguration_required) {
-  if (old_session == nullptr || new_session == nullptr) {
-    ALOGE("%s: old_session or new_session is nullptr.", __FUNCTION__);
+  if (old_session == nullptr || new_session == nullptr ||
+      reconfiguration_required == nullptr) {
+    ALOGE(
+        "%s: old_session or new_session or reconfiguration_required is "
+        "nullptr.",
+        __FUNCTION__);
     return BAD_VALUE;
   }
 
-  // WAR for the IR camera session reconfiguration issue. The current session
-  // parameters doesn't really apply to IR cameras.
-  // TODO: refactor this logic in HWL. b/134698399
-  if (camera_id_ == 2) {
-    *reconfiguration_required = false;
-    ALOGI("Logical camera 2 doesn't need to reconfigure session");
-    return OK;
-  }
-
-  *reconfiguration_required = true;
-
-  auto old_session_count = old_session->GetEntryCount();
-  auto new_session_count = new_session->GetEntryCount();
-
-  if (operation_mode_ == StreamConfigurationMode::kConstrainedHighSpeed) {
-    camera_metadata_ro_entry_t ae_target_fps_entry;
-    int32_t old_max_fps = 0;
-    int32_t new_max_fps = 0;
-
-    if (old_session->Get(ANDROID_CONTROL_AE_TARGET_FPS_RANGE,
-                         &ae_target_fps_entry) == OK) {
-      old_max_fps = ae_target_fps_entry.data.i32[1];
-    }
-    if (new_session->Get(ANDROID_CONTROL_AE_TARGET_FPS_RANGE,
-                         &ae_target_fps_entry) == OK) {
-      new_max_fps = ae_target_fps_entry.data.i32[1];
-    }
-    if (new_max_fps == old_max_fps) {
-      *reconfiguration_required = false;
-    }
-    ALOGI(
-        "%s: HFR: old max fps: %d, new max fps: %d, "
-        "reconfiguration_required: %d",
-        __FUNCTION__, old_max_fps, new_max_fps, *reconfiguration_required);
-    return OK;
-  }
-  if (old_session_count == 0 || new_session_count == 0) {
-    ALOGI("No session paramerter means that no reconfiguration is required");
-    *reconfiguration_required = false;
-    return OK;
-  }
-  if (old_session_count != new_session_count) {
-    ALOGI(
-        "Session reconfiguration is required: entry count has changed from %zu "
-        "to %zu",
-        old_session_count, new_session_count);
-    return OK;
-  }
-
-  for (size_t entry_index = 0; entry_index < new_session_count; entry_index++) {
-    camera_metadata_ro_entry_t new_entry;
-    // Get the medata from new session first
-    if (new_session->GetByIndex(&new_entry, entry_index) != OK) {
-      ALOGW("Unable to get new session entry for index %zu", entry_index);
-      return OK;
-    }
-
-    // Get the same tag from old session
-    camera_metadata_ro_entry_t old_entry;
-    if (old_session->Get(new_entry.tag, &old_entry) != OK) {
-      ALOGW("Unable to get old session tag 0x%x", new_entry.tag);
-      return OK;
-    }
-
-    if (new_entry.count != old_entry.count) {
-      ALOGI(
-          "Session reconfiguration is required: new entry count %zu doesn't "
-          "match old entry count %zu",
-          new_entry.count, old_entry.count);
-      return OK;
-    }
-
-    if (new_entry.tag == ANDROID_CONTROL_AE_TARGET_FPS_RANGE) {
-      // Stream reconfiguration is not needed in case the upper
-      // framerate range remains unchanged. Any other modification
-      // to the session parameters must trigger new stream
-      // configuration.
-      int32_t old_min_fps = old_entry.data.i32[0];
-      int32_t old_max_fps = old_entry.data.i32[1];
-      int32_t new_min_fps = new_entry.data.i32[0];
-      int32_t new_max_fps = new_entry.data.i32[1];
-      if (old_max_fps == new_max_fps) {
-        ALOGI("%s: Don't require reconfiguration from fps (%d, %d) to (%d, %d)",
-              __FUNCTION__, old_min_fps, old_max_fps, new_min_fps, new_max_fps);
-        continue;
-      }
-
-      return OK;
-    } else {
-      // Same type and count, compare values
-      size_t type_size = camera_metadata_type_size[old_entry.type];
-      size_t entry_size = type_size * old_entry.count;
-      int32_t cmp = memcmp(new_entry.data.u8, old_entry.data.u8, entry_size);
-      if (cmp != 0) {
-        ALOGI(
-            "Session reconfiguration is required: Session parameter value has "
-            "changed");
-        return OK;
-      }
-    }
-  }
-
-  *reconfiguration_required = false;
-  return OK;
+  return device_session_hwl_->IsReconfigurationRequired(
+      old_session, new_session, reconfiguration_required);
 }
 
 status_t CameraDeviceSession::UpdateRequestedBufferHandles(

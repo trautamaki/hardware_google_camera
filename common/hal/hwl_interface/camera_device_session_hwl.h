@@ -151,6 +151,15 @@ class CameraDeviceSessionHwl {
   // Return the corresponding HWL coordinator utility interface
   virtual std::unique_ptr<IMulticamCoordinatorHwl>
   CreateMulticamCoordinatorHwl() = 0;
+
+  // Check reconfiguration is required or not
+  // old_session is old session parameter
+  // new_session is new session parameter
+  // If reconfiguration is required, set reconfiguration_required to true
+  // If reconfiguration is not required, set reconfiguration_required to false
+  virtual status_t IsReconfigurationRequired(
+      const HalCameraMetadata* old_session, const HalCameraMetadata* new_session,
+      bool* reconfiguration_required) const = 0;
 };
 
 }  // namespace google_camera_hal
