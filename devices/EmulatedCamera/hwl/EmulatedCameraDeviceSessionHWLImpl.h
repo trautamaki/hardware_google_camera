@@ -128,6 +128,17 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
       override {
     return nullptr;
   }
+
+  status_t IsReconfigurationRequired(
+      const HalCameraMetadata* /*old_session*/,
+      const HalCameraMetadata* /*new_session*/,
+      bool* reconfiguration_required) const override {
+    if (reconfiguration_required == nullptr) {
+      return BAD_VALUE;
+    }
+    *reconfiguration_required = true;
+    return OK;
+  }
   // End override functions in CameraDeviceSessionHwl
 
  private:

@@ -96,6 +96,10 @@ class FakeCameraDeviceSessionHwl : public CameraDeviceSessionHwl {
 
   std::unique_ptr<IMulticamCoordinatorHwl> CreateMulticamCoordinatorHwl();
 
+  status_t IsReconfigurationRequired(
+      const HalCameraMetadata* old_session, const HalCameraMetadata* new_session,
+      bool* reconfiguration_required) const override;
+
  private:
   const uint32_t kCameraId;
   const std::vector<uint32_t> kPhysicalCameraIds;
@@ -180,6 +184,11 @@ class MockDeviceSessionHwl : public CameraDeviceSessionHwl {
 
   MOCK_METHOD0(CreateMulticamCoordinatorHwl,
                std::unique_ptr<IMulticamCoordinatorHwl>());
+
+  MOCK_CONST_METHOD3(IsReconfigurationRequired,
+                     status_t(const HalCameraMetadata* old_session,
+                              const HalCameraMetadata* new_session,
+                              bool* reconfiguration_required));
 
   // Delegate all calls to FakeCameraDeviceSessionHwl.
   void DelegateCallsToFakeSession();
