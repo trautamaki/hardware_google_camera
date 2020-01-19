@@ -337,6 +337,7 @@ size_t JpegCompressor::CompressYUV420Frame(YUV420Frame frame) {
     int li = std::min(i, cinfo->image_height - 1);
     y_lines[i] = static_cast<JSAMPROW>(py + li * frame.yuv_planes.y_stride);
     if (i < padded_height / c_vsub_sampling) {
+      li = std::min(i, (cinfo->image_height - 1) / c_vsub_sampling);
       cr_lines[i] =
           static_cast<JSAMPROW>(pcr + li * frame.yuv_planes.cbcr_stride);
       cb_lines[i] =
