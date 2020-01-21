@@ -68,9 +68,15 @@ class EmulatedScene {
 
   // Get sensor response in physical units (electrons) for light hitting the
   // current readout pixel, after passing through color filters. The readout
-  // pixel will be auto-incremented. The returned array can be indexed with
-  // ColorChannels.
+  // pixel will be auto-incremented horizontally. The returned array can be
+  // indexed with ColorChannels.
   const uint32_t* GetPixelElectrons();
+
+  // Get sensor response in physical units (electrons) for light hitting the
+  // current readout pixel, after passing through color filters. The readout
+  // pixel will be auto-incremented vertically. The returned array can be
+  // indexed with ColorChannels.
+  const uint32_t* GetPixelElectronsColumn();
 
   enum ColorChannels { R = 0, Gr, Gb, B, Y, Cb, Cr, NUM_CHANNELS };
 

@@ -357,6 +357,24 @@ const uint32_t* EmulatedScene::GetPixelElectrons() {
   return pixel;
 }
 
+const uint32_t* EmulatedScene::GetPixelElectronsColumn() {
+  const uint32_t* pixel = current_scene_material_;
+  current_y_++;
+  sub_y_++;
+  if (current_y_ >= sensor_height_) {
+    current_y_ = 0;
+    current_x_++;
+    if (current_x_ >= sensor_width_) current_x_ = 0;
+    SetReadoutPixel(current_x_, current_y_);
+  } else if (sub_y_ > map_div_) {
+    scene_idx_ += kSceneWidth;
+    scene_y_++;
+    current_scene_material_ = &(current_colors_[kScene[scene_idx_]]);
+    sub_y_ = 0;
+  }
+  return pixel;
+}
+
 // Handshake model constants.
 // Frequencies measured in a nanosecond timebase
 const float EmulatedScene::kHorizShakeFreq1 = 2 * M_PI * 2 / 1e9;   // 2 Hz

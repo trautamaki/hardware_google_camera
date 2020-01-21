@@ -659,6 +659,15 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     zoom_ratio_ = std::min(std::max(entry.data.f[0], min_zoom), max_zoom);
   }
 
+  // Check rotate_and_crop setting
+  rotate_and_crop_ = false;
+  ret = request_settings_->Get(ANDROID_SCALER_ROTATE_AND_CROP, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (entry.data.u8[0] == ANDROID_SCALER_ROTATE_AND_CROP_90) {
+      rotate_and_crop_ = true;
+    }
+  }
+
   // 3A modes are active in case the scene is disabled or set to face priority
   // or the control mode is not using scenes
   if ((scene_mode_ == ANDROID_CONTROL_SCENE_MODE_DISABLED) ||
@@ -741,6 +750,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->report_green_split = report_green_split_;
   sensor_settings->report_noise_profile = report_noise_profile_;
   sensor_settings->zoom_ratio = zoom_ratio_;
+  sensor_settings->rotate_and_crop = rotate_and_crop_;
 
   return OK;
 }
@@ -2169,6 +2179,42 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
             __FUNCTION__);
       return BAD_VALUE;
     }
+    bool set_rotate_and_crop = false;
+    uint8_t rotate_and_crop_value = ANDROID_SCALER_ROTATE_AND_CROP_NONE;
+    ret = static_metadata_->Get(ANDROID_SCALER_AVAILABLE_ROTATE_AND_CROP_MODES,
+                                &entry);
+    if ((ret == OK) && (entry.count > 0)) {
+      // Listing rotate and crop, so need to make sure it's consistently reported
+      if (available_requests_.find(ANDROID_SCALER_ROTATE_AND_CROP) ==
+          available_requests_.end()) {
+        ALOGE(
+            "%s: Rotate and crop must be listed in request keys if supported!",
+            __FUNCTION__);
+        return BAD_VALUE;
+      }
+      if (available_results_.find(ANDROID_SCALER_ROTATE_AND_CROP) ==
+          available_results_.end()) {
+        ALOGE("%s: Rotate and crop must be listed in result keys if supported!",
+              __FUNCTION__);
+        return BAD_VALUE;
+      }
+      if (available_characteristics_.find(
+              ANDROID_SCALER_AVAILABLE_ROTATE_AND_CROP_MODES) ==
+          available_characteristics_.end()) {
+        ALOGE(
+            "%s: Rotate and crop must be listed in characteristics keys if "
+            "supported!",
+            __FUNCTION__);
+        return BAD_VALUE;
+      }
+      set_rotate_and_crop = true;
+      for (size_t i = 0; i < entry.count; i++) {
+        if (entry.data.u8[i] == ANDROID_SCALER_ROTATE_AND_CROP_AUTO) {
+          rotate_and_crop_value = ANDROID_SCALER_ROTATE_AND_CROP_AUTO;
+          break;
+        }
+      }
+    }
 
     for (size_t idx = 0; idx < kTemplateCount; idx++) {
       if (default_requests_[idx].get() == nullptr) {
@@ -2178,6 +2224,10 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
       default_requests_[idx]->Set(ANDROID_SCALER_CROP_REGION,
                                   scaler_crop_region_default_,
                                   ARRAY_SIZE(scaler_crop_region_default_));
+      if (set_rotate_and_crop) {
+        default_requests_[idx]->Set(ANDROID_SCALER_ROTATE_AND_CROP,
+                                    &rotate_and_crop_value, 1);
+      }
     }
   }
 

@@ -187,6 +187,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     bool report_green_split = false;
     bool report_noise_profile = false;
     float zoom_ratio = 1.0f;
+    bool rotate_and_crop = false;
   };
 
   // Maps physical and logical camera ids to individual device settings
@@ -290,7 +291,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
                   uint32_t stride, RGBLayout layout, uint32_t gain,
                   const SensorCharacteristics& chars);
   void CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width, uint32_t height,
-                     uint32_t gain, float zoom_ratio,
+                     uint32_t gain, float zoom_ratio, bool rotate,
                      const SensorCharacteristics& chars);
   void CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width, uint32_t height,
                     uint32_t stride, const SensorCharacteristics& chars);
@@ -303,7 +304,8 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   status_t ProcessYUV420(const YUV420Frame& input, const YUV420Frame& output,
                          uint32_t gain, bool reprocess_request,
-                         float zoom_ratio, const SensorCharacteristics& chars);
+                         float zoom_ratio, bool rotate_and_crop,
+                         const SensorCharacteristics& chars);
 
   inline int32_t ApplysRGBGamma(int32_t value, int32_t saturation);
 
