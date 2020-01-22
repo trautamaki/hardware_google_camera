@@ -29,6 +29,12 @@ using CameraDeviceStatusChangeFunc = std::function<void(
     std::string /*camera_id*/, CameraDeviceStatus /*new_status*/)>;
 
 // See the definition of
+// ::android::hardware::camera::provider::V2_6::ICameraProviderCallback
+using PhysicalCameraDeviceStatusChangeFunc = std::function<void(
+    std::string /*camera_id*/, std::string /*physical_camera_id*/,
+    CameraDeviceStatus /*new_status*/)>;
+
+// See the definition of
 // ::android::hardware::camera::provider::V2_4::ICameraProviderCallback
 using TorchModeStatusChangeFunc =
     std::function<void(std::string /*camera_id*/, TorchModeStatus /*new_status*/)>;
@@ -37,6 +43,9 @@ using TorchModeStatusChangeFunc =
 struct CameraProviderCallback {
   // Callback to notify when a camera device's status changed.
   CameraDeviceStatusChangeFunc camera_device_status_change;
+
+  // Callback to notify when a physical camera device's status changed.
+  PhysicalCameraDeviceStatusChangeFunc physical_camera_device_status_change;
 
   // Callback to notify when a torch mode status changed.
   TorchModeStatusChangeFunc torch_mode_status_change;

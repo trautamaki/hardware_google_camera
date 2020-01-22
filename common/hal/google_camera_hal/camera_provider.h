@@ -40,6 +40,10 @@ class CameraProvider {
   // Set callback functions.
   status_t SetCallback(const CameraProviderCallback* callback);
 
+  // Trigger deferred callbacks (such as physical camera avail/unavail) right
+  // after setCallback() is called.
+  status_t TriggerDeferredCallbacks();
+
   // Get vendor tags.
   status_t GetVendorTags(
       std::vector<VendorTagSection>* vendor_tag_sections) const;

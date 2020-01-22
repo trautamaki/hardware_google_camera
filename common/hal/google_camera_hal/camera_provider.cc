@@ -149,6 +149,15 @@ status_t CameraProvider::SetCallback(const CameraProviderCallback* callback) {
                 std::to_string(camera_id), new_status);
           });
 
+  hwl_provider_callback_.physical_camera_device_status_change =
+      HwlPhysicalCameraDeviceStatusChangeFunc(
+          [this](uint32_t camera_id, uint32_t physical_camera_id,
+                 CameraDeviceStatus new_status) {
+            provider_callback_->physical_camera_device_status_change(
+                std::to_string(camera_id), std::to_string(physical_camera_id),
+                new_status);
+          });
+
   hwl_provider_callback_.torch_mode_status_change = HwlTorchModeStatusChangeFunc(
       [this](uint32_t camera_id, TorchModeStatus new_status) {
         provider_callback_->torch_mode_status_change(std::to_string(camera_id),
@@ -157,6 +166,11 @@ status_t CameraProvider::SetCallback(const CameraProviderCallback* callback) {
 
   camera_provider_hwl_->SetCallback(hwl_provider_callback_);
   return OK;
+}
+
+status_t CameraProvider::TriggerDeferredCallbacks() {
+  ATRACE_CALL();
+  return camera_provider_hwl_->TriggerDeferredCallbacks();
 }
 
 status_t CameraProvider::GetVendorTags(
