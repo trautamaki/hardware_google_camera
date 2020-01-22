@@ -47,6 +47,10 @@ class MockProviderHwl : public CameraProviderHwl {
     return OK;
   };
 
+  status_t TriggerDeferredCallbacks() override {
+    return OK;
+  };
+
   status_t GetVendorTags(
       std::vector<VendorTagSection>* vendor_tag_sections) override {
     if (vendor_tag_sections == nullptr) {

@@ -34,6 +34,10 @@ class CameraProviderHwl {
   // Set camera provider callback functions to camera HWL.
   virtual status_t SetCallback(const HwlCameraProviderCallback& callback) = 0;
 
+  // Trigger a deferred callback (such as physical camera avail/unavail) right
+  // after setCallback() is called.
+  virtual status_t TriggerDeferredCallbacks() = 0;
+
   // Get all vendor tags supported by devices. The tags are grouped into
   // sections.
   virtual status_t GetVendorTags(
