@@ -593,8 +593,46 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
 status_t EmulatedCameraProviderHwlImpl::SetCallback(
     const HwlCameraProviderCallback& callback) {
   torch_cb_ = callback.torch_mode_status_change;
+  physical_camera_status_cb_ = callback.physical_camera_device_status_change;
 
   return OK;
+}
+
+status_t EmulatedCameraProviderHwlImpl::TriggerDeferredCallbacks() {
+  std::lock_guard<std::mutex> lock(status_callback_future_lock_);
+  if (status_callback_future_.valid()) {
+    return OK;
+  }
+
+  status_callback_future_ = std::async(
+      std::launch::async,
+      &EmulatedCameraProviderHwlImpl::NotifyPhysicalCameraUnavailable, this);
+  return OK;
+}
+
+void EmulatedCameraProviderHwlImpl::WaitForStatusCallbackFuture() {
+  {
+    std::lock_guard<std::mutex> lock(status_callback_future_lock_);
+    if (!status_callback_future_.valid()) {
+      // If there is no future pending, construct a dummy one.
+      status_callback_future_ = std::async([]() { return; });
+    }
+  }
+  status_callback_future_.wait();
+}
+
+void EmulatedCameraProviderHwlImpl::NotifyPhysicalCameraUnavailable() {
+  for (auto one_map : camera_id_map_) {
+    if (one_map.second.size() <= 2) continue;
+
+    // Only notify one unavailable physical camera if there are more than 2
+    // physical cameras backing the logical camera
+    uint32_t logicalCameraId = one_map.first;
+    uint32_t physicalCameraId = one_map.second[one_map.second.size() - 1];
+    physical_camera_status_cb_(
+        logicalCameraId, physicalCameraId,
+        google_camera_hal::CameraDeviceStatus::kNotPresent);
+  }
 }
 
 status_t EmulatedCameraProviderHwlImpl::GetVendorTags(
