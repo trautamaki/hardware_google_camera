@@ -137,6 +137,11 @@ struct StreamConfiguration {
   uint32_t stream_config_counter = 0;
 };
 
+struct CameraIdAndStreamConfiguration {
+  uint32_t camera_id;
+  StreamConfiguration stream_configuration;
+};
+
 // See the definition of
 // ::android::hardware::camera::device::V3_4::HalStream
 struct HalStream {

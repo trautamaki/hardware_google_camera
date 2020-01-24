@@ -215,6 +215,35 @@ bool CameraProvider::IsSetTorchModeSupported() const {
   return camera_provider_hwl_->IsSetTorchModeSupported();
 }
 
+status_t CameraProvider::IsConcurrentStreamCombinationSupported(
+    const std::vector<CameraIdAndStreamConfiguration>& configs,
+    bool* is_supported) {
+  ATRACE_CALL();
+  if (camera_provider_hwl_ == nullptr) {
+    ALOGE("%s: Camera provider HWL was not initialized.", __FUNCTION__);
+    return NO_INIT;
+  }
+  return camera_provider_hwl_->IsConcurrentStreamCombinationSupported(
+      configs, is_supported);
+}
+
+// Get the combinations of camera ids which support concurrent streaming
+status_t CameraProvider::GetConcurrentStreamingCameraIds(
+    std::vector<std::unordered_set<uint32_t>>* camera_id_combinations) {
+  if (camera_id_combinations == nullptr) {
+    return BAD_VALUE;
+  }
+
+  ATRACE_CALL();
+  if (camera_provider_hwl_ == nullptr) {
+    ALOGE("%s: Camera provider HWL was not initialized.", __FUNCTION__);
+    return NO_INIT;
+  }
+
+  return camera_provider_hwl_->GetConcurrentStreamingCameraIds(
+      camera_id_combinations);
+}
+
 status_t CameraProvider::CreateCameraDevice(
     uint32_t camera_id, std::unique_ptr<CameraDevice>* device) {
   ATRACE_CALL();
