@@ -202,6 +202,7 @@ class EmulatedRequestState {
   uint8_t ae_trigger_ = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
   FPSRange ae_target_fps_ = {0, 0};
   float zoom_ratio_ = 1.0f;
+  bool rotate_and_crop_ = false;
   uint8_t bokeh_mode_ = ANDROID_CONTROL_BOKEH_MODE_OFF;
   static const int32_t kMinimumStreamingFPS = 20;
   bool ae_lock_available_ = false;

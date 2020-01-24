@@ -637,7 +637,7 @@ bool EmulatedSensor::threadLoop() {
             auto ret = ProcessYUV420(
                 yuv_input, yuv_output, device_settings->second.gain,
                 reprocess_request, device_settings->second.zoom_ratio,
-                device_chars->second);
+                device_settings->second.rotate_and_crop, device_chars->second);
             if (ret != 0) {
               (*b)->stream_buffer.status = BufferStatus::kError;
               break;
@@ -678,7 +678,7 @@ bool EmulatedSensor::threadLoop() {
           auto ret = ProcessYUV420(
               yuv_input, yuv_output, device_settings->second.gain,
               reprocess_request, device_settings->second.zoom_ratio,
-              device_chars->second);
+              device_settings->second.rotate_and_crop, device_chars->second);
           if (ret != 0) {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
@@ -963,7 +963,7 @@ void EmulatedSensor::CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,
 
 void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
                                    uint32_t height, uint32_t gain,
-                                   float zoom_ratio,
+                                   float zoom_ratio, bool rotate,
                                    const SensorCharacteristics& chars) {
   ATRACE_CALL();
   float total_gain = gain / 100.0 * GetBaseGainFactor(chars.max_raw_value);
@@ -982,22 +982,43 @@ void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
   const int scale_out_sq = scale_out * scale_out;  // after multiplies
 
   // inc = how many pixels to skip while reading every next pixel
+  const float aspect_ratio = static_cast<float>(width) / height;
+
+  // precalculate normalized coordinates and dimensions
+  const float norm_left_top = 0.5f - 0.5f / zoom_ratio;
+  const float norm_rot_top = norm_left_top;
+  const float norm_width = 1 / zoom_ratio;
+  const float norm_rot_width = norm_width / aspect_ratio;
+  const float norm_rot_height = norm_width;
+  const float norm_rot_left =
+      norm_left_top + (norm_width + norm_rot_width) * 0.5f;
+
   for (unsigned int out_y = 0; out_y < height; out_y++) {
     uint8_t* px_y = yuv_layout.img_y + out_y * yuv_layout.y_stride;
     uint8_t* px_cb = yuv_layout.img_cb + (out_y / 2) * yuv_layout.cbcr_stride;
     uint8_t* px_cr = yuv_layout.img_cr + (out_y / 2) * yuv_layout.cbcr_stride;
-    for (unsigned int out_x = 0; out_x < yuv_layout.y_stride; out_x++) {
-      int x = static_cast<int>(chars.width * (0.5f - 0.5f / zoom_ratio +
-                                              out_x / (width * zoom_ratio)));
-      int y = static_cast<int>(chars.height * (0.5f - 0.5f / zoom_ratio +
-                                               out_y / (height * zoom_ratio)));
+
+    for (unsigned int out_x = 0; out_x < width; out_x++) {
+      int x, y;
+      float norm_x = out_x / (width * zoom_ratio);
+      float norm_y = out_y / (height * zoom_ratio);
+      if (rotate) {
+        x = static_cast<int>(chars.width *
+                             (norm_rot_left - norm_y * norm_rot_width));
+        y = static_cast<int>(chars.height *
+                             (norm_rot_top + norm_x * norm_rot_height));
+      } else {
+        x = static_cast<int>(chars.width * (norm_left_top + norm_x));
+        y = static_cast<int>(chars.height * (norm_left_top + norm_y));
+      }
       x = std::min(std::max(x, 0), (int)chars.width - 1);
       y = std::min(std::max(y, 0), (int)chars.height - 1);
       scene_->SetReadoutPixel(x, y);
 
       int32_t r_count, g_count, b_count;
       // TODO: Perfect demosaicing is a cheat
-      const uint32_t* pixel = scene_->GetPixelElectrons();
+      const uint32_t* pixel = rotate ? scene_->GetPixelElectronsColumn()
+                                     : scene_->GetPixelElectrons();
       r_count = pixel[EmulatedScene::R] * scale64x;
       r_count = r_count < kSaturationPoint ? r_count : kSaturationPoint;
       g_count = pixel[EmulatedScene::Gr] * scale64x;
@@ -1060,6 +1081,7 @@ void EmulatedSensor::CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width,
 status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
                                        const YUV420Frame& output, uint32_t gain,
                                        bool reprocess_request, float zoom_ratio,
+                                       bool rotate_and_crop,
                                        const SensorCharacteristics& chars) {
   ATRACE_CALL();
   size_t input_width, input_height;
@@ -1094,6 +1116,7 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
     // Generate the smallest possible frame with the expected AR and
     // then scale using libyuv.
     float aspect_ratio = static_cast<float>(output.width) / output.height;
+    zoom_ratio = std::max(1.f, zoom_ratio);
     input_width = EmulatedScene::kSceneWidth * aspect_ratio;
     input_height = EmulatedScene::kSceneHeight;
     temp_yuv.reserve((input_width * input_height * 3) / 2);
@@ -1106,7 +1129,7 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
         .cbcr_stride = static_cast<uint32_t>(input_width) / 2,
         .cbcr_step = 1};
     CaptureYUV420(input_planes, input_width, input_height, gain, zoom_ratio,
-                  chars);
+                  rotate_and_crop, chars);
   }
 
   output_planes = output.planes;
