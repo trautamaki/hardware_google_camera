@@ -54,6 +54,15 @@ class CameraProvider {
   status_t CreateCameraDevice(uint32_t camera_id,
                               std::unique_ptr<CameraDevice>* device);
 
+  // Get the combinations of camera ids which support concurrent streaming
+  status_t GetConcurrentStreamingCameraIds(
+      std::vector<std::unordered_set<uint32_t>>* camera_id_combinations);
+
+  // Check if a set of concurrent stream  configurations are supported
+  status_t IsConcurrentStreamCombinationSupported(
+      const std::vector<CameraIdAndStreamConfiguration>& configs,
+      bool* is_supported);
+
  protected:
   CameraProvider() = default;
 
