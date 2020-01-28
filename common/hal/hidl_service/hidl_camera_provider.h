@@ -40,6 +40,7 @@ using ::android::hardware::camera::common::V1_0::VendorTag;
 using ::android::hardware::camera::common::V1_0::VendorTagSection;
 using ::android::hardware::camera::provider::V2_4::ICameraProviderCallback;
 using ::android::hardware::camera::provider::V2_5::DeviceState;
+using ::android::hardware::camera::provider::V2_6::CameraIdAndStreamCombination;
 using ::android::hardware::camera::provider::V2_6::ICameraProvider;
 
 using ::android::google_camera_hal::CameraProvider;
@@ -63,6 +64,13 @@ class HidlCameraProvider : public ICameraProvider {
 
   Return<void> isSetTorchModeSupported(
       isSetTorchModeSupported_cb _hidl_cb) override;
+
+  Return<void> getConcurrentStreamingCameraIds(
+      getConcurrentStreamingCameraIds_cb _hidl_cb) override;
+
+  Return<void> isConcurrentStreamCombinationSupported(
+      const hidl_vec<CameraIdAndStreamCombination>& configs,
+      isConcurrentStreamCombinationSupported_cb _hidl_cb) override;
 
   Return<void> getCameraDeviceInterface_V1_x(
       const hidl_string& cameraDeviceName,

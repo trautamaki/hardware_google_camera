@@ -223,6 +223,68 @@ Return<void> HidlCameraProvider::getCameraIdList(getCameraIdList_cb _hidl_cb) {
   return Void();
 }
 
+Return<void> HidlCameraProvider::getConcurrentStreamingCameraIds(
+    getConcurrentStreamingCameraIds_cb _hidl_cb) {
+  hidl_vec<hidl_vec<hidl_string>> hidl_camera_id_combinations;
+  std::vector<std::unordered_set<uint32_t>> camera_id_combinations;
+  status_t res = google_camera_provider_->GetConcurrentStreamingCameraIds(
+      &camera_id_combinations);
+  if (res != OK) {
+    ALOGE(
+        "%s: Getting the combinations of concurrent streaming camera ids "
+        "failed: %s(%d)",
+        __FUNCTION__, strerror(-res), res);
+    _hidl_cb(Status::INTERNAL_ERROR, hidl_camera_id_combinations);
+    return Void();
+  }
+  hidl_camera_id_combinations.resize(camera_id_combinations.size());
+  int i = 0;
+  for (auto& combination : camera_id_combinations) {
+    hidl_vec<hidl_string> hidl_combination(combination.size());
+    int c = 0;
+    for (auto& camera_id : combination) {
+      hidl_combination[c] = std::to_string(camera_id);
+      c++;
+    }
+    hidl_camera_id_combinations[i] = hidl_combination;
+    i++;
+  }
+  _hidl_cb(Status::OK, hidl_camera_id_combinations);
+  return Void();
+}
+
+Return<void> HidlCameraProvider::isConcurrentStreamCombinationSupported(
+    const hidl_vec<CameraIdAndStreamCombination>& configs,
+    isConcurrentStreamCombinationSupported_cb _hidl_cb) {
+  std::vector<google_camera_hal::CameraIdAndStreamConfiguration>
+      devices_stream_configs(configs.size());
+  status_t res = OK;
+  size_t c = 0;
+  for (auto& config : configs) {
+    res = hidl_utils::ConverToHalStreamConfig(
+        config.streamConfiguration,
+        &devices_stream_configs[c].stream_configuration);
+    if (res != OK) {
+      ALOGE("%s: ConverToHalStreamConfig failed", __FUNCTION__);
+      _hidl_cb(Status::INTERNAL_ERROR, false);
+      return Void();
+    }
+    uint32_t camera_id = atoi(config.cameraId.c_str());
+    devices_stream_configs[c].camera_id = camera_id;
+    c++;
+  }
+  bool is_supported = false;
+  res = google_camera_provider_->IsConcurrentStreamCombinationSupported(
+      devices_stream_configs, &is_supported);
+  if (res != OK) {
+    ALOGE("%s: ConverToHalStreamConfig failed", __FUNCTION__);
+    _hidl_cb(Status::INTERNAL_ERROR, false);
+    return Void();
+  }
+  _hidl_cb(Status::OK, is_supported);
+  return Void();
+}
+
 Return<void> HidlCameraProvider::isSetTorchModeSupported(
     isSetTorchModeSupported_cb _hidl_cb) {
   bool is_supported = google_camera_provider_->IsSetTorchModeSupported();
