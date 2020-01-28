@@ -27,6 +27,7 @@ namespace android {
 
 using google_camera_hal::CameraBufferAllocatorHwl;
 using google_camera_hal::CameraDeviceHwl;
+using google_camera_hal::CameraIdAndStreamConfiguration;
 using google_camera_hal::CameraProviderHwl;
 using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::HwlCameraProviderCallback;
@@ -57,6 +58,12 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
     return true;
   }
 
+  status_t GetConcurrentStreamingCameraIds(
+      std::vector<std::unordered_set<uint32_t>>*) override;
+
+  status_t IsConcurrentStreamCombinationSupported(
+      const std::vector<CameraIdAndStreamConfiguration>&, bool*) override;
+
   status_t CreateCameraDeviceHwl(
       uint32_t camera_id,
       std::unique_ptr<CameraDeviceHwl>* camera_device_hwl) override;
@@ -70,6 +77,7 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   uint32_t ParseCharacteristics(const Json::Value& root, ssize_t id);
   status_t GetTagFromName(const char* name, uint32_t* tag);
   status_t WaitForQemuSfFakeCameraPropertyAvailable();
+  bool Supports720pYUVAndPrivate(uint32_t camera_id);
 
   static const char* kConfigurationFileLocation[];
 
