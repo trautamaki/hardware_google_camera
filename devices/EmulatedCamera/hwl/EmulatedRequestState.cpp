@@ -660,11 +660,14 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   }
 
   // Check rotate_and_crop setting
-  rotate_and_crop_ = false;
   ret = request_settings_->Get(ANDROID_SCALER_ROTATE_AND_CROP, &entry);
   if ((ret == OK) && (entry.count == 1)) {
-    if (entry.data.u8[0] == ANDROID_SCALER_ROTATE_AND_CROP_90) {
-      rotate_and_crop_ = true;
+    if (available_rotate_crop_modes_.find(entry.data.u8[0]) !=
+        available_rotate_crop_modes_.end()) {
+      rotate_and_crop_ = entry.data.u8[0];
+    } else {
+      ALOGE("%s: Unsupported rotate and crop mode: %u", __FUNCTION__, entry.data.u8[0]);
+      return BAD_VALUE;
     }
   }
 
@@ -750,6 +753,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->report_green_split = report_green_split_;
   sensor_settings->report_noise_profile = report_noise_profile_;
   sensor_settings->zoom_ratio = zoom_ratio_;
+  sensor_settings->report_rotate_and_crop = report_rotate_and_crop_;
   sensor_settings->rotate_and_crop = rotate_and_crop_;
 
   return OK;
@@ -2179,8 +2183,6 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
             __FUNCTION__);
       return BAD_VALUE;
     }
-    bool set_rotate_and_crop = false;
-    uint8_t rotate_and_crop_value = ANDROID_SCALER_ROTATE_AND_CROP_NONE;
     ret = static_metadata_->Get(ANDROID_SCALER_AVAILABLE_ROTATE_AND_CROP_MODES,
                                 &entry);
     if ((ret == OK) && (entry.count > 0)) {
@@ -2207,12 +2209,12 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
             __FUNCTION__);
         return BAD_VALUE;
       }
-      set_rotate_and_crop = true;
+      report_rotate_and_crop_ = true;
       for (size_t i = 0; i < entry.count; i++) {
         if (entry.data.u8[i] == ANDROID_SCALER_ROTATE_AND_CROP_AUTO) {
-          rotate_and_crop_value = ANDROID_SCALER_ROTATE_AND_CROP_AUTO;
-          break;
+          rotate_and_crop_ = ANDROID_SCALER_ROTATE_AND_CROP_AUTO;
         }
+        available_rotate_crop_modes_.insert(entry.data.u8[i]);
       }
     }
 
@@ -2224,9 +2226,9 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
       default_requests_[idx]->Set(ANDROID_SCALER_CROP_REGION,
                                   scaler_crop_region_default_,
                                   ARRAY_SIZE(scaler_crop_region_default_));
-      if (set_rotate_and_crop) {
+      if (report_rotate_and_crop_) {
         default_requests_[idx]->Set(ANDROID_SCALER_ROTATE_AND_CROP,
-                                    &rotate_and_crop_value, 1);
+                                    &rotate_and_crop_, 1);
       }
     }
   }

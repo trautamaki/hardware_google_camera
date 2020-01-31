@@ -187,7 +187,8 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     bool report_green_split = false;
     bool report_noise_profile = false;
     float zoom_ratio = 1.0f;
-    bool rotate_and_crop = false;
+    bool report_rotate_and_crop = false;
+    uint8_t rotate_and_crop = ANDROID_SCALER_ROTATE_AND_CROP_NONE;
   };
 
   // Maps physical and logical camera ids to individual device settings

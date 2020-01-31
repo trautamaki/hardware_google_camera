@@ -634,10 +634,12 @@ bool EmulatedSensor::threadLoop() {
                                    .height = jpeg_input->height,
                                    .planes = jpeg_input->yuv_planes};
 
+            bool rotate =
+                device_settings->second.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
             auto ret = ProcessYUV420(
                 yuv_input, yuv_output, device_settings->second.gain,
                 reprocess_request, device_settings->second.zoom_ratio,
-                device_settings->second.rotate_and_crop, device_chars->second);
+                rotate, device_chars->second);
             if (ret != 0) {
               (*b)->stream_buffer.status = BufferStatus::kError;
               break;
@@ -675,10 +677,12 @@ bool EmulatedSensor::threadLoop() {
           YUV420Frame yuv_output{.width = (*b)->width,
                                  .height = (*b)->height,
                                  .planes = (*b)->plane.img_y_crcb};
+          bool rotate =
+              device_settings->second.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
           auto ret = ProcessYUV420(
               yuv_input, yuv_output, device_settings->second.gain,
               reprocess_request, device_settings->second.zoom_ratio,
-              device_settings->second.rotate_and_crop, device_chars->second);
+              rotate, device_chars->second);
           if (ret != 0) {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
@@ -801,12 +805,15 @@ void EmulatedSensor::ReturnResults(
     if (logical_settings->second.report_green_split) {
       result->result_metadata->Set(ANDROID_SENSOR_GREEN_SPLIT, &kGreenSplit, 1);
     }
-
     if (logical_settings->second.report_noise_profile) {
       CalculateAndAppendNoiseProfile(
           logical_settings->second.gain,
           GetBaseGainFactor(device_chars->second.max_raw_value),
           result->result_metadata.get());
+    }
+    if (logical_settings->second.report_rotate_and_crop) {
+      result->result_metadata->Set(ANDROID_SCALER_ROTATE_AND_CROP,
+          &logical_settings->second.rotate_and_crop, 1);
     }
 
     if (!result->physical_camera_results.empty()) {
