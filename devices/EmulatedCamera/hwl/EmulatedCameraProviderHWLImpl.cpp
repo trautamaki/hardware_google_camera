@@ -41,6 +41,8 @@ const char* EmulatedCameraProviderHwlImpl::kConfigurationFileLocation[] = {
     "/vendor/etc/config/emu_camera_depth.json",
 };
 
+constexpr StreamSize s720pStreamSize = std::pair(1280, 720);
+
 std::unique_ptr<EmulatedCameraProviderHwlImpl>
 EmulatedCameraProviderHwlImpl::Create() {
   auto provider = std::unique_ptr<EmulatedCameraProviderHwlImpl>(
@@ -130,6 +132,90 @@ status_t EmulatedCameraProviderHwlImpl::GetTagFromName(const char* name,
   }
 
   *tag = candidate_tag;
+  return OK;
+}
+
+bool EmulatedCameraProviderHwlImpl::Supports720pYUVAndPrivate(uint32_t camera_id) {
+  auto map =
+      std::make_unique<StreamConfigurationMap>(*(static_metadata_[camera_id]));
+  auto yuv_output_sizes = map->GetOutputSizes(HAL_PIXEL_FORMAT_YCBCR_420_888);
+  auto priv_output_sizes =
+      map->GetOutputSizes(HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED);
+
+  if (yuv_output_sizes.empty()) {
+    ALOGW("%s: No YUV output supported by camera id %u", __FUNCTION__,
+          camera_id);
+    return false;
+  }
+  if (priv_output_sizes.empty()) {
+    ALOGW("No PRIV output supported by camera id %u", camera_id);
+    return false;
+  }
+  // Check whether both sizes contain 720p
+  if (yuv_output_sizes.find(s720pStreamSize) == yuv_output_sizes.end()) {
+    ALOGW("%s: 720p YUV output not found for camera id %u", __FUNCTION__,
+          camera_id);
+    return false;
+  }
+  if (priv_output_sizes.find(s720pStreamSize) == priv_output_sizes.end()) {
+    ALOGW("%s: 720p PRIV output not found for camera id %u", __FUNCTION__,
+          camera_id);
+    return false;
+  }
+
+  return true;
+}
+
+status_t EmulatedCameraProviderHwlImpl::GetConcurrentStreamingCameraIds(
+    std::vector<std::unordered_set<uint32_t>>* combinations) {
+  if (combinations == nullptr) {
+    return BAD_VALUE;
+  }
+  // Collect all camera ids that support the guaranteed stream combinations
+  // (720p YUV and IMPLEMENTATION_DEFINED) and put them in one set. We don't
+  // make all possible combinations since it should be possible to stream all
+  // of them at once in the emulated camera.
+  std::unordered_set<uint32_t> candidate_ids;
+  for (auto& entry : camera_id_map_) {
+    if (Supports720pYUVAndPrivate(entry.first)) {
+      candidate_ids.insert(entry.first);
+    }
+  }
+  combinations->emplace_back(std::move(candidate_ids));
+  return OK;
+}
+
+status_t EmulatedCameraProviderHwlImpl::IsConcurrentStreamCombinationSupported(
+    const std::vector<CameraIdAndStreamConfiguration>& configs,
+    bool* is_supported) {
+  *is_supported = false;
+
+  // Go through the given camera ids, get their sensor characteristics, stream
+  // config maps and call EmulatedSensor::IsStreamCombinationSupported()
+  for (auto& config : configs) {
+    // TODO: Consider caching sensor characteristics and StreamConfigurationMap
+    if (camera_id_map_.find(config.camera_id) == camera_id_map_.end()) {
+      ALOGE("%s: Camera id %u does not exist", __FUNCTION__, config.camera_id);
+      return BAD_VALUE;
+    }
+    auto stream_configuration_map = std::make_unique<StreamConfigurationMap>(
+        *(static_metadata_[config.camera_id]));
+    SensorCharacteristics sensor_chars;
+    status_t ret = GetSensorCharacteristics(
+        (static_metadata_[config.camera_id]).get(), &sensor_chars);
+    if (ret != OK) {
+      ALOGE("%s: Unable to extract sensor chars for camera id %u", __FUNCTION__,
+            config.camera_id);
+      return UNKNOWN_ERROR;
+    }
+    if (!EmulatedSensor::IsStreamCombinationSupported(
+            config.stream_configuration, *stream_configuration_map,
+            sensor_chars)) {
+      return OK;
+    }
+  }
+
+  *is_supported = true;
   return OK;
 }
 
@@ -593,8 +679,46 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
 status_t EmulatedCameraProviderHwlImpl::SetCallback(
     const HwlCameraProviderCallback& callback) {
   torch_cb_ = callback.torch_mode_status_change;
+  physical_camera_status_cb_ = callback.physical_camera_device_status_change;
 
   return OK;
+}
+
+status_t EmulatedCameraProviderHwlImpl::TriggerDeferredCallbacks() {
+  std::lock_guard<std::mutex> lock(status_callback_future_lock_);
+  if (status_callback_future_.valid()) {
+    return OK;
+  }
+
+  status_callback_future_ = std::async(
+      std::launch::async,
+      &EmulatedCameraProviderHwlImpl::NotifyPhysicalCameraUnavailable, this);
+  return OK;
+}
+
+void EmulatedCameraProviderHwlImpl::WaitForStatusCallbackFuture() {
+  {
+    std::lock_guard<std::mutex> lock(status_callback_future_lock_);
+    if (!status_callback_future_.valid()) {
+      // If there is no future pending, construct a dummy one.
+      status_callback_future_ = std::async([]() { return; });
+    }
+  }
+  status_callback_future_.wait();
+}
+
+void EmulatedCameraProviderHwlImpl::NotifyPhysicalCameraUnavailable() {
+  for (auto one_map : camera_id_map_) {
+    if (one_map.second.size() <= 2) continue;
+
+    // Only notify one unavailable physical camera if there are more than 2
+    // physical cameras backing the logical camera
+    uint32_t logicalCameraId = one_map.first;
+    uint32_t physicalCameraId = one_map.second[one_map.second.size() - 1];
+    physical_camera_status_cb_(
+        logicalCameraId, physicalCameraId,
+        google_camera_hal::CameraDeviceStatus::kNotPresent);
+  }
 }
 
 status_t EmulatedCameraProviderHwlImpl::GetVendorTags(

@@ -40,6 +40,10 @@ class CameraProvider {
   // Set callback functions.
   status_t SetCallback(const CameraProviderCallback* callback);
 
+  // Trigger deferred callbacks (such as physical camera avail/unavail) right
+  // after setCallback() is called.
+  status_t TriggerDeferredCallbacks();
+
   // Get vendor tags.
   status_t GetVendorTags(
       std::vector<VendorTagSection>* vendor_tag_sections) const;
@@ -53,6 +57,15 @@ class CameraProvider {
   // Create a CameraDevice for camera_id.
   status_t CreateCameraDevice(uint32_t camera_id,
                               std::unique_ptr<CameraDevice>* device);
+
+  // Get the combinations of camera ids which support concurrent streaming
+  status_t GetConcurrentStreamingCameraIds(
+      std::vector<std::unordered_set<uint32_t>>* camera_id_combinations);
+
+  // Check if a set of concurrent stream  configurations are supported
+  status_t IsConcurrentStreamCombinationSupported(
+      const std::vector<CameraIdAndStreamConfiguration>& configs,
+      bool* is_supported);
 
  protected:
   CameraProvider() = default;

@@ -21,14 +21,17 @@
 #include <hal_types.h>
 #include <json/json.h>
 #include <json/reader.h>
+#include <future>
 
 namespace android {
 
 using google_camera_hal::CameraBufferAllocatorHwl;
 using google_camera_hal::CameraDeviceHwl;
+using google_camera_hal::CameraIdAndStreamConfiguration;
 using google_camera_hal::CameraProviderHwl;
 using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::HwlCameraProviderCallback;
+using google_camera_hal::HwlPhysicalCameraDeviceStatusChangeFunc;
 using google_camera_hal::HwlTorchModeStatusChangeFunc;
 using google_camera_hal::VendorTagSection;
 
@@ -38,10 +41,13 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   // again before the previous one is destroyed will fail.
   static std::unique_ptr<EmulatedCameraProviderHwlImpl> Create();
 
-  virtual ~EmulatedCameraProviderHwlImpl() = default;
+  virtual ~EmulatedCameraProviderHwlImpl() {
+    WaitForStatusCallbackFuture();
+  }
 
   // Override functions in CameraProviderHwl.
   status_t SetCallback(const HwlCameraProviderCallback& callback) override;
+  status_t TriggerDeferredCallbacks() override;
 
   status_t GetVendorTags(
       std::vector<VendorTagSection>* vendor_tag_sections) override;
@@ -51,6 +57,12 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   bool IsSetTorchModeSupported() override {
     return true;
   }
+
+  status_t GetConcurrentStreamingCameraIds(
+      std::vector<std::unordered_set<uint32_t>>*) override;
+
+  status_t IsConcurrentStreamCombinationSupported(
+      const std::vector<CameraIdAndStreamConfiguration>&, bool*) override;
 
   status_t CreateCameraDeviceHwl(
       uint32_t camera_id,
@@ -65,6 +77,7 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   uint32_t ParseCharacteristics(const Json::Value& root, ssize_t id);
   status_t GetTagFromName(const char* name, uint32_t* tag);
   status_t WaitForQemuSfFakeCameraPropertyAvailable();
+  bool Supports720pYUVAndPrivate(uint32_t camera_id);
 
   static const char* kConfigurationFileLocation[];
 
@@ -73,6 +86,12 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   // of regular non-logical device.
   std::unordered_map<uint32_t, std::vector<uint32_t>> camera_id_map_;
   HwlTorchModeStatusChangeFunc torch_cb_;
+  HwlPhysicalCameraDeviceStatusChangeFunc physical_camera_status_cb_;
+
+  std::mutex status_callback_future_lock_;
+  std::future<void> status_callback_future_;
+  void WaitForStatusCallbackFuture();
+  void NotifyPhysicalCameraUnavailable();
 };
 
 extern "C" CameraProviderHwl* CreateCameraProviderHwl() {

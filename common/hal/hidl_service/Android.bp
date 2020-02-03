@@ -15,7 +15,7 @@
  */
 
 cc_library_shared {
-    name: "android.hardware.camera.provider@2.4-impl-google",
+    name: "android.hardware.camera.provider@2.6-impl-google",
     defaults: ["google_camera_hal_defaults"],
     vendor: true,
     relative_install_path: "hw",
@@ -34,6 +34,8 @@ cc_library_shared {
         "android.hardware.camera.device@3.4",
         "android.hardware.camera.device@3.5",
         "android.hardware.camera.provider@2.4",
+        "android.hardware.camera.provider@2.5",
+        "android.hardware.camera.provider@2.6",
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@3.0",
         "android.hardware.thermal@2.0",
@@ -53,19 +55,21 @@ cc_library_shared {
 }
 
 cc_binary {
-    name: "android.hardware.camera.provider@2.4-service-google",
+    name: "android.hardware.camera.provider@2.6-service-google",
     defaults: ["google_camera_hal_defaults"],
     vendor: true,
     relative_install_path: "hw",
     srcs: ["service.cc"],
     compile_multilib: "first",
-    init_rc: ["android.hardware.camera.provider@2.4-service-google.rc"],
+    init_rc: ["android.hardware.camera.provider@2.6-service-google.rc"],
     shared_libs: [
         "android.hardware.camera.device@3.2",
         "android.hardware.camera.device@3.3",
         "android.hardware.camera.device@3.4",
         "android.hardware.camera.device@3.5",
         "android.hardware.camera.provider@2.4",
+        "android.hardware.camera.provider@2.5",
+        "android.hardware.camera.provider@2.6",
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@3.0",
         "libbinder",
@@ -73,4 +77,5 @@ cc_binary {
         "liblog",
         "libutils",
     ],
+    vintf_fragments: ["android.hardware.camera.provider@2.6-service-google.xml"]
 }

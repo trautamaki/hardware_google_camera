@@ -34,7 +34,7 @@ using ::android::hardware::camera::device::V3_2::ErrorMsg;
 using ::android::hardware::camera::device::V3_2::MsgType;
 using ::android::hardware::camera::device::V3_2::ShutterMsg;
 using ::android::hardware::camera::device::V3_5::implementation::HidlCameraDevice;
-using ::android::hardware::camera::provider::V2_4::implementation::HidlCameraProvider;
+using ::android::hardware::camera::provider::V2_6::implementation::HidlCameraProvider;
 
 status_t ConvertToHidlVendorTagType(
     google_camera_hal::CameraMetadataType hal_type,

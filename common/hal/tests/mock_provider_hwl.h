@@ -47,6 +47,10 @@ class MockProviderHwl : public CameraProviderHwl {
     return OK;
   };
 
+  status_t TriggerDeferredCallbacks() override {
+    return OK;
+  };
+
   status_t GetVendorTags(
       std::vector<VendorTagSection>* vendor_tag_sections) override {
     if (vendor_tag_sections == nullptr) {
@@ -73,6 +77,21 @@ class MockProviderHwl : public CameraProviderHwl {
 
   bool IsSetTorchModeSupported() override {
     return is_torch_supported_;
+  }
+
+  status_t IsConcurrentStreamCombinationSupported(
+      const std::vector<CameraIdAndStreamConfiguration>&,
+      bool* is_supported) override {
+    if (is_supported == nullptr) {
+      return BAD_VALUE;
+    }
+    *is_supported = false;
+    return OK;
+  }
+
+  status_t GetConcurrentStreamingCameraIds(
+      std::vector<std::unordered_set<uint32_t>>*) override {
+    return OK;
   }
 
   status_t CreateCameraDeviceHwl(

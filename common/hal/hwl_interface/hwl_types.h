@@ -115,6 +115,12 @@ struct HwlSessionCallback {
 using HwlCameraDeviceStatusChangeFunc =
     std::function<void(uint32_t /*camera_id*/, CameraDeviceStatus /*new_status*/)>;
 
+// Callback defined from framework to indicate the state of physical camera
+// device has changed.
+using HwlPhysicalCameraDeviceStatusChangeFunc =
+    std::function<void(uint32_t /*camera_id*/, uint32_t /*physical_camera_id*/,
+                       CameraDeviceStatus /*new_status*/)>;
+
 // Callback defined from framework to indicate the state of the torch mode
 // has changed.
 using HwlTorchModeStatusChangeFunc =
@@ -124,6 +130,9 @@ using HwlTorchModeStatusChangeFunc =
 struct HwlCameraProviderCallback {
   // Callback to notify when a camera device's status changed.
   HwlCameraDeviceStatusChangeFunc camera_device_status_change;
+
+  // Callback to notify when a physical camera device's status changed.
+  HwlPhysicalCameraDeviceStatusChangeFunc physical_camera_device_status_change;
 
   // Callback to notify when a torch mode status changed.
   HwlTorchModeStatusChangeFunc torch_mode_status_change;

@@ -34,6 +34,10 @@ class CameraProviderHwl {
   // Set camera provider callback functions to camera HWL.
   virtual status_t SetCallback(const HwlCameraProviderCallback& callback) = 0;
 
+  // Trigger a deferred callback (such as physical camera avail/unavail) right
+  // after setCallback() is called.
+  virtual status_t TriggerDeferredCallbacks() = 0;
+
   // Get all vendor tags supported by devices. The tags are grouped into
   // sections.
   virtual status_t GetVendorTags(
@@ -42,6 +46,16 @@ class CameraProviderHwl {
   // Return the camera IDs that are visible to camera framework.
   virtual status_t GetVisibleCameraIds(
       std::vector<std::uint32_t>* camera_ids) = 0;
+
+  // Check if the combinations of camera ids and corresponding stream
+  // configurations are supported.
+  virtual status_t IsConcurrentStreamCombinationSupported(
+      const std::vector<CameraIdAndStreamConfiguration>&, bool*) = 0;
+
+  // Return the combinations of camera ids that can stream concurrently with
+  // guaranteed stream combinations
+  virtual status_t GetConcurrentStreamingCameraIds(
+      std::vector<std::unordered_set<uint32_t>>* combinations) = 0;
 
   // Return if setting torch mode API is supported. Not all camera devices
   // support torch mode so enabling torch mode for a devices is okay to

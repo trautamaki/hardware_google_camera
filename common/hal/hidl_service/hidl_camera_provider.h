@@ -17,16 +17,15 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_PROVIDER_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_PROVIDER_H_
 
-#include <android/hardware/camera/provider/2.4/ICameraProvider.h>
-#include <android/hardware/camera/provider/2.4/ICameraProviderCallback.h>
-#include <memory>
+#include <android/hardware/camera/provider/2.6/ICameraProvider.h>
+#include <android/hardware/camera/provider/2.6/ICameraProviderCallback.h>
 #include "camera_provider.h"
 
 namespace android {
 namespace hardware {
 namespace camera {
 namespace provider {
-namespace V2_4 {
+namespace V2_6 {
 namespace implementation {
 
 using ::android::sp;
@@ -39,8 +38,10 @@ using ::android::hardware::camera::common::V1_0::Status;
 using ::android::hardware::camera::common::V1_0::TorchModeStatus;
 using ::android::hardware::camera::common::V1_0::VendorTag;
 using ::android::hardware::camera::common::V1_0::VendorTagSection;
-using ::android::hardware::camera::provider::V2_4::ICameraProvider;
 using ::android::hardware::camera::provider::V2_4::ICameraProviderCallback;
+using ::android::hardware::camera::provider::V2_5::DeviceState;
+using ::android::hardware::camera::provider::V2_6::CameraIdAndStreamCombination;
+using ::android::hardware::camera::provider::V2_6::ICameraProvider;
 
 using ::android::google_camera_hal::CameraProvider;
 
@@ -64,6 +65,13 @@ class HidlCameraProvider : public ICameraProvider {
   Return<void> isSetTorchModeSupported(
       isSetTorchModeSupported_cb _hidl_cb) override;
 
+  Return<void> getConcurrentStreamingCameraIds(
+      getConcurrentStreamingCameraIds_cb _hidl_cb) override;
+
+  Return<void> isConcurrentStreamCombinationSupported(
+      const hidl_vec<CameraIdAndStreamCombination>& configs,
+      isConcurrentStreamCombinationSupported_cb _hidl_cb) override;
+
   Return<void> getCameraDeviceInterface_V1_x(
       const hidl_string& cameraDeviceName,
       getCameraDeviceInterface_V1_x_cb _hidl_cb) override;
@@ -71,6 +79,9 @@ class HidlCameraProvider : public ICameraProvider {
   Return<void> getCameraDeviceInterface_V3_x(
       const hidl_string& cameraDeviceName,
       getCameraDeviceInterface_V3_x_cb _hidl_cb) override;
+
+  Return<void> notifyDeviceStateChange(
+      hardware::hidl_bitfield<DeviceState> newState) override;
   // End of override functions in ICameraProvider.
 
  protected:
@@ -95,7 +106,7 @@ class HidlCameraProvider : public ICameraProvider {
 extern "C" ICameraProvider* HIDL_FETCH_ICameraProvider(const char* name);
 
 }  // namespace implementation
-}  // namespace V2_4
+}  // namespace V2_6
 }  // namespace provider
 }  // namespace camera
 }  // namespace hardware

@@ -28,7 +28,7 @@ namespace android {
 namespace hardware {
 namespace camera {
 namespace provider {
-namespace V2_4 {
+namespace V2_6 {
 namespace implementation {
 
 namespace hidl_utils = ::android::hardware::camera::implementation::hidl_utils;
@@ -89,6 +89,47 @@ status_t HidlCameraProvider::Initialize() {
                     "/" + kProviderName + "/" + camera_id,
                 hidl_camera_device_status);
           }),
+      .physical_camera_device_status_change = google_camera_hal::
+          PhysicalCameraDeviceStatusChangeFunc([this](
+                                                   std::string camera_id,
+                                                   std::string physical_camera_id,
+                                                   google_camera_hal::CameraDeviceStatus
+                                                       new_status) {
+            if (callbacks_ == nullptr) {
+              ALOGE("%s: callbacks_ is null", __FUNCTION__);
+              return;
+            }
+            auto castResult =
+                provider::V2_6::ICameraProviderCallback::castFrom(callbacks_);
+            if (!castResult.isOk()) {
+              ALOGE("%s: callbacks_ cannot be casted to version 2.6",
+                    __FUNCTION__);
+              return;
+            }
+            sp<provider::V2_6::ICameraProviderCallback> callbacks_2_6_ =
+                castResult;
+            if (callbacks_2_6_ == nullptr) {
+              ALOGE("%s: callbacks_2_6_ is null", __FUNCTION__);
+              return;
+            }
+
+            CameraDeviceStatus hidl_camera_device_status;
+            status_t res = hidl_utils::ConvertToHidlCameraDeviceStatus(
+                new_status, &hidl_camera_device_status);
+            if (res != OK) {
+              ALOGE(
+                  "%s: Converting to hidl camera device status failed: %s(%d)",
+                  __FUNCTION__, strerror(-res), res);
+              return;
+            }
+
+            std::unique_lock<std::mutex> lock(callbacks_lock_);
+            callbacks_2_6_->physicalCameraDeviceStatusChange(
+                "device@" +
+                    device::V3_5::implementation::HidlCameraDevice::kDeviceVersion +
+                    "/" + kProviderName + "/" + camera_id,
+                physical_camera_id, hidl_camera_device_status);
+          }),
       .torch_mode_status_change = google_camera_hal::TorchModeStatusChangeFunc(
           [this](std::string camera_id,
                  google_camera_hal::TorchModeStatus new_status) {
@@ -121,9 +162,13 @@ status_t HidlCameraProvider::Initialize() {
 
 Return<Status> HidlCameraProvider::setCallback(
     const sp<ICameraProviderCallback>& callback) {
-  std::unique_lock<std::mutex> lock(callbacks_lock_);
+  {
+    std::unique_lock<std::mutex> lock(callbacks_lock_);
+    callbacks_ = callback;
+  }
 
-  callbacks_ = callback;
+  google_camera_provider_->TriggerDeferredCallbacks();
+
   return Status::OK;
 }
 
@@ -175,6 +220,68 @@ Return<void> HidlCameraProvider::getCameraIdList(getCameraIdList_cb _hidl_cb) {
   }
 
   _hidl_cb(Status::OK, hidl_camera_ids);
+  return Void();
+}
+
+Return<void> HidlCameraProvider::getConcurrentStreamingCameraIds(
+    getConcurrentStreamingCameraIds_cb _hidl_cb) {
+  hidl_vec<hidl_vec<hidl_string>> hidl_camera_id_combinations;
+  std::vector<std::unordered_set<uint32_t>> camera_id_combinations;
+  status_t res = google_camera_provider_->GetConcurrentStreamingCameraIds(
+      &camera_id_combinations);
+  if (res != OK) {
+    ALOGE(
+        "%s: Getting the combinations of concurrent streaming camera ids "
+        "failed: %s(%d)",
+        __FUNCTION__, strerror(-res), res);
+    _hidl_cb(Status::INTERNAL_ERROR, hidl_camera_id_combinations);
+    return Void();
+  }
+  hidl_camera_id_combinations.resize(camera_id_combinations.size());
+  int i = 0;
+  for (auto& combination : camera_id_combinations) {
+    hidl_vec<hidl_string> hidl_combination(combination.size());
+    int c = 0;
+    for (auto& camera_id : combination) {
+      hidl_combination[c] = std::to_string(camera_id);
+      c++;
+    }
+    hidl_camera_id_combinations[i] = hidl_combination;
+    i++;
+  }
+  _hidl_cb(Status::OK, hidl_camera_id_combinations);
+  return Void();
+}
+
+Return<void> HidlCameraProvider::isConcurrentStreamCombinationSupported(
+    const hidl_vec<CameraIdAndStreamCombination>& configs,
+    isConcurrentStreamCombinationSupported_cb _hidl_cb) {
+  std::vector<google_camera_hal::CameraIdAndStreamConfiguration>
+      devices_stream_configs(configs.size());
+  status_t res = OK;
+  size_t c = 0;
+  for (auto& config : configs) {
+    res = hidl_utils::ConverToHalStreamConfig(
+        config.streamConfiguration,
+        &devices_stream_configs[c].stream_configuration);
+    if (res != OK) {
+      ALOGE("%s: ConverToHalStreamConfig failed", __FUNCTION__);
+      _hidl_cb(Status::INTERNAL_ERROR, false);
+      return Void();
+    }
+    uint32_t camera_id = atoi(config.cameraId.c_str());
+    devices_stream_configs[c].camera_id = camera_id;
+    c++;
+  }
+  bool is_supported = false;
+  res = google_camera_provider_->IsConcurrentStreamCombinationSupported(
+      devices_stream_configs, &is_supported);
+  if (res != OK) {
+    ALOGE("%s: ConverToHalStreamConfig failed", __FUNCTION__);
+    _hidl_cb(Status::INTERNAL_ERROR, false);
+    return Void();
+  }
+  _hidl_cb(Status::OK, is_supported);
   return Void();
 }
 
@@ -248,6 +355,11 @@ Return<void> HidlCameraProvider::getCameraDeviceInterface_V3_x(
   return Void();
 }
 
+Return<void> HidlCameraProvider::notifyDeviceStateChange(
+    hardware::hidl_bitfield<DeviceState> /*newState*/) {
+  return Void();
+}
+
 ICameraProvider* HIDL_FETCH_ICameraProvider(const char* name) {
   std::string provider_name = HidlCameraProvider::kProviderName + "/0";
   if (provider_name.compare(name) != 0) {
@@ -265,7 +377,7 @@ ICameraProvider* HIDL_FETCH_ICameraProvider(const char* name) {
 }
 
 }  // namespace implementation
-}  // namespace V2_4
+}  // namespace V2_6
 }  // namespace provider
 }  // namespace camera
 }  // namespace hardware
