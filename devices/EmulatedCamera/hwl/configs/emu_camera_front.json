@@ -3988,7 +3988,8 @@
    "524301", 
    "524295", 
    "524294", 
-   "524298"
+   "524298", 
+   "851984"
   ], 
   "android.request.availableRequestKeys": [
    "0", 
@@ -4047,7 +4048,8 @@
    "1245185", 
    "1245186", 
    "1245187", 
-   "1441792"
+   "1441792", 
+   "851985"
   ], 
   "android.request.availableResultKeys": [
    "0", 
@@ -4120,7 +4122,8 @@
    "65545",
    "65552",
    "1114123",
-   "917530"
+   "917530", 
+   "851985"
   ], 
   "android.request.maxNumInputStreams": [
    "0"
@@ -4129,6 +4132,9 @@
    "1", 
    "3", 
    "2"
+  ], 
+ "android.scaler.availableRotateAndCropModes": [
+   "0"
   ], 
   "android.request.partialResultCount": [
    "1"
