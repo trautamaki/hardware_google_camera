@@ -138,7 +138,7 @@ struct StreamConfiguration {
 };
 
 struct CameraIdAndStreamConfiguration {
-  uint32_t camera_id;
+  uint32_t camera_id = 0;
   StreamConfiguration stream_configuration;
 };
 
