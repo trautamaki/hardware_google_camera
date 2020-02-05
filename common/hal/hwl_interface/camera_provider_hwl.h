@@ -47,6 +47,16 @@ class CameraProviderHwl {
   virtual status_t GetVisibleCameraIds(
       std::vector<std::uint32_t>* camera_ids) = 0;
 
+  // Check if the combinations of camera ids and corresponding stream
+  // configurations are supported.
+  virtual status_t IsConcurrentStreamCombinationSupported(
+      const std::vector<CameraIdAndStreamConfiguration>&, bool*) = 0;
+
+  // Return the combinations of camera ids that can stream concurrently with
+  // guaranteed stream combinations
+  virtual status_t GetConcurrentStreamingCameraIds(
+      std::vector<std::unordered_set<uint32_t>>* combinations) = 0;
+
   // Return if setting torch mode API is supported. Not all camera devices
   // support torch mode so enabling torch mode for a devices is okay to
   // fail if the camera device doesn't support torch mode.
