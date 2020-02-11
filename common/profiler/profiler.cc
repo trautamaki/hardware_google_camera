@@ -159,7 +159,7 @@ void ProfilerImpl::CreateFolder(std::string folder_path) {
 void ProfilerImpl::SetDumpFilePrefix(std::string dump_file_prefix) {
   dump_file_prefix_ = dump_file_prefix;
   if (setting_ & SetPropFlag::kDumpBit) {
-    if (auto index = dump_file_prefix_.rfind("/"); index != std::string::npos) {
+    if (auto index = dump_file_prefix_.rfind('/'); index != std::string::npos) {
       CreateFolder(dump_file_prefix_.substr(0, index));
     }
   }
