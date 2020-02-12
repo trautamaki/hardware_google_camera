@@ -71,7 +71,7 @@ status_t BasicRequestProcessor::SetProcessBlock(
     return BAD_VALUE;
   }
 
-  std::lock_guard<std::mutex> lock(process_block_lock_);
+  std::lock_guard lock(process_block_shared_lock_);
   if (process_block_ != nullptr) {
     ALOGE("%s: Already configured.", __FUNCTION__);
     return ALREADY_EXISTS;
@@ -83,7 +83,7 @@ status_t BasicRequestProcessor::SetProcessBlock(
 
 status_t BasicRequestProcessor::ProcessRequest(const CaptureRequest& request) {
   ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(process_block_lock_);
+  std::shared_lock lock(process_block_shared_lock_);
   if (process_block_ == nullptr) {
     ALOGE("%s: Not configured yet.", __FUNCTION__);
     return NO_INIT;
@@ -113,7 +113,7 @@ status_t BasicRequestProcessor::ProcessRequest(const CaptureRequest& request) {
 
 status_t BasicRequestProcessor::Flush() {
   ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(process_block_lock_);
+  std::shared_lock lock(process_block_shared_lock_);
   if (process_block_ == nullptr) {
     return OK;
   }

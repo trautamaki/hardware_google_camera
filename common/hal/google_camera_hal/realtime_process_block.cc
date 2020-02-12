@@ -92,7 +92,7 @@ status_t RealtimeProcessBlock::ConfigureStreams(
     const StreamConfiguration& stream_config,
     const StreamConfiguration& overall_config) {
   ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(configure_lock_);
+  std::lock_guard lock(configure_shared_mutex_);
   if (is_configured_) {
     ALOGE("%s: Already configured.", __FUNCTION__);
     return ALREADY_EXISTS;
@@ -114,7 +114,7 @@ status_t RealtimeProcessBlock::ConfigureStreams(
 status_t RealtimeProcessBlock::GetConfiguredHalStreams(
     std::vector<HalStream>* hal_streams) const {
   ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(configure_lock_);
+  std::lock_guard lock(configure_shared_mutex_);
   if (hal_streams == nullptr) {
     ALOGE("%s: hal_streams is nullptr.", __FUNCTION__);
     return BAD_VALUE;
@@ -154,7 +154,7 @@ status_t RealtimeProcessBlock::ProcessRequests(
     }
   }
 
-  std::lock_guard<std::mutex> lock(configure_lock_);
+  std::shared_lock lock(configure_shared_mutex_);
   if (!is_configured_) {
     ALOGE("%s: block is not configured.", __FUNCTION__);
     return NO_INIT;
@@ -175,7 +175,7 @@ status_t RealtimeProcessBlock::ProcessRequests(
 
 status_t RealtimeProcessBlock::Flush() {
   ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(configure_lock_);
+  std::shared_lock lock(configure_shared_mutex_);
   if (!is_configured_) {
     return OK;
   }

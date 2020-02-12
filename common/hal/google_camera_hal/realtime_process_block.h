@@ -17,6 +17,8 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_PROCESS_BLOCK_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_PROCESS_BLOCK_H_
 
+#include <shared_mutex>
+
 #include "process_block.h"
 
 namespace android {
@@ -73,12 +75,12 @@ class RealtimeProcessBlock : public ProcessBlock {
   HwlPipelineCallback hwl_pipeline_callback_;
   CameraDeviceSessionHwl* device_session_hwl_ = nullptr;
 
-  mutable std::mutex configure_lock_;
+  mutable std::shared_mutex configure_shared_mutex_;
 
-  // If streams are configured. Must be protected by configure_lock_.
+  // If streams are configured. Must be protected by configure_shared_mutex_.
   bool is_configured_ = false;
 
-  // HWL pipeline ID. Must be protected by configure_lock_.
+  // HWL pipeline ID. Must be protected by configure_shared_mutex_.
   uint32_t pipeline_id_ = 0;
 
   std::mutex result_processor_lock_;
