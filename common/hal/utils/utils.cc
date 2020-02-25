@@ -60,6 +60,16 @@ bool IsJPEGSnapshotStream(const Stream& stream) {
   return false;
 }
 
+bool IsOutputZslStream(const Stream& stream) {
+  if (stream.stream_type == StreamType::kOutput &&
+      (stream.usage & GRALLOC_USAGE_HW_CAMERA_ZSL) ==
+          GRALLOC_USAGE_HW_CAMERA_ZSL) {
+    return true;
+  }
+
+  return false;
+}
+
 bool IsVideoStream(const Stream& stream) {
   if (stream.stream_type == StreamType::kOutput &&
       (stream.usage & GRALLOC_USAGE_HW_VIDEO_ENCODER) != 0) {
