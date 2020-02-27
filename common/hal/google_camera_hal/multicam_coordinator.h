@@ -71,6 +71,10 @@ class IMulticamCoordinator {
 
   virtual status_t GetResult(uint32_t frame_num, CoordinatorResult* result) = 0;
 
+  // Prepare the framework request for the coordinator to make transition decision.
+  virtual status_t PrepareRequest(uint32_t frame_num,
+                                  HalCameraMetadata* request_metadata) = 0;
+
   virtual ~IMulticamCoordinator() {
   }
 };
