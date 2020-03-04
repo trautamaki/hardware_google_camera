@@ -16,10 +16,12 @@
 
 #include <system/camera_metadata.h>
 #include <camera_metadata_hidden.h>
+
 #define LOG_TAG "GCH_VendorTagUtils"
 #include <log/log.h>
 
 #include <map>
+#include <string>
 #include <unordered_set>
 
 #include "vendor_tag_utils.h"
@@ -135,9 +137,13 @@ status_t VendorTagManager::AddTags(
   for (auto& section : tag_sections) {
     for (auto& tag : section.tags) {
       vendor_tag_map_[tag.tag_id] =
-          VendorTagInfo{.section_name = section.section_name,
-                        .tag_name = tag.tag_name,
-                        .tag_type = static_cast<int>(tag.tag_type)};
+          VendorTagInfo{.tag_id = tag.tag_id,
+                        .tag_type = static_cast<int>(tag.tag_type),
+                        .section_name = section.section_name,
+                        .tag_name = tag.tag_name};
+
+      vendor_tag_inverse_map_[TagString(section.section_name, tag.tag_name)] =
+          tag.tag_id;
     }
   }
 
@@ -220,5 +226,42 @@ int VendorTagManager::GetTagType(uint32_t tag_id) const {
 
   return it->second.tag_type;
 }
+
+status_t VendorTagManager::GetTagInfo(uint32_t tag_id, VendorTagInfo* tag_info) {
+  if (tag_info == nullptr) {
+    ALOGE("%s tag_info is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+  std::lock_guard<std::mutex> lock(api_mutex_);
+  auto itr = vendor_tag_map_.find(tag_id);
+  if (itr == vendor_tag_map_.end()) {
+    ALOGE("%s Given tag_id not found", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  *tag_info = itr->second;
+  return OK;
+}
+
+status_t VendorTagManager::GetTag(const std::string section_name,
+                                  const std::string tag_name, uint32_t* tag_id) {
+  if (tag_id == nullptr) {
+    ALOGE("%s tag_id is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+  std::lock_guard<std::mutex> lock(api_mutex_);
+
+  const TagString section_tag{section_name, tag_name};
+
+  auto itr = vendor_tag_inverse_map_.find(section_tag);
+  if (itr == vendor_tag_inverse_map_.end()) {
+    ALOGE("%s Given section/tag names not found", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  *tag_id = itr->second;
+  return OK;
+}
+
 }  // namespace google_camera_hal
 }  // namespace android
