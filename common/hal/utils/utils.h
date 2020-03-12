@@ -45,6 +45,9 @@ status_t GetSensorPixelArraySize(const HalCameraMetadata* characteristics,
 status_t GetFocalLength(const HalCameraMetadata* characteristics,
                         float* focal_length);
 
+status_t GetZoomRatioRange(const HalCameraMetadata* characteristics,
+                           ZoomRatioRange* zoom_ratio_range);
+
 // Return if LiveSnapshot is configured
 bool IsLiveSnapshotConfigured(const StreamConfiguration& stream_config);
 
