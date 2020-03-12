@@ -31,6 +31,7 @@
 #include "pending_requests_tracker.h"
 #include "stream_buffer_cache_manager.h"
 #include "thermal_types.h"
+#include "zoom_ratio_mapper.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -159,7 +160,7 @@ class CameraDeviceSession {
   void InitializeCallbacks();
 
   // Initialize buffer management support.
-  status_t InitializeBufferManagement();
+  status_t InitializeBufferManagement(HalCameraMetadata* characteristics);
 
   // Update all buffer handles in buffers with the imported buffer handles.
   // Must be protected by imported_buffer_handle_map_lock_.
@@ -284,6 +285,8 @@ class CameraDeviceSession {
   // Load HAL external capture session libraries.
   status_t LoadExternalCaptureSession();
 
+  void InitializeZoomRatioMapper(HalCameraMetadata* characteristics);
+
   uint32_t camera_id_ = 0;
   std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl_;
 
@@ -392,6 +395,9 @@ class CameraDeviceSession {
 
   // Flush is running or not
   std::atomic<bool> is_flushing_ = false;
+
+  // Zoom ratio mapper
+  ZoomRatioMapper zoom_ratio_mapper_;
 };
 
 }  // namespace google_camera_hal
