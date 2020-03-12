@@ -380,6 +380,11 @@ using RequestStreamBuffersFunc = std::function<BufferRequestStatus(
 using ReturnStreamBuffersFunc =
     std::function<void(const std::vector<StreamBuffer>& /*buffers*/)>;
 
+struct ZoomRatioRange {
+  float min = 1.0f;
+  float max = 1.0f;
+};
+
 }  // namespace google_camera_hal
 }  // namespace android
 
