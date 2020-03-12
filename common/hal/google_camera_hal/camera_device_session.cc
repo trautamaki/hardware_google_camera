@@ -169,6 +169,9 @@ void CameraDeviceSession::ProcessCaptureResult(
     ALOGE("%s: result is nullptr", __FUNCTION__);
     return;
   }
+  if (result->result_metadata != nullptr) {
+    zoom_ratio_mapper_.ApplyZoomRatio(result->result_metadata.get(), false);
+  }
 
   // If buffer management is not supported, simply send the result to the client.
   if (!buffer_management_supported_) {
@@ -303,21 +306,18 @@ void CameraDeviceSession::InitializeCallbacks() {
   device_session_hwl_->SetSessionCallback(hwl_session_callback_);
 }
 
-status_t CameraDeviceSession::InitializeBufferManagement() {
+status_t CameraDeviceSession::InitializeBufferManagement(
+    HalCameraMetadata* characteristics) {
   ATRACE_CALL();
 
-  // Query characteristics to check if buffer management supported
-  std::unique_ptr<google_camera_hal::HalCameraMetadata> characteristics;
-  status_t res = device_session_hwl_->GetCameraCharacteristics(&characteristics);
-  if (res != OK) {
-    ALOGE("%s: Get camera characteristics failed: %s(%d)", __FUNCTION__,
-          strerror(-res), res);
-    return res;
+  if (characteristics == nullptr) {
+    ALOGE("%s: characteristics cannot be nullptr.", __FUNCTION__);
+    return BAD_VALUE;
   }
 
   camera_metadata_ro_entry entry = {};
-  res = characteristics->Get(ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION,
-                             &entry);
+  status_t res = characteristics->Get(
+      ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION, &entry);
   if (res == OK && entry.count > 0) {
     buffer_management_supported_ =
         (entry.data.u8[0] >=
@@ -354,7 +354,15 @@ status_t CameraDeviceSession::Initialize(
 
   InitializeCallbacks();
 
-  status_t res = InitializeBufferManagement();
+  std::unique_ptr<google_camera_hal::HalCameraMetadata> characteristics;
+  status_t res = device_session_hwl_->GetCameraCharacteristics(&characteristics);
+  if (res != OK) {
+    ALOGE("%s: Get camera characteristics failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
+  res = InitializeBufferManagement(characteristics.get());
   if (res != OK) {
     ALOGE("%s: Initialize buffer management failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);
@@ -368,7 +376,40 @@ status_t CameraDeviceSession::Initialize(
     return res;
   }
 
+  InitializeZoomRatioMapper(characteristics.get());
+
   return OK;
+}
+
+void CameraDeviceSession::InitializeZoomRatioMapper(
+    HalCameraMetadata* characteristics) {
+  if (characteristics == nullptr) {
+    ALOGE("%s: characteristics cannot be nullptr.", __FUNCTION__);
+    return;
+  }
+
+  Rect active_array_size;
+  status_t res =
+      utils::GetSensorActiveArraySize(characteristics, &active_array_size);
+  if (res != OK) {
+    ALOGE("%s: Failed to get the active array size: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return;
+  }
+
+  ZoomRatioMapper::InitParams params;
+  params.active_array_dimension = {
+      active_array_size.right - active_array_size.left + 1,
+      active_array_size.bottom - active_array_size.top + 1};
+
+  res = utils::GetZoomRatioRange(characteristics, &params.zoom_ratio_range);
+  if (res != OK) {
+    ALOGW("%s: Failed to get the zoom ratio range: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return;
+  }
+
+  zoom_ratio_mapper_.Initialize(params);
 }
 
 // Returns an array of regular files under dir_path.
@@ -726,6 +767,10 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
             strerror(-res), res);
       return res;
     }
+  }
+
+  if (updated_request->settings != nullptr) {
+    zoom_ratio_mapper_.ApplyZoomRatio(updated_request->settings.get(), true);
   }
 
   return OK;
