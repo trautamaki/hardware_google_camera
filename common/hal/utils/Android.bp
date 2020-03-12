@@ -28,6 +28,7 @@ cc_library_shared {
         "stream_buffer_cache_manager.cc",
         "utils.cc",
         "vendor_tag_utils.cc",
+        "zoom_ratio_mapper.cc",
         "zsl_buffer_manager.cc",
     ],
     shared_libs: [

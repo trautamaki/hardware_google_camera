@@ -163,6 +163,29 @@ status_t GetSensorActiveArraySize(const HalCameraMetadata* characteristics,
   return OK;
 }
 
+status_t GetZoomRatioRange(const HalCameraMetadata* characteristics,
+                           ZoomRatioRange* zoom_ratio_range) {
+  if (characteristics == nullptr || zoom_ratio_range == nullptr) {
+    ALOGE("%s: characteristics or zoom_ratio_range is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  camera_metadata_ro_entry entry;
+  status_t res = characteristics->Get(ANDROID_CONTROL_ZOOM_RATIO_RANGE, &entry);
+  if (res != OK || entry.count != 2) {
+    ALOGE(
+        "%s: Getting ANDROID_CONTROL_ZOOM_RATIO_RANGE failed: %s(%d) "
+        "count: %zu",
+        __FUNCTION__, strerror(-res), res, entry.count);
+    return res;
+  }
+
+  zoom_ratio_range->min = entry.data.f[0];
+  zoom_ratio_range->max = entry.data.f[1];
+
+  return OK;
+}
+
 status_t GetSensorPixelArraySize(const HalCameraMetadata* characteristics,
                                  Dimension* pixel_array) {
   if (characteristics == nullptr || pixel_array == nullptr) {
