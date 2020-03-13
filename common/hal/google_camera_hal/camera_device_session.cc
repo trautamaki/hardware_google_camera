@@ -1167,7 +1167,21 @@ status_t CameraDeviceSession::ProcessCaptureRequest(
         }
       }
 
-      {
+      // Check the flush status again to prevent flush being called while we are
+      // waiting for the request buffers(request throttling).
+      if (buffer_management_supported_ && is_flushing_) {
+        std::vector<StreamBuffer> buffers = updated_request.output_buffers;
+        {
+          std::lock_guard<std::mutex> lock(request_record_lock_);
+          pending_request_streams_.erase(updated_request.frame_number);
+        }
+        NotifyErrorRequest(updated_request.frame_number);
+        NotifyBufferError(updated_request);
+        if (pending_requests_tracker_->TrackReturnedResultBuffers(buffers) !=
+            OK) {
+          ALOGE("%s: Tracking requested quota buffers failed", __FUNCTION__);
+        }
+      } else {
         std::shared_lock lock(capture_session_lock_);
         if (capture_session_ == nullptr) {
           ALOGE("%s: Capture session wasn't created.", __FUNCTION__);
