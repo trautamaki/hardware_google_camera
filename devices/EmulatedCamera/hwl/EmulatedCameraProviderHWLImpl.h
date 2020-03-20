@@ -27,6 +27,7 @@ namespace android {
 
 using google_camera_hal::CameraBufferAllocatorHwl;
 using google_camera_hal::CameraDeviceHwl;
+using google_camera_hal::CameraDeviceStatus;
 using google_camera_hal::CameraIdAndStreamConfiguration;
 using google_camera_hal::CameraProviderHwl;
 using google_camera_hal::HalCameraMetadata;
@@ -84,7 +85,7 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   std::vector<std::unique_ptr<HalCameraMetadata>> static_metadata_;
   // Logical to physical camera Id mapping. Empty value vector in case
   // of regular non-logical device.
-  std::unordered_map<uint32_t, std::vector<uint32_t>> camera_id_map_;
+  std::unordered_map<uint32_t, std::vector<std::pair<CameraDeviceStatus, uint32_t>>> camera_id_map_;
   HwlTorchModeStatusChangeFunc torch_cb_;
   HwlPhysicalCameraDeviceStatusChangeFunc physical_camera_status_cb_;
 
