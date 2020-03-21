@@ -632,23 +632,24 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   }
 
   float min_zoom = min_zoom_, max_zoom = max_zoom_;
-  ret = request_settings_->Get(ANDROID_CONTROL_BOKEH_MODE, &entry);
+  ret = request_settings_->Get(ANDROID_CONTROL_EXTENDED_SCENE_MODE, &entry);
   if ((ret == OK) && (entry.count == 1)) {
-    bool bokeh_mode_valid = false;
-    for (const auto& bokeh_cap : available_bokeh_caps_) {
-      if (bokeh_cap.mode == entry.data.u8[0]) {
-        bokeh_mode_ = entry.data.u8[0];
-        min_zoom = bokeh_cap.min_zoom;
-        max_zoom = bokeh_cap.max_zoom;
-        bokeh_mode_valid = true;
+    bool extended_scene_mode_valid = false;
+    for (const auto& cap : available_extended_scene_mode_caps_) {
+      if (cap.mode == entry.data.u8[0]) {
+        extended_scene_mode_ = entry.data.u8[0];
+        min_zoom = cap.min_zoom;
+        max_zoom = cap.max_zoom;
+        extended_scene_mode_valid = true;
         break;
       }
     }
-    if (!bokeh_mode_valid) {
-      ALOGE("%s: Unsupported bokeh mode %d!", __FUNCTION__, entry.data.u8[0]);
+    if (!extended_scene_mode_valid) {
+      ALOGE("%s: Unsupported extended scene mode %d!", __FUNCTION__,
+            entry.data.u8[0]);
       return BAD_VALUE;
     }
-    if (bokeh_mode_ != ANDROID_CONTROL_BOKEH_MODE_OFF) {
+    if (extended_scene_mode_ != ANDROID_CONTROL_EXTENDED_SCENE_MODE_DISABLED) {
       scene_mode_ = ANDROID_CONTROL_SCENE_MODE_FACE_PRIORITY;
     }
   }
@@ -890,8 +891,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   if (zoom_ratio_supported_) {
     result->result_metadata->Set(ANDROID_CONTROL_ZOOM_RATIO, &zoom_ratio_, 1);
   }
-  if (report_bokeh_mode_) {
-    result->result_metadata->Set(ANDROID_CONTROL_BOKEH_MODE, &bokeh_mode_, 1);
+  if (report_extended_scene_mode_) {
+    result->result_metadata->Set(ANDROID_CONTROL_EXTENDED_SCENE_MODE,
+                                 &extended_scene_mode_, 1);
   }
   return result;
 }
@@ -1590,8 +1592,9 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
     return BAD_VALUE;
   }
 
-  report_bokeh_mode_ = available_results_.find(ANDROID_CONTROL_BOKEH_MODE) !=
-                       available_results_.end();
+  report_extended_scene_mode_ =
+      available_results_.find(ANDROID_CONTROL_EXTENDED_SCENE_MODE) !=
+      available_results_.end();
 
   if (is_backward_compatible_) {
     ret = static_metadata_->Get(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST,
@@ -1684,8 +1687,8 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
       min_zoom_ = entry.data.f[0];
     }
 
-    ret = static_metadata_->Get(ANDROID_CONTROL_AVAILABLE_BOKEH_MAX_SIZES,
-                                &entry);
+    ret = static_metadata_->Get(
+        ANDROID_CONTROL_AVAILABLE_EXTENDED_SCENE_MODE_MAX_SIZES, &entry);
     if ((ret == OK) && (entry.count > 0)) {
       if (entry.count % 3 != 0) {
         ALOGE("%s: Invalid bokeh capabilities!", __FUNCTION__);
@@ -1694,7 +1697,7 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
 
       camera_metadata_ro_entry_t zoom_ratio_ranges_entry;
       ret = static_metadata_->Get(
-          ANDROID_CONTROL_AVAILABLE_BOKEH_ZOOM_RATIO_RANGES,
+          ANDROID_CONTROL_AVAILABLE_EXTENDED_SCENE_MODE_ZOOM_RATIO_RANGES,
           &zoom_ratio_ranges_entry);
       if (ret != OK ||
           zoom_ratio_ranges_entry.count / 2 != entry.count / 3 - 1) {
@@ -1703,20 +1706,21 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
       }
 
       // Sanity check request and characteristics keys
-      if (available_requests_.find(ANDROID_CONTROL_BOKEH_MODE) ==
+      if (available_requests_.find(ANDROID_CONTROL_EXTENDED_SCENE_MODE) ==
           available_requests_.end()) {
-        ALOGE("%s: Bokeh mode must be configurable for this device",
+        ALOGE("%s: Extended scene mode must be configurable for this device",
               __FUNCTION__);
         return BAD_VALUE;
       }
       if (available_characteristics_.find(
-              ANDROID_CONTROL_AVAILABLE_BOKEH_MAX_SIZES) ==
+              ANDROID_CONTROL_AVAILABLE_EXTENDED_SCENE_MODE_MAX_SIZES) ==
               available_characteristics_.end() ||
           available_characteristics_.find(
-              ANDROID_CONTROL_AVAILABLE_BOKEH_ZOOM_RATIO_RANGES) ==
+              ANDROID_CONTROL_AVAILABLE_EXTENDED_SCENE_MODE_ZOOM_RATIO_RANGES) ==
               available_characteristics_.end()) {
         ALOGE(
-            "%s: Bokeh maxSizes and zoomRatioRanges characteristics keys must "
+            "%s: ExtendedSceneMode maxSizes and zoomRatioRanges "
+            "characteristics keys must "
             "be available",
             __FUNCTION__);
         return BAD_VALUE;
@@ -1726,30 +1730,32 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
       StreamConfigurationMap stream_configuration_map(*static_metadata_);
       std::set<StreamSize> yuv_sizes = stream_configuration_map.GetOutputSizes(
           HAL_PIXEL_FORMAT_YCBCR_420_888);
-      bool has_bokeh_off = false;
+      bool has_extended_scene_mode_off = false;
       for (size_t i = 0, j = 0; i < entry.count; i += 3) {
         int32_t mode = entry.data.i32[i];
         int32_t max_width = entry.data.i32[i + 1];
         int32_t max_height = entry.data.i32[i + 2];
         float min_zoom_ratio, max_zoom_ratio;
 
-        if (mode < ANDROID_CONTROL_BOKEH_MODE_OFF ||
-            mode > ANDROID_CONTROL_BOKEH_MODE_CONTINUOUS) {
-          ALOGE("%s: Invalid bokeh mode %d", __FUNCTION__, mode);
+        if (mode < ANDROID_CONTROL_EXTENDED_SCENE_MODE_DISABLED ||
+            mode > ANDROID_CONTROL_EXTENDED_SCENE_MODE_BOKEH_CONTINUOUS) {
+          ALOGE("%s: Invalid extended scene mode %d", __FUNCTION__, mode);
           return BAD_VALUE;
         }
 
-        if (mode == ANDROID_CONTROL_BOKEH_MODE_OFF) {
-          has_bokeh_off = true;
+        if (mode == ANDROID_CONTROL_EXTENDED_SCENE_MODE_DISABLED) {
+          has_extended_scene_mode_off = true;
           if (max_width != 0 || max_height != 0) {
-            ALOGE("%s: Invalid max width or height for BOKEH_MODE_OFF",
-                  __FUNCTION__);
+            ALOGE(
+                "%s: Invalid max width or height for "
+                "EXTENDED_SCENE_MODE_DISABLED",
+                __FUNCTION__);
             return BAD_VALUE;
           }
           min_zoom_ratio = min_zoom_;
           max_zoom_ratio = max_zoom_;
         } else if (yuv_sizes.find({max_width, max_height}) == yuv_sizes.end()) {
-          ALOGE("%s: Invalid max width or height for bokeh mode %d",
+          ALOGE("%s: Invalid max width or height for extended scene mode %d",
                 __FUNCTION__, mode);
           return BAD_VALUE;
         } else {
@@ -1758,12 +1764,12 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
           j += 2;
         }
 
-        BokehCapability bokeh(mode, max_width, max_height, min_zoom_ratio,
-                              max_zoom_ratio);
-        available_bokeh_caps_.push_back(bokeh);
+        ExtendedSceneModeCapability cap(mode, max_width, max_height,
+                                        min_zoom_ratio, max_zoom_ratio);
+        available_extended_scene_mode_caps_.push_back(cap);
       }
-      if (!has_bokeh_off) {
-        ALOGE("%s: Off bokeh mode not supported!", __FUNCTION__);
+      if (!has_extended_scene_mode_off) {
+        ALOGE("%s: Off extended scene mode not supported!", __FUNCTION__);
         return BAD_VALUE;
       }
     }
