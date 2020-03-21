@@ -46,7 +46,7 @@
    "3", 
    "4"
   ], 
-  "android.control.availableBokehMaxSizes": [
+  "android.control.availableExtendedSceneModeMaxSizes": [
    "0", 
    "0", 
    "0", 
@@ -57,7 +57,7 @@
    "1920", 
    "1440" 
   ], 
-  "android.control.availableBokehZoomRatioRanges": [
+  "android.control.availableExtendedSceneModeZoomRatioRanges": [
     "1.0", 
     "1.0", 
     "1.0", 
@@ -69,7 +69,8 @@
   "android.control.availableModes": [
    "0", 
    "1", 
-   "2"
+   "2", 
+   "4"
   ], 
   "android.control.availableSceneModes": [
    "0", 
@@ -1253,7 +1254,7 @@
    "3", 
    "4"
   ], 
-  "android.control.availableBokehMaxSizes": [
+  "android.control.availableExtendedSceneModeMaxSizes": [
    "0", 
    "0", 
    "0", 
@@ -1264,7 +1265,7 @@
    "1920", 
    "1440" 
   ], 
-  "android.control.availableBokehZoomRatioRanges": [
+  "android.control.availableExtendedSceneModeZoomRatioRanges": [
     "1.0", 
     "1.0", 
     "1.0", 
@@ -1276,7 +1277,8 @@
   "android.control.availableModes": [
    "0", 
    "1", 
-   "2"
+   "2",
+   "4"
   ], 
   "android.control.availableSceneModes": [
    "0", 
@@ -2451,7 +2453,7 @@
    "3", 
    "4"
   ], 
-  "android.control.availableBokehMaxSizes": [
+  "android.control.availableExtendedSceneModeMaxSizes": [
    "0", 
    "0", 
    "0", 
@@ -2462,7 +2464,7 @@
    "1920", 
    "1440" 
   ], 
-  "android.control.availableBokehZoomRatioRanges": [
+  "android.control.availableExtendedSceneModeZoomRatioRanges": [
     "1.0", 
     "1.0", 
     "1.0", 
@@ -2474,7 +2476,8 @@
   "android.control.availableModes": [
    "0", 
    "1", 
-   "2"
+   "2",
+   "4"
   ], 
   "android.control.availableSceneModes": [
    "0", 
@@ -3646,7 +3649,7 @@
    "3", 
    "4"
   ], 
-  "android.control.availableBokehMaxSizes": [
+  "android.control.availableExtendedSceneModeMaxSizes": [
    "0", 
    "0", 
    "0", 
@@ -3657,7 +3660,7 @@
    "1920", 
    "1440" 
   ], 
-  "android.control.availableBokehZoomRatioRanges": [
+  "android.control.availableExtendedSceneModeZoomRatioRanges": [
     "1.0", 
     "1.0", 
     "1.0", 
@@ -3669,7 +3672,8 @@
   "android.control.availableModes": [
    "0", 
    "1", 
-   "2"
+   "2",
+   "4"
   ], 
   "android.control.availableSceneModes": [
    "0", 
