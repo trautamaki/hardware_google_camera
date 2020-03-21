@@ -149,17 +149,18 @@ class EmulatedRequestState {
     }
   };
 
-  struct BokehCapability {
+  struct ExtendedSceneModeCapability {
     int32_t mode, max_width, max_height;
     float min_zoom, max_zoom;
-    BokehCapability()
-        : mode(ANDROID_CONTROL_BOKEH_MODE_OFF),
+    ExtendedSceneModeCapability()
+        : mode(ANDROID_CONTROL_EXTENDED_SCENE_MODE_DISABLED),
           max_width(-1),
           max_height(-1),
           min_zoom(1.0f),
           max_zoom(1.0f) {
     }
-    BokehCapability(int32_t m, int32_t w, int32_t h, float min_z, float max_z)
+    ExtendedSceneModeCapability(int32_t m, int32_t w, int32_t h, float min_z,
+                                float max_z)
         : mode(m), max_width(w), max_height(h), min_zoom(min_z), max_zoom(max_z) {
     }
   };
@@ -172,7 +173,7 @@ class EmulatedRequestState {
   std::set<uint8_t> available_antibanding_modes_;
   std::set<uint8_t> available_effects_;
   std::set<uint8_t> available_vstab_modes_;
-  std::vector<BokehCapability> available_bokeh_caps_;
+  std::vector<ExtendedSceneModeCapability> available_extended_scene_mode_caps_;
   std::unordered_map<uint8_t, SceneOverride> scene_overrides_;
   std::vector<FPSRange> available_fps_ranges_;
   int32_t exposure_compensation_range_[2] = {0, 0};
@@ -202,7 +203,7 @@ class EmulatedRequestState {
   uint8_t ae_trigger_ = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_IDLE;
   FPSRange ae_target_fps_ = {0, 0};
   float zoom_ratio_ = 1.0f;
-  uint8_t bokeh_mode_ = ANDROID_CONTROL_BOKEH_MODE_OFF;
+  uint8_t extended_scene_mode_ = ANDROID_CONTROL_EXTENDED_SCENE_MODE_DISABLED;
   static const int32_t kMinimumStreamingFPS = 20;
   bool ae_lock_available_ = false;
   bool report_ae_lock_ = false;
@@ -251,7 +252,7 @@ class EmulatedRequestState {
   bool report_neutral_color_point_ = false;
   bool report_green_split_ = false;
   bool report_noise_profile_ = false;
-  bool report_bokeh_mode_ = false;
+  bool report_extended_scene_mode_ = false;
 
   // android.scaler.*
   bool report_rotate_and_crop_ = false;
