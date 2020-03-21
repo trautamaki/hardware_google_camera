@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "hal_types.h"
+#include "vendor_tag_interface.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -44,7 +45,7 @@ status_t CombineVendorTags(const std::vector<VendorTagSection>& source1,
 // could be only one set of callbacks set per camera provider. The HWL or HAL
 // layers should use this wrapper instead of directly invoking
 // set_camera_metadata_vendor_ops()
-class VendorTagManager {
+class VendorTagManager : public VendorTagInterface {
  public:
   static VendorTagManager& GetInstance();
 
@@ -74,20 +75,32 @@ class VendorTagManager {
   VendorTagManager(VendorTagManager const&) = delete;
   VendorTagManager& operator=(VendorTagManager const&) = delete;
 
- private:
-  // Vendor tag descriptor containing all the information expected by camera
-  // metadata framework operations in vendor_tag_ops_t.
-  struct VendorTagInfo {
-    std::string section_name;
-    std::string tag_name;
-    int tag_type = TYPE_BYTE;
-  };
+  // Get Tag info for the give tag id
+  status_t GetTagInfo(uint32_t tag_id, VendorTagInfo* tag_info) override;
 
+  // Get the tag id for the given section/name
+  status_t GetTag(const std::string section_name, const std::string tag_name,
+                  uint32_t* tag_id) override;
+
+ private:
   VendorTagManager() = default;
 
   // Map from vendor tag ID to VendorTagInfo. Used for camera framework
   // vendor tag callbacks, protected by api_mutex_.
   std::unordered_map<uint32_t, VendorTagInfo> vendor_tag_map_;
+
+  using TagString = std::pair<std::string, std::string>;
+
+  struct TagStringHash {
+    size_t operator()(const TagString& pair) const {
+      std::hash<TagString::first_type> h1;
+      std::hash<TagString::second_type> h2;
+      return h1(pair.first) ^ h2(pair.second);
+    }
+  };
+
+  std::unordered_map<const TagString, uint32_t, TagStringHash>
+      vendor_tag_inverse_map_;
 
   // Protects the public entry points into this class.
   mutable std::mutex api_mutex_;
