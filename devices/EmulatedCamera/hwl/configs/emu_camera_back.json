@@ -42,7 +42,7 @@
   "3", 
   "4"
  ], 
- "android.control.availableBokehMaxSizes": [
+ "android.control.availableExtendedSceneModeMaxSizes": [
    "0", 
    "0", 
    "0", 
@@ -50,7 +50,7 @@
    "1856", 
    "1392" 
  ], 
- "android.control.availableBokehZoomRatioRanges": [
+ "android.control.availableExtendedSceneModeZoomRatioRanges": [
     "0.5", 
     "4.0"
  ], 
@@ -60,7 +60,8 @@
  "android.control.availableModes": [
   "0", 
   "1", 
-  "2"
+  "2", 
+  "4"
  ], 
  "android.control.availableSceneModes": [
   "1"
@@ -258,6 +259,7 @@
   "65575", 
   "65579", 
   "65580", 
+  "65582", 
   "983050", 
   "393217", 
   "1572865", 
@@ -646,7 +648,7 @@
   "OUTPUT"
  ], 
  "android.scaler.croppingType": [
-  "FREEFORM"
+  "CENTER_ONLY"
  ], 
  "android.sensor.calibrationTransform1": [
   "128", 
