@@ -119,7 +119,7 @@ status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
   }
 
   *characteristics = HalCameraMetadata::Clone(
-      physical_device_map_->at(physical_camera_id).get());
+      physical_device_map_->at(physical_camera_id).second.get());
 
   return OK;
 }
