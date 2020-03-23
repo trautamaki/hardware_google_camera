@@ -208,7 +208,8 @@ status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
 PhysicalDeviceMapPtr ClonePhysicalDeviceMap(const PhysicalDeviceMapPtr& src) {
   auto ret = std::make_unique<PhysicalDeviceMap>();
   for (const auto& it : *src) {
-    ret->emplace(it.first, HalCameraMetadata::Clone(it.second.get()));
+    ret->emplace(it.first, std::make_pair(it.second.first,
+        HalCameraMetadata::Clone(it.second.second.get())));
   }
   return ret;
 }

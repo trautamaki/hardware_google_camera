@@ -18,6 +18,7 @@
 #define EMULATOR_CAMERA_HAL_HWL_HWL_UTILS_H_
 
 #include "EmulatedSensor.h"
+#include "hal_types.h"
 #include "hwl_types.h"
 #include "system/camera_metadata.h"
 
@@ -31,11 +32,15 @@
 
 namespace android {
 
-typedef std::unordered_map<uint32_t, std::unique_ptr<HalCameraMetadata>>
+using google_camera_hal::CameraDeviceStatus;
+using google_camera_hal::HalCameraMetadata;
+using std::pair;
+using std::unique_ptr;
+using std::unordered_map;
+
+typedef unordered_map<uint32_t, pair<CameraDeviceStatus, unique_ptr<HalCameraMetadata>>>
     PhysicalDeviceMap;
 typedef std::unique_ptr<PhysicalDeviceMap> PhysicalDeviceMapPtr;
-
-using google_camera_hal::HalCameraMetadata;
 
 // Metadata utility functions start
 bool HasCapability(const HalCameraMetadata* metadata, uint8_t capability);

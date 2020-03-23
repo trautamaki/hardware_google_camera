@@ -84,7 +84,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
   logical_chars->emplace(camera_id_, sensor_chars_);
   for (const auto& it : *physical_device_map_) {
     SensorCharacteristics physical_chars;
-    auto stat = GetSensorCharacteristics(it.second.get(), &physical_chars);
+    auto stat = GetSensorCharacteristics(it.second.second.get(), &physical_chars);
     if (stat == OK) {
       logical_chars->emplace(it.first, physical_chars);
     } else {
@@ -353,7 +353,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::GetPhysicalCameraCharacteristics(
   }
 
   (*characteristics) = HalCameraMetadata::Clone(
-      physical_device_map_->at(physical_camera_id).get());
+      physical_device_map_->at(physical_camera_id).second.get());
 
   return OK;
 }

@@ -630,25 +630,29 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
 
       // The first device entry is always the logical camera followed by the
       // physical devices. They must be at least 2.
-      camera_id_map_.emplace(logical_id, std::vector<uint32_t>());
+      camera_id_map_.emplace(logical_id, std::vector<std::pair<CameraDeviceStatus, uint32_t>>());
       if (root.size() >= 3) {
         camera_id_map_[logical_id].reserve(root.size() - 1);
+        size_t current_physical_device = 0;
         while (device_iter != root.end()) {
           auto physical_id = ParseCharacteristics(*device_iter, /*id*/ -1);
           if (physical_id < 0) {
             return physical_id;
           }
-          camera_id_map_[logical_id].push_back(physical_id);
-
-          device_iter++;
+          // Only notify unavailable physical camera if there are more than 2
+          // physical cameras backing the logical camera
+          auto device_status = (current_physical_device < 2) ? CameraDeviceStatus::kPresent :
+              CameraDeviceStatus::kNotPresent;
+          camera_id_map_[logical_id].push_back(std::make_pair(device_status, physical_id));
+          device_iter++; current_physical_device++;
         }
 
         auto physical_devices = std::make_unique<PhysicalDeviceMap>();
-        for (const auto& physical_device_id : camera_id_map_[logical_id]) {
+        for (const auto& physical_device : camera_id_map_[logical_id]) {
           physical_devices->emplace(
-              physical_device_id,
+              physical_device.second, std::make_pair(physical_device.first,
               HalCameraMetadata::Clone(
-                  static_metadata_[physical_device_id].get()));
+                  static_metadata_[physical_device.second].get())));
         }
         auto updated_logical_chars =
             EmulatedLogicalRequestState::AdaptLogicalCharacteristics(
@@ -667,7 +671,7 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
       if (result_id != logical_id) {
         return result_id;
       }
-      camera_id_map_.emplace(logical_id, std::vector<uint32_t>());
+      camera_id_map_.emplace(logical_id, std::vector<std::pair<CameraDeviceStatus, uint32_t>>());
     }
 
     logical_id++;
@@ -708,16 +712,18 @@ void EmulatedCameraProviderHwlImpl::WaitForStatusCallbackFuture() {
 }
 
 void EmulatedCameraProviderHwlImpl::NotifyPhysicalCameraUnavailable() {
-  for (auto one_map : camera_id_map_) {
-    if (one_map.second.size() <= 2) continue;
+  for (const auto& one_map : camera_id_map_) {
+    for (const auto& physical_device : one_map.second) {
+      if (physical_device.first != CameraDeviceStatus::kNotPresent) {
+        continue;
+      }
 
-    // Only notify one unavailable physical camera if there are more than 2
-    // physical cameras backing the logical camera
-    uint32_t logicalCameraId = one_map.first;
-    uint32_t physicalCameraId = one_map.second[one_map.second.size() - 1];
-    physical_camera_status_cb_(
-        logicalCameraId, physicalCameraId,
-        google_camera_hal::CameraDeviceStatus::kNotPresent);
+      uint32_t logical_camera_id = one_map.first;
+      uint32_t physical_camera_id = physical_device.second;
+      physical_camera_status_cb_(
+          logical_camera_id, physical_camera_id,
+          CameraDeviceStatus::kNotPresent);
+    }
   }
 }
 
@@ -776,10 +782,10 @@ status_t EmulatedCameraProviderHwlImpl::CreateCameraDeviceHwl(
   }
 
   auto physical_devices = std::make_unique<PhysicalDeviceMap>();
-  for (const auto& physical_device_id : camera_id_map_[camera_id]) {
-    physical_devices->emplace(
-        physical_device_id,
-        HalCameraMetadata::Clone(static_metadata_[physical_device_id].get()));
+  for (const auto& physical_device : camera_id_map_[camera_id]) {
+      physical_devices->emplace(
+          physical_device.second, std::make_pair(physical_device.first,
+          HalCameraMetadata::Clone(static_metadata_[physical_device.second].get())));
   }
   *camera_device_hwl = EmulatedCameraDeviceHwlImpl::Create(
       camera_id, std::move(meta), std::move(physical_devices), torch_state);
