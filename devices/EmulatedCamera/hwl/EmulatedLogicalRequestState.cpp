@@ -45,7 +45,10 @@ status_t EmulatedLogicalRequestState::Initialize(
     if ((ret == OK) && (logical_entry.count > 1)) {
       for (size_t i = 0; i < logical_entry.count; i++) {
         for (const auto& it : *physical_device_map_) {
-          ret = it.second->Get(ANDROID_LENS_INFO_AVAILABLE_FOCAL_LENGTHS,
+          if (it.second.first != CameraDeviceStatus::kPresent) {
+            continue;
+          }
+          ret = it.second.second->Get(ANDROID_LENS_INFO_AVAILABLE_FOCAL_LENGTHS,
                                &physical_entry);
           if ((ret == OK) && (physical_entry.count > 0)) {
             if (logical_entry.data.f[i] == physical_entry.data.f[0]) {
@@ -64,7 +67,7 @@ status_t EmulatedLogicalRequestState::Initialize(
         std::unique_ptr<EmulatedRequestState> physical_request_state =
             std::make_unique<EmulatedRequestState>(it.first);
         auto ret = physical_request_state->Initialize(
-            HalCameraMetadata::Clone(it.second.get()));
+            HalCameraMetadata::Clone(it.second.second.get()));
         if (ret != OK) {
           ALOGE("%s: Physical device: %u request state initialization failed!",
                 __FUNCTION__, it.first);
@@ -217,7 +220,7 @@ EmulatedLogicalRequestState::AdaptLogicalCharacteristics(
     physical_ids.insert(physical_ids.end(), physical_id.begin(),
                         physical_id.end());
     physical_ids.push_back('\0');
-    auto ret = physical_device.second->Get(
+    auto ret = physical_device.second.second->Get(
         ANDROID_LENS_INFO_AVAILABLE_FOCAL_LENGTHS, &entry);
     if ((ret == OK) && (entry.count > 0)) {
       focal_lengths.insert(entry.data.f, entry.data.f + entry.count);
