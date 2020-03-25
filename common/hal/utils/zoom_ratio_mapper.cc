@@ -240,8 +240,10 @@ void ZoomRatioMapper::CorrectBoundary(int32_t* left, int32_t* top,
   *top = std::max(*top, 0);
   *top = std::min(*top, bound_h - 1);
 
+  *width = std::max(*width, 1);
   *width = std::min(*width, bound_w - *left);
 
+  *height = std::max(*height, 1);
   *height = std::min(*height, bound_h - *top);
 }
 
