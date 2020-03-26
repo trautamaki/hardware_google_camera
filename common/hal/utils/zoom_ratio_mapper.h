@@ -31,10 +31,16 @@ class ZoomRatioMapper {
 
   void Initialize(InitParams params);
 
+  // Apply zoom ratio to capture request
+  void UpdateCaptureRequest(CaptureRequest* request);
+
+  // Apply zoom ratio to capture result
+  void UpdateCaptureResult(CaptureResult* result);
+
+ private:
   // Apply zoom ratio to the capture request or result.
   void ApplyZoomRatio(HalCameraMetadata* metadata, const bool is_request);
 
- private:
   // Update crop region.
   void UpdateCropRegion(HalCameraMetadata* metadata, const float zoom_ratio,
                         const bool is_request);
