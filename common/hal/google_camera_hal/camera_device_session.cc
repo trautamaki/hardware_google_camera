@@ -169,9 +169,7 @@ void CameraDeviceSession::ProcessCaptureResult(
     ALOGE("%s: result is nullptr", __FUNCTION__);
     return;
   }
-  if (result->result_metadata != nullptr) {
-    zoom_ratio_mapper_.ApplyZoomRatio(result->result_metadata.get(), false);
-  }
+  zoom_ratio_mapper_.UpdateCaptureResult(result.get());
 
   // If buffer management is not supported, simply send the result to the client.
   if (!buffer_management_supported_) {
@@ -769,9 +767,7 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
     }
   }
 
-  if (updated_request->settings != nullptr) {
-    zoom_ratio_mapper_.ApplyZoomRatio(updated_request->settings.get(), true);
-  }
+  zoom_ratio_mapper_.UpdateCaptureRequest(updated_request);
 
   return OK;
 }
