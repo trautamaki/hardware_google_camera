@@ -30,15 +30,54 @@ void ZoomRatioMapper::Initialize(InitParams params) {
   is_zoom_ratio_supported_ = true;
 }
 
-void ZoomRatioMapper::ApplyZoomRatio(HalCameraMetadata* metadata,
-                                     const bool is_request) {
-  if (metadata == nullptr) {
-    ALOGE("%s: metadata is nullptr", __FUNCTION__);
+void ZoomRatioMapper::UpdateCaptureRequest(CaptureRequest* request) {
+  if (request == nullptr) {
+    ALOGE("%s: request is nullptr", __FUNCTION__);
     return;
   }
 
   if (!is_zoom_ratio_supported_) {
     ALOGV("%s: zoom ratio is not supported", __FUNCTION__);
+    return;
+  }
+
+  if (request->settings != nullptr) {
+    ApplyZoomRatio(request->settings.get(), true);
+  }
+
+  for (auto& [camera_id, metadata] : request->physical_camera_settings) {
+    if (metadata != nullptr) {
+      ApplyZoomRatio(metadata.get(), true);
+    }
+  }
+}
+
+void ZoomRatioMapper::UpdateCaptureResult(CaptureResult* result) {
+  if (result == nullptr) {
+    ALOGE("%s: result is nullptr", __FUNCTION__);
+    return;
+  }
+
+  if (!is_zoom_ratio_supported_) {
+    ALOGV("%s: zoom ratio is not supported", __FUNCTION__);
+    return;
+  }
+
+  if (result->result_metadata != nullptr) {
+    ApplyZoomRatio(result->result_metadata.get(), false);
+  }
+
+  for (auto& [camera_id, metadata] : result->physical_metadata) {
+    if (metadata != nullptr) {
+      ApplyZoomRatio(metadata.get(), false);
+    }
+  }
+}
+
+void ZoomRatioMapper::ApplyZoomRatio(HalCameraMetadata* metadata,
+                                     const bool is_request) {
+  if (metadata == nullptr) {
+    ALOGE("%s: metadata is nullptr", __FUNCTION__);
     return;
   }
 
