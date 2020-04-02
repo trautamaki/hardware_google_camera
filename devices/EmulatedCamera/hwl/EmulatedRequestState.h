@@ -209,6 +209,7 @@ class EmulatedRequestState {
   bool report_ae_lock_ = false;
   bool scenes_supported_ = false;
   size_t ae_frame_counter_ = 0;
+  bool vstab_available_ = false;
   const size_t kAEPrecaptureMinFrames = 10;
   // Fake AE related constants
   const float kExposureTrackRate = .2f;  // This is the rate at which the fake

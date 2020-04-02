@@ -45,6 +45,9 @@ using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::MessageType;
 using google_camera_hal::NotifyMessage;
 
+const uint32_t EmulatedSensor::kRegularSceneHandshake = 1; // Scene handshake divider
+const uint32_t EmulatedSensor::kReducedSceneHandshake = 2; // Scene handshake divider
+
 // 1 us - 30 sec
 const nsecs_t EmulatedSensor::kSupportedExposureTimeRange[2] = {1000LL,
                                                                 30000000000LL};
@@ -570,7 +573,10 @@ bool EmulatedSensor::threadLoop() {
                                 device_chars->second.color_filter.bX,
                                 device_chars->second.color_filter.bY,
                                 device_chars->second.color_filter.bZ);
-      scene_->CalculateScene(next_capture_time_);
+      uint32_t handshake_divider =
+        (device_settings->second.video_stab == ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON) ?
+        kReducedSceneHandshake : kRegularSceneHandshake;
+      scene_->CalculateScene(next_capture_time_, handshake_divider);
 
       (*b)->stream_buffer.status = BufferStatus::kOk;
       switch ((*b)->format) {
@@ -796,6 +802,10 @@ void EmulatedSensor::ReturnResults(
                                      lens_shading_map.data(),
                                      lens_shading_map.size());
       }
+    }
+    if (logical_settings->second.report_video_stab) {
+      result->result_metadata->Set(ANDROID_CONTROL_VIDEO_STABILIZATION_MODE,
+                                   &logical_settings->second.video_stab, 1);
     }
     if (logical_settings->second.report_neutral_color_point) {
       result->result_metadata->Set(ANDROID_SENSOR_NEUTRAL_COLOR_POINT,

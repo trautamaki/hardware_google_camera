@@ -189,6 +189,9 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     float zoom_ratio = 1.0f;
     bool report_rotate_and_crop = false;
     uint8_t rotate_and_crop = ANDROID_SCALER_ROTATE_AND_CROP_NONE;
+    bool report_video_stab = false;
+    uint8_t video_stab = ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF;
+
   };
 
   // Maps physical and logical camera ids to individual device settings
@@ -228,6 +231,10 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static const uint8_t kPipelineDepth;
 
  private:
+  // Scene stabilization
+  static const uint32_t kRegularSceneHandshake;
+  static const uint32_t kReducedSceneHandshake;
+
   /**
    * Logical characteristics
    */
