@@ -685,6 +685,19 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  // Check video stabilization parameter
+  uint8_t edge_mode = ANDROID_EDGE_MODE_OFF;
+  ret = request_settings_->Get(ANDROID_EDGE_MODE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (available_edge_modes_.find(entry.data.u8[0]) !=
+      available_edge_modes_.end()) {
+      edge_mode = entry.data.u8[0];
+    } else {
+      ALOGE("%s: Unsupported edge mode: %u", __FUNCTION__, entry.data.u8[0]);
+      return BAD_VALUE;
+    }
+  }
+
   // 3A modes are active in case the scene is disabled or set to face priority
   // or the control mode is not using scenes
   if ((scene_mode_ == ANDROID_CONTROL_SCENE_MODE_DISABLED) ||
@@ -771,6 +784,8 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->rotate_and_crop = rotate_and_crop_;
   sensor_settings->report_video_stab = !available_vstab_modes_.empty();
   sensor_settings->video_stab = vstab_mode;
+  sensor_settings->report_edge_mode = report_edge_mode_;
+  sensor_settings->edge_mode = edge_mode;
 
   return OK;
 }
@@ -2074,6 +2089,7 @@ status_t EmulatedRequestState::InitializeEdgeDefaults() {
       return BAD_VALUE;
     }
 
+    report_edge_mode_ = available_results_.find(ANDROID_EDGE_MODE) != available_results_.end();
     bool is_fast_mode_supported =
         available_edge_modes_.find(ANDROID_EDGE_MODE_FAST) !=
         available_edge_modes_.end();

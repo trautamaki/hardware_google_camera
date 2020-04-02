@@ -107,6 +107,7 @@ class EmulatedRequestState {
 
   // android.edge.*
   std::set<uint8_t> available_edge_modes_;
+  bool report_edge_mode_ = false;
 
   // android.shading.*
   std::set<uint8_t> available_shading_modes_;

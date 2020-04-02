@@ -191,7 +191,8 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     uint8_t rotate_and_crop = ANDROID_SCALER_ROTATE_AND_CROP_NONE;
     bool report_video_stab = false;
     uint8_t video_stab = ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF;
-
+    bool report_edge_mode = false;
+    uint8_t edge_mode = ANDROID_EDGE_MODE_OFF;
   };
 
   // Maps physical and logical camera ids to individual device settings
@@ -310,8 +311,9 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     YCbCrPlanes planes;
   };
 
+  enum ProcessType { REPROCESS, HIGH_QUALITY, REGULAR };
   status_t ProcessYUV420(const YUV420Frame& input, const YUV420Frame& output,
-                         uint32_t gain, bool reprocess_request,
+                         uint32_t gain, ProcessType process_type,
                          float zoom_ratio, bool rotate_and_crop,
                          const SensorCharacteristics& chars);
 
