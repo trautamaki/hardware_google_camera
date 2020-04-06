@@ -58,8 +58,8 @@
    "1440" 
   ], 
   "android.control.availableExtendedSceneModeZoomRatioRanges": [
-    "1.0", 
-    "1.0", 
+    "2.0", 
+    "2.0", 
     "1.0", 
     "1.0"
   ], 
@@ -1266,8 +1266,8 @@
    "1440" 
   ], 
   "android.control.availableExtendedSceneModeZoomRatioRanges": [
-    "1.0", 
-    "1.0", 
+    "2.0", 
+    "2.0", 
     "1.0", 
     "1.0"
   ], 
@@ -2465,8 +2465,8 @@
    "1440" 
   ], 
   "android.control.availableExtendedSceneModeZoomRatioRanges": [
-    "1.0", 
-    "1.0", 
+    "2.0", 
+    "2.0", 
     "1.0", 
     "1.0"
   ], 
@@ -3661,8 +3661,8 @@
    "1440" 
   ], 
   "android.control.availableExtendedSceneModeZoomRatioRanges": [
-    "1.0", 
-    "1.0", 
+    "2.0", 
+    "2.0", 
     "1.0", 
     "1.0"
   ], 
