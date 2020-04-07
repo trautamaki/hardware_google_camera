@@ -54,14 +54,13 @@ cc_library_shared {
     ],
 }
 
-cc_binary {
-    name: "android.hardware.camera.provider@2.6-service-google",
+cc_defaults {
+    name: "camera_service_defaults",
     defaults: ["google_camera_hal_defaults"],
     vendor: true,
     relative_install_path: "hw",
     srcs: ["service.cc"],
     compile_multilib: "first",
-    init_rc: ["android.hardware.camera.provider@2.6-service-google.rc"],
     shared_libs: [
         "android.hardware.camera.device@3.2",
         "android.hardware.camera.device@3.3",
@@ -78,4 +77,17 @@ cc_binary {
         "libutils",
     ],
     vintf_fragments: ["android.hardware.camera.provider@2.6-service-google.xml"]
+}
+
+cc_binary {
+    name: "android.hardware.camera.provider@2.6-service-google",
+    defaults: ["camera_service_defaults"],
+    init_rc: ["android.hardware.camera.provider@2.6-service-google.rc"],
+}
+
+cc_binary {
+    name: "android.hardware.camera.provider@2.6-service-google-lazy",
+    defaults: ["camera_service_defaults"],
+    init_rc: ["android.hardware.camera.provider@2.6-service-google-lazy.rc"],
+    cflags: ["-DLAZY_SERVICE"],
 }
