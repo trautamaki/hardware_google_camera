@@ -14,22 +14,39 @@
  * limitations under the License.
  */
 
+#ifdef LAZY_SERVICE
+#define LOG_TAG "android.hardware.pixel.camera.provider@2.6-service-lazy"
+#else
 #define LOG_TAG "android.hardware.pixel.camera.provider@2.6-service"
+#endif
 
 #include <android/hardware/camera/provider/2.6/ICameraProvider.h>
 #include <binder/ProcessState.h>
 #include <hidl/LegacySupport.h>
 
+using android::hardware::defaultLazyPassthroughServiceImplementation;
 using android::hardware::defaultPassthroughServiceImplementation;
 using android::hardware::camera::provider::V2_6::ICameraProvider;
+
+#ifdef LAZY_SERVICE
+const bool kLazyService = true;
+#else
+const bool kLazyService = false;
+#endif
 
 int main() {
   ALOGI("Google camera provider service is starting.");
   // The camera HAL may communicate to other vendor components via
   // /dev/vndbinder
   android::ProcessState::initWithDriver("/dev/vndbinder");
-  int res = defaultPassthroughServiceImplementation<ICameraProvider>(
-      "internal/0", /*maxThreads*/ 6);
+  int res;
+  if (kLazyService) {
+    res = defaultLazyPassthroughServiceImplementation<ICameraProvider>(
+        "internal/0", /*maxThreads*/ 6);
+  } else {
+    res = defaultPassthroughServiceImplementation<ICameraProvider>(
+        "internal/0", /*maxThreads*/ 6);
+  }
 
   ALOGE("Google camera provider service ending with res %d", res);
   return res;
