@@ -45,6 +45,9 @@ using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::MessageType;
 using google_camera_hal::NotifyMessage;
 
+const uint32_t EmulatedSensor::kRegularSceneHandshake = 1; // Scene handshake divider
+const uint32_t EmulatedSensor::kReducedSceneHandshake = 2; // Scene handshake divider
+
 // 1 us - 30 sec
 const nsecs_t EmulatedSensor::kSupportedExposureTimeRange[2] = {1000LL,
                                                                 30000000000LL};
@@ -570,7 +573,10 @@ bool EmulatedSensor::threadLoop() {
                                 device_chars->second.color_filter.bX,
                                 device_chars->second.color_filter.bY,
                                 device_chars->second.color_filter.bZ);
-      scene_->CalculateScene(next_capture_time_);
+      uint32_t handshake_divider =
+        (device_settings->second.video_stab == ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON) ?
+        kReducedSceneHandshake : kRegularSceneHandshake;
+      scene_->CalculateScene(next_capture_time_, handshake_divider);
 
       (*b)->stream_buffer.status = BufferStatus::kOk;
       switch ((*b)->format) {
@@ -636,9 +642,12 @@ bool EmulatedSensor::threadLoop() {
 
             bool rotate =
                 device_settings->second.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
+            ProcessType process_type = reprocess_request ? REPROCESS :
+              (device_settings->second.edge_mode == ANDROID_EDGE_MODE_HIGH_QUALITY) ?
+              HIGH_QUALITY : REGULAR;
             auto ret = ProcessYUV420(
                 yuv_input, yuv_output, device_settings->second.gain,
-                reprocess_request, device_settings->second.zoom_ratio,
+                process_type, device_settings->second.zoom_ratio,
                 rotate, device_chars->second);
             if (ret != 0) {
               (*b)->stream_buffer.status = BufferStatus::kError;
@@ -679,9 +688,12 @@ bool EmulatedSensor::threadLoop() {
                                  .planes = (*b)->plane.img_y_crcb};
           bool rotate =
               device_settings->second.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
+          ProcessType process_type = reprocess_request ? REPROCESS :
+            (device_settings->second.edge_mode == ANDROID_EDGE_MODE_HIGH_QUALITY) ?
+            HIGH_QUALITY : REGULAR;
           auto ret = ProcessYUV420(
               yuv_input, yuv_output, device_settings->second.gain,
-              reprocess_request, device_settings->second.zoom_ratio,
+              process_type, device_settings->second.zoom_ratio,
               rotate, device_chars->second);
           if (ret != 0) {
             (*b)->stream_buffer.status = BufferStatus::kError;
@@ -796,6 +808,14 @@ void EmulatedSensor::ReturnResults(
                                      lens_shading_map.data(),
                                      lens_shading_map.size());
       }
+    }
+    if (logical_settings->second.report_video_stab) {
+      result->result_metadata->Set(ANDROID_CONTROL_VIDEO_STABILIZATION_MODE,
+                                   &logical_settings->second.video_stab, 1);
+    }
+    if (logical_settings->second.report_edge_mode) {
+      result->result_metadata->Set(ANDROID_EDGE_MODE,
+                                   &logical_settings->second.edge_mode, 1);
     }
     if (logical_settings->second.report_neutral_color_point) {
       result->result_metadata->Set(ANDROID_SENSOR_NEUTRAL_COLOR_POINT,
@@ -1087,56 +1107,64 @@ void EmulatedSensor::CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width,
 
 status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
                                        const YUV420Frame& output, uint32_t gain,
-                                       bool reprocess_request, float zoom_ratio,
+                                       ProcessType process_type, float zoom_ratio,
                                        bool rotate_and_crop,
                                        const SensorCharacteristics& chars) {
   ATRACE_CALL();
   size_t input_width, input_height;
   YCbCrPlanes input_planes, output_planes;
   std::vector<uint8_t> temp_yuv, temp_output_uv, temp_input_uv;
-  if (reprocess_request) {
-    input_width = input.width;
-    input_height = input.height;
-    input_planes = input.planes;
 
-    // libyuv only supports planar YUV420 during scaling.
-    // Split the input U/V plane in separate planes if needed.
-    if (input_planes.cbcr_step == 2) {
-      temp_input_uv.resize(input_width * input_height / 2);
-      auto temp_uv_buffer = temp_input_uv.data();
-      input_planes.img_cb = temp_uv_buffer;
-      input_planes.img_cr = temp_uv_buffer + (input_width * input_height) / 4;
-      input_planes.cbcr_stride = input_width / 2;
-      if (input.planes.img_cb < input.planes.img_cr) {
-        libyuv::SplitUVPlane(input.planes.img_cb, input.planes.cbcr_stride,
-                             input_planes.img_cb, input_planes.cbcr_stride,
-                             input_planes.img_cr, input_planes.cbcr_stride,
-                             input_width / 2, input_height / 2);
-      } else {
-        libyuv::SplitUVPlane(input.planes.img_cr, input.planes.cbcr_stride,
-                             input_planes.img_cr, input_planes.cbcr_stride,
-                             input_planes.img_cb, input_planes.cbcr_stride,
-                             input_width / 2, input_height / 2);
+  switch (process_type) {
+    case HIGH_QUALITY:
+      CaptureYUV420(output.planes, output.width, output.height, gain, zoom_ratio,
+                    rotate_and_crop, chars);
+      return OK;
+    case REPROCESS:
+      input_width = input.width;
+      input_height = input.height;
+      input_planes = input.planes;
+
+      // libyuv only supports planar YUV420 during scaling.
+      // Split the input U/V plane in separate planes if needed.
+      if (input_planes.cbcr_step == 2) {
+        temp_input_uv.resize(input_width * input_height / 2);
+        auto temp_uv_buffer = temp_input_uv.data();
+        input_planes.img_cb = temp_uv_buffer;
+        input_planes.img_cr = temp_uv_buffer + (input_width * input_height) / 4;
+        input_planes.cbcr_stride = input_width / 2;
+        if (input.planes.img_cb < input.planes.img_cr) {
+          libyuv::SplitUVPlane(input.planes.img_cb, input.planes.cbcr_stride,
+                               input_planes.img_cb, input_planes.cbcr_stride,
+                               input_planes.img_cr, input_planes.cbcr_stride,
+                               input_width / 2, input_height / 2);
+        } else {
+          libyuv::SplitUVPlane(input.planes.img_cr, input.planes.cbcr_stride,
+                               input_planes.img_cr, input_planes.cbcr_stride,
+                               input_planes.img_cb, input_planes.cbcr_stride,
+                               input_width / 2, input_height / 2);
+        }
       }
-    }
-  } else {
-    // Generate the smallest possible frame with the expected AR and
-    // then scale using libyuv.
-    float aspect_ratio = static_cast<float>(output.width) / output.height;
-    zoom_ratio = std::max(1.f, zoom_ratio);
-    input_width = EmulatedScene::kSceneWidth * aspect_ratio;
-    input_height = EmulatedScene::kSceneHeight;
-    temp_yuv.reserve((input_width * input_height * 3) / 2);
-    auto temp_yuv_buffer = temp_yuv.data();
-    input_planes = {
-        .img_y = temp_yuv_buffer,
-        .img_cb = temp_yuv_buffer + input_width * input_height,
-        .img_cr = temp_yuv_buffer + (input_width * input_height * 5) / 4,
-        .y_stride = static_cast<uint32_t>(input_width),
-        .cbcr_stride = static_cast<uint32_t>(input_width) / 2,
-        .cbcr_step = 1};
-    CaptureYUV420(input_planes, input_width, input_height, gain, zoom_ratio,
-                  rotate_and_crop, chars);
+      break;
+    case REGULAR:
+    default:
+      // Generate the smallest possible frame with the expected AR and
+      // then scale using libyuv.
+      float aspect_ratio = static_cast<float>(output.width) / output.height;
+      zoom_ratio = std::max(1.f, zoom_ratio);
+      input_width = EmulatedScene::kSceneWidth * aspect_ratio;
+      input_height = EmulatedScene::kSceneHeight;
+      temp_yuv.reserve((input_width * input_height * 3) / 2);
+      auto temp_yuv_buffer = temp_yuv.data();
+      input_planes = {
+          .img_y = temp_yuv_buffer,
+          .img_cb = temp_yuv_buffer + input_width * input_height,
+          .img_cr = temp_yuv_buffer + (input_width * input_height * 5) / 4,
+          .y_stride = static_cast<uint32_t>(input_width),
+          .cbcr_stride = static_cast<uint32_t>(input_width) / 2,
+          .cbcr_step = 1};
+      CaptureYUV420(input_planes, input_width, input_height, gain, zoom_ratio,
+                    rotate_and_crop, chars);
   }
 
   output_planes = output.planes;

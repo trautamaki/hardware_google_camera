@@ -153,7 +153,7 @@ void EmulatedScene::SetExposureDuration(float seconds) {
   exposure_duration_ = seconds;
 }
 
-void EmulatedScene::CalculateScene(nsecs_t time) {
+void EmulatedScene::CalculateScene(nsecs_t time, int32_t handshake_divider) {
   // Calculate time fractions for interpolation
   int time_idx = hour_ / kTimeStep;
   int next_time_idx = (time_idx + 1) % (24 / kTimeStep);
@@ -319,10 +319,16 @@ void EmulatedScene::CalculateScene(nsecs_t time) {
       (kFreq1Magnitude * std::sin(kHorizShakeFreq1 * time_since_idx) +
        kFreq2Magnitude * std::sin(kHorizShakeFreq2 * time_since_idx)) *
       map_div_ * kShakeFraction;
+  if (handshake_divider > 0) {
+    handshake_x_ /= handshake_divider;
+  }
 
   handshake_y_ = (kFreq1Magnitude * std::sin(kVertShakeFreq1 * time_since_idx) +
                   kFreq2Magnitude * std::sin(kVertShakeFreq2 * time_since_idx)) *
                  map_div_ * kShakeFraction;
+  if (handshake_divider > 0) {
+    handshake_y_ /= handshake_divider;
+  }
 
   // Set starting pixel
   SetReadoutPixel(0, 0);
