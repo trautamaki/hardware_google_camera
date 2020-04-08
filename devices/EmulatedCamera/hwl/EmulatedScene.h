@@ -59,9 +59,8 @@ class EmulatedScene {
   void SetExposureDuration(float seconds);
 
   // Calculate scene information for current hour and the time offset since
-  // the hour. Must be called at least once before calling
-  // getLuminousExposure. Resets pixel readout location to 0,0
-  void CalculateScene(nsecs_t time);
+  // the hour. Resets pixel readout location to 0,0
+  void CalculateScene(nsecs_t time, int32_t handshake_divider);
 
   // Set sensor pixel readout location.
   void SetReadoutPixel(int x, int y);
