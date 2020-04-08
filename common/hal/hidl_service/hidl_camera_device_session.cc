@@ -66,6 +66,10 @@ std::unique_ptr<HidlCameraDeviceSession> HidlCameraDeviceSession::Create(
   return session;
 }
 
+HidlCameraDeviceSession::~HidlCameraDeviceSession() {
+  close();
+}
+
 void HidlCameraDeviceSession::ProcessCaptureResult(
     std::unique_ptr<google_camera_hal::CaptureResult> hal_result) {
   std::shared_lock lock(hidl_device_callback_lock_);
