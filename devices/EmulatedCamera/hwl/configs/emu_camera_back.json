@@ -67,7 +67,8 @@
   "1"
  ], 
  "android.control.availableVideoStabilizationModes": [
-  "0"
+   "0", 
+   "1"
  ], 
  "android.control.awbAvailableModes": [
   "0", 

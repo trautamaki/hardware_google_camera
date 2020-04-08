@@ -672,6 +672,32 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  // Check video stabilization parameter
+  uint8_t vstab_mode = ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF;
+  ret = request_settings_->Get(ANDROID_CONTROL_VIDEO_STABILIZATION_MODE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (available_vstab_modes_.find(entry.data.u8[0]) !=
+      available_vstab_modes_.end()) {
+      vstab_mode = entry.data.u8[0];
+    } else {
+      ALOGE("%s: Unsupported video stabilization mode: %u! Video stabilization will be disabled!",
+            __FUNCTION__, entry.data.u8[0]);
+    }
+  }
+
+  // Check video stabilization parameter
+  uint8_t edge_mode = ANDROID_EDGE_MODE_OFF;
+  ret = request_settings_->Get(ANDROID_EDGE_MODE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (available_edge_modes_.find(entry.data.u8[0]) !=
+      available_edge_modes_.end()) {
+      edge_mode = entry.data.u8[0];
+    } else {
+      ALOGE("%s: Unsupported edge mode: %u", __FUNCTION__, entry.data.u8[0]);
+      return BAD_VALUE;
+    }
+  }
+
   // 3A modes are active in case the scene is disabled or set to face priority
   // or the control mode is not using scenes
   if ((scene_mode_ == ANDROID_CONTROL_SCENE_MODE_DISABLED) ||
@@ -756,6 +782,10 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->zoom_ratio = zoom_ratio_;
   sensor_settings->report_rotate_and_crop = report_rotate_and_crop_;
   sensor_settings->rotate_and_crop = rotate_and_crop_;
+  sensor_settings->report_video_stab = !available_vstab_modes_.empty();
+  sensor_settings->video_stab = vstab_mode;
+  sensor_settings->report_edge_mode = report_edge_mode_;
+  sensor_settings->edge_mode = edge_mode;
 
   return OK;
 }
@@ -1626,11 +1656,14 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
         ANDROID_CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES, &entry);
     if ((ret == OK) && (entry.count > 0)) {
       available_vstab_modes_.insert(entry.data.u8, entry.data.u8 + entry.count);
-      if (available_vstab_modes_.find(
-              ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF) ==
-          available_vstab_modes_.end()) {
+      if (available_vstab_modes_.find(ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF) ==
+        available_vstab_modes_.end()) {
         ALOGE("%s: Off video stabilization mode not supported!", __FUNCTION__);
         return BAD_VALUE;
+      }
+      if (available_vstab_modes_.find(ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON) !=
+        available_vstab_modes_.end()) {
+        vstab_available_ = true;
       }
     } else {
       ALOGE("%s: No available video stabilization modes!", __FUNCTION__);
@@ -1848,13 +1881,14 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
     }
 
     uint8_t intent = ANDROID_CONTROL_CAPTURE_INTENT_CUSTOM;
-    uint8_t control_mode, ae_mode, awb_mode, af_mode, scene_mode;
+    uint8_t control_mode, ae_mode, awb_mode, af_mode, scene_mode, vstab_mode;
     control_mode = ANDROID_CONTROL_MODE_AUTO;
     ae_mode = ANDROID_CONTROL_AE_MODE_ON;
     awb_mode = ANDROID_CONTROL_AWB_MODE_AUTO;
     af_mode = af_supported_ ? ANDROID_CONTROL_AF_MODE_AUTO
                             : ANDROID_CONTROL_AF_MODE_OFF;
     scene_mode = ANDROID_CONTROL_SCENE_MODE_DISABLED;
+    vstab_mode = ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF;
     uint8_t effect_mode = ANDROID_CONTROL_EFFECT_MODE_OFF;
     uint8_t ae_lock = ANDROID_CONTROL_AE_LOCK_OFF;
     uint8_t awb_lock = ANDROID_CONTROL_AWB_LOCK_OFF;
@@ -1891,11 +1925,17 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
         if (video_caf_supported_) {
           af_mode = ANDROID_CONTROL_AF_MODE_CONTINUOUS_VIDEO;
         }
+        if (vstab_available_) {
+          vstab_mode = ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON;
+        }
         break;
       case RequestTemplate::kVideoSnapshot:
         intent = ANDROID_CONTROL_CAPTURE_INTENT_VIDEO_SNAPSHOT;
         if (video_caf_supported_) {
           af_mode = ANDROID_CONTROL_AF_MODE_CONTINUOUS_VIDEO;
+        }
+        if (vstab_available_) {
+          vstab_mode = ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON;
         }
         break;
       default:
@@ -1914,6 +1954,10 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
       if (is_backward_compatible_) {
         default_requests_[idx]->Set(ANDROID_CONTROL_POST_RAW_SENSITIVITY_BOOST,
                                     &post_raw_boost_, 1);
+        if (vstab_available_) {
+          default_requests_[idx]->Set(ANDROID_CONTROL_VIDEO_STABILIZATION_MODE,
+                                      &vstab_mode, 1);
+        }
         if (ae_lock_available_) {
           default_requests_[idx]->Set(ANDROID_CONTROL_AE_LOCK, &ae_lock, 1);
         }
@@ -2045,6 +2089,7 @@ status_t EmulatedRequestState::InitializeEdgeDefaults() {
       return BAD_VALUE;
     }
 
+    report_edge_mode_ = available_results_.find(ANDROID_EDGE_MODE) != available_results_.end();
     bool is_fast_mode_supported =
         available_edge_modes_.find(ANDROID_EDGE_MODE_FAST) !=
         available_edge_modes_.end();
