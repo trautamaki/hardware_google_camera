@@ -61,7 +61,7 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
       const sp<V3_2::ICameraDeviceCallback>& callback,
       std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session);
 
-  virtual ~HidlCameraDeviceSession() = default;
+  virtual ~HidlCameraDeviceSession();
 
   // Override functions in ICameraDeviceSession
   Return<void> constructDefaultRequestSettings(
