@@ -26,10 +26,11 @@ class ZoomRatioMapper {
  public:
   struct InitParams {
     Dimension active_array_dimension;
+    std::unordered_map<uint32_t, Dimension> physical_cam_active_array_dimension;
     ZoomRatioRange zoom_ratio_range;
   };
 
-  void Initialize(InitParams params);
+  void Initialize(const InitParams& params);
 
   // Apply zoom ratio to capture request
   void UpdateCaptureRequest(CaptureRequest* request);
@@ -39,40 +40,53 @@ class ZoomRatioMapper {
 
  private:
   // Apply zoom ratio to the capture request or result.
-  void ApplyZoomRatio(HalCameraMetadata* metadata, const bool is_request);
+  void ApplyZoomRatio(HalCameraMetadata* metadata,
+                      const Dimension& active_array_dimension,
+                      const bool is_request);
 
   // Update crop region.
   void UpdateCropRegion(HalCameraMetadata* metadata, const float zoom_ratio,
+                        const Dimension& active_array_dimension,
                         const bool is_request);
 
   // Update AE/AF/AWB regions.
   void Update3ARegion(HalCameraMetadata* metadata, const float zoom_ratio,
-                      const uint32_t tag_id, const bool is_request);
+                      const uint32_t tag_id,
+                      const Dimension& active_array_dimension,
+                      const bool is_request);
 
   // Update face retangles.
-  void UpdateFaceRectangles(HalCameraMetadata* metadata, const float zoom_ratio);
+  void UpdateFaceRectangles(HalCameraMetadata* metadata, const float zoom_ratio,
+                            const Dimension& active_array_dimension);
 
   // Update face landmarks.
-  void UpdateFaceLandmarks(HalCameraMetadata* metadata, const float zoom_ratio);
+  void UpdateFaceLandmarks(HalCameraMetadata* metadata, const float zoom_ratio,
+                           const Dimension& active_array_dimension);
 
   // Map the rectangle to the coordination of HAL.
   void ConvertZoomRatio(const float zoom_ratio, int32_t* left, int32_t* top,
-                        int32_t* width, int32_t* height);
+                        int32_t* width, int32_t* height,
+                        const Dimension& active_array_dimension);
 
   // Map the rectangle to the coordination of framework.
   void RevertZoomRatio(const float zoom_ratio, int32_t* left, int32_t* top,
-                       int32_t* width, int32_t* height);
+                       int32_t* width, int32_t* height,
+                       const Dimension& active_array_dimension);
 
   // Map the position to the coordination of framework.
   void RevertZoomRatio(const float zoom_ratio, Point* new_point,
-                       const Point* point);
+                       const Point* point,
+                       const Dimension& active_array_dimension);
 
   // Boundary check.
   void CorrectBoundary(int32_t* left, int32_t* top, int32_t* width,
                        int32_t* height, int32_t bound_w, int32_t bound_h);
 
-  // Active array dimension.
+  // Active array dimension of logical camera.
   Dimension active_array_dimension_;
+
+  // Active array dimension of physical camera.
+  std::unordered_map<uint32_t, Dimension> physical_cam_active_array_dimension_;
 
   // Zoom ratio range.
   ZoomRatioRange zoom_ratio_range_;
