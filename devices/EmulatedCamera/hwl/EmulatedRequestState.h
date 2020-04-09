@@ -107,6 +107,7 @@ class EmulatedRequestState {
 
   // android.edge.*
   std::set<uint8_t> available_edge_modes_;
+  bool report_edge_mode_ = false;
 
   // android.shading.*
   std::set<uint8_t> available_shading_modes_;
@@ -209,6 +210,7 @@ class EmulatedRequestState {
   bool report_ae_lock_ = false;
   bool scenes_supported_ = false;
   size_t ae_frame_counter_ = 0;
+  bool vstab_available_ = false;
   const size_t kAEPrecaptureMinFrames = 10;
   // Fake AE related constants
   const float kExposureTrackRate = .2f;  // This is the rate at which the fake
