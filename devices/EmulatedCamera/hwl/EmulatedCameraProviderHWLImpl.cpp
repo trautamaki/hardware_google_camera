@@ -603,7 +603,7 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
       }
     }
   }
-  static_metadata_.resize(sizeof(configurationFileLocation));
+  static_metadata_.resize(configurationFileLocation.size());
 
   for (const auto& config_path : configurationFileLocation) {
     if (!android::base::ReadFileToString(config_path, &config)) {
