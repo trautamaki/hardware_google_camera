@@ -400,6 +400,33 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
       active_array_size.right - active_array_size.left + 1,
       active_array_size.bottom - active_array_size.top + 1};
 
+  std::vector<uint32_t> physical_camera_ids =
+      device_session_hwl_->GetPhysicalCameraIds();
+  for (uint32_t id : physical_camera_ids) {
+    std::unique_ptr<google_camera_hal::HalCameraMetadata>
+        physical_cam_characteristics;
+    res = device_session_hwl_->GetPhysicalCameraCharacteristics(
+        id, &physical_cam_characteristics);
+    if (res != OK) {
+      ALOGE("%s: Get camera: %u characteristics failed: %s(%d)", __FUNCTION__,
+            id, strerror(-res), res);
+      return;
+    }
+
+    res = utils::GetSensorActiveArraySize(physical_cam_characteristics.get(),
+                                          &active_array_size);
+    if (res != OK) {
+      ALOGE("%s: Failed to get cam: %u, active array size: %s(%d)",
+            __FUNCTION__, id, strerror(-res), res);
+      return;
+    }
+    Dimension active_array_dimension = {
+        active_array_size.right - active_array_size.left + 1,
+        active_array_size.bottom - active_array_size.top + 1};
+    params.physical_cam_active_array_dimension.emplace(id,
+                                                       active_array_dimension);
+  }
+
   res = utils::GetZoomRatioRange(characteristics, &params.zoom_ratio_range);
   if (res != OK) {
     ALOGW("%s: Failed to get the zoom ratio range: %s(%d)", __FUNCTION__,
