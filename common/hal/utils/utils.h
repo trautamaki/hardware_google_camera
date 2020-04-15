@@ -17,6 +17,7 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_UTILS_UTILS_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_UTILS_UTILS_H_
 
+#include <utility>
 #include "hal_types.h"
 
 namespace android {
@@ -63,6 +64,25 @@ bool IsHighSpeedModeFpsCompatible(StreamConfigurationMode mode,
 //    For ANDROID_CONTROL_AE_TARGET_FPS_RANGE, only compare max fps.
 bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
                                   const HalCameraMetadata* new_session);
+
+// Boundary check.
+void CorrectRegionBoundary(int32_t* left, int32_t* top, int32_t* width,
+                           int32_t* height, int32_t bound_w, int32_t bound_h);
+
+// Map the rectangle to the coordination of framework.
+void RevertZoomRatio(const float zoom_ratio, int32_t* left, int32_t* top,
+                     int32_t* width, int32_t* height,
+                     const Dimension& active_array_dimension);
+
+// Map the rectangle to the coordination of framework.
+void RevertZoomRatio(const float zoom_ratio, std::pair<float, float>* new_pair,
+                     const std::pair<float, float>* pair,
+                     const Dimension& active_array_dimension);
+
+// Map the position to the coordination of framework.
+void RevertZoomRatio(const float zoom_ratio, Point* new_point,
+                     const Point* point,
+                     const Dimension& active_array_dimension);
 
 }  // namespace utils
 }  // namespace google_camera_hal

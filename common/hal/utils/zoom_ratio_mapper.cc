@@ -18,6 +18,7 @@
 
 #include "zoom_ratio_mapper.h"
 #include <log/log.h>
+#include "utils.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -173,8 +174,8 @@ void ZoomRatioMapper::UpdateCropRegion(HalCameraMetadata* metadata,
     ConvertZoomRatio(zoom_ratio, &left, &top, &width, &height,
                      active_array_dimension);
   } else {
-    RevertZoomRatio(zoom_ratio, &left, &top, &width, &height,
-                    active_array_dimension);
+    utils::RevertZoomRatio(zoom_ratio, &left, &top, &width, &height,
+                           active_array_dimension);
   }
   int32_t rect[4] = {left, top, width, height};
 
@@ -220,8 +221,8 @@ void ZoomRatioMapper::Update3ARegion(HalCameraMetadata* metadata,
       ConvertZoomRatio(zoom_ratio, &left, &top, &width, &height,
                        active_array_dimension);
     } else {
-      RevertZoomRatio(zoom_ratio, &left, &top, &width, &height,
-                      active_array_dimension);
+      utils::RevertZoomRatio(zoom_ratio, &left, &top, &width, &height,
+                             active_array_dimension);
     }
 
     updated_regions[i].left = left;
@@ -262,59 +263,14 @@ void ZoomRatioMapper::ConvertZoomRatio(const float zoom_ratio, int32_t* left,
   *height = std::round(*height / zoom_ratio);
 
   if (zoom_ratio >= 1.0f) {
-    CorrectBoundary(left, top, width, height, active_array_dimension.width,
-                    active_array_dimension.height);
+    utils::CorrectRegionBoundary(left, top, width, height,
+                                 active_array_dimension.width,
+                                 active_array_dimension.height);
   }
 
   ALOGV("%s: zoom: %f, active array: [%d x %d], rect: [%d, %d, %d, %d]",
         __FUNCTION__, zoom_ratio, active_array_dimension.width,
         active_array_dimension.height, *left, *top, *width, *height);
-}
-
-void ZoomRatioMapper::RevertZoomRatio(const float zoom_ratio, int32_t* left,
-                                      int32_t* top, int32_t* width,
-                                      int32_t* height,
-                                      const Dimension& active_array_dimension) {
-  if (left == nullptr || top == nullptr || width == nullptr ||
-      height == nullptr) {
-    ALOGE("%s, invalid params", __FUNCTION__);
-    return;
-  }
-
-  *left = std::round(*left * zoom_ratio -
-                     0.5f * active_array_dimension.width * (zoom_ratio - 1.0f));
-  *top = std::round(*top * zoom_ratio -
-                    0.5f * active_array_dimension.height * (zoom_ratio - 1.0f));
-  *width = std::round(*width * zoom_ratio);
-  *height = std::round(*height * zoom_ratio);
-
-  CorrectBoundary(left, top, width, height, active_array_dimension.width,
-                  active_array_dimension.height);
-
-  ALOGV("%s: zoom: %f, active array: [%d x %d], rect: [%d, %d, %d, %d]",
-        __FUNCTION__, zoom_ratio, active_array_dimension.width,
-        active_array_dimension.height, *left, *top, *width, *height);
-}
-
-void ZoomRatioMapper::CorrectBoundary(int32_t* left, int32_t* top,
-                                      int32_t* width, int32_t* height,
-                                      int32_t bound_w, int32_t bound_h) {
-  if (left == nullptr || top == nullptr || width == nullptr ||
-      height == nullptr) {
-    ALOGE("%s, invalid params", __FUNCTION__);
-    return;
-  }
-  *left = std::max(*left, 0);
-  *left = std::min(*left, bound_w - 1);
-
-  *top = std::max(*top, 0);
-  *top = std::min(*top, bound_h - 1);
-
-  *width = std::max(*width, 1);
-  *width = std::min(*width, bound_w - *left);
-
-  *height = std::max(*height, 1);
-  *height = std::min(*height, bound_h - *top);
 }
 
 void ZoomRatioMapper::UpdateFaceRectangles(
@@ -344,8 +300,8 @@ void ZoomRatioMapper::UpdateFaceRectangles(
     int32_t width = face_rect[i].right - face_rect[i].left + 1;
     int32_t height = face_rect[i].bottom - face_rect[i].top + 1;
 
-    RevertZoomRatio(zoom_ratio, &left, &top, &width, &height,
-                    active_array_dimension);
+    utils::RevertZoomRatio(zoom_ratio, &left, &top, &width, &height,
+                           active_array_dimension);
 
     updated_face_rect[i].left = left;
     updated_face_rect[i].top = top;
@@ -386,14 +342,14 @@ void ZoomRatioMapper::UpdateFaceLandmarks(
     return;
   }
 
-  // Each landmark is composed of 6 integers
-  int32_t num_landmarks = entry.count / 6;
+  // Each face is composed of 6 integers
+  int32_t num_faces = entry.count / 6;
   uint32_t data_index = 0;
-  uint32_t num_visible_landmarks = 0;
-  std::vector<Point> landmarks(num_landmarks * 3);
+  uint32_t num_visible_faces = 0;
+  std::vector<Point> landmarks(num_faces * 3);
 
-  for (int32_t i = 0; i < num_landmarks; i++) {
-    Point* transformed = &landmarks[num_visible_landmarks * 3];
+  for (int32_t i = 0; i < num_faces; i++) {
+    Point* transformed = &landmarks[num_visible_faces * 3];
     const Point points[3] = {
         {.x = static_cast<uint32_t>(entry.data.i32[data_index++]),
          .y = static_cast<uint32_t>(entry.data.i32[data_index++])},
@@ -402,12 +358,12 @@ void ZoomRatioMapper::UpdateFaceLandmarks(
         {.x = static_cast<uint32_t>(entry.data.i32[data_index++]),
          .y = static_cast<uint32_t>(entry.data.i32[data_index++])}};
 
-    RevertZoomRatio(zoom_ratio, &transformed[0], &points[0],
-                    active_array_dimension);
-    RevertZoomRatio(zoom_ratio, &transformed[1], &points[1],
-                    active_array_dimension);
-    RevertZoomRatio(zoom_ratio, &transformed[2], &points[2],
-                    active_array_dimension);
+    utils::RevertZoomRatio(zoom_ratio, &transformed[0], &points[0],
+                           active_array_dimension);
+    utils::RevertZoomRatio(zoom_ratio, &transformed[1], &points[1],
+                           active_array_dimension);
+    utils::RevertZoomRatio(zoom_ratio, &transformed[2], &points[2],
+                           active_array_dimension);
     ALOGV(
         "%s: update face landmark: "
         "x_y(%d, %d), x_y(%d, %d), x_y(%d, %d) --> "
@@ -416,37 +372,18 @@ void ZoomRatioMapper::UpdateFaceLandmarks(
         points[2].x, points[2].y, transformed[0].x, transformed[0].y,
         transformed[1].x, transformed[1].y, transformed[2].x, transformed[2].y);
 
-    num_visible_landmarks++;
+    num_visible_faces++;
   }
 
-  status_t res = metadata->Set(
-      ANDROID_STATISTICS_FACE_LANDMARKS,
-      reinterpret_cast<int32_t*>(landmarks.data()),
-      num_visible_landmarks * 3 * (sizeof(Point) / sizeof(int32_t)));
+  status_t res =
+      metadata->Set(ANDROID_STATISTICS_FACE_LANDMARKS,
+                    reinterpret_cast<int32_t*>(landmarks.data()),
+                    num_visible_faces * 3 * (sizeof(Point) / sizeof(int32_t)));
 
   if (res != OK) {
     ALOGE("%s: Updating face landmarks failed: %s (%d)", __FUNCTION__,
           strerror(-res), res);
   }
-}
-
-void ZoomRatioMapper::RevertZoomRatio(const float zoom_ratio, Point* new_point,
-                                      const Point* point,
-                                      const Dimension& active_array_dimension) {
-  if (new_point == nullptr || point == nullptr) {
-    ALOGE("%s, invalid params", __FUNCTION__);
-    return;
-  }
-  new_point->x =
-      std::round(point->x * zoom_ratio -
-                 0.5f * active_array_dimension.width * (zoom_ratio - 1.0f));
-  new_point->y =
-      std::round(point->y * zoom_ratio -
-                 0.5f * active_array_dimension.height * (zoom_ratio - 1.0f));
-
-  ALOGV("%s: zoom: %f, active array: [%d x %d], point: [%d, %d]", __FUNCTION__,
-        zoom_ratio, active_array_dimension.width, active_array_dimension.height,
-        new_point->x, new_point->y);
 }
 
 }  // namespace google_camera_hal
