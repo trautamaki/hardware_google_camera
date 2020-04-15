@@ -359,6 +359,86 @@ bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
   return true;
 }
 
+void RevertZoomRatio(const float zoom_ratio, std::pair<float, float>* new_pair,
+                     const std::pair<float, float>* pair,
+                     const Dimension& active_array_dimension) {
+  if (new_pair == nullptr || pair == nullptr) {
+    ALOGE("%s, invalid params", __FUNCTION__);
+    return;
+  }
+  new_pair->first = pair->first * zoom_ratio -
+                    0.5f * active_array_dimension.width * (zoom_ratio - 1.0f);
+  new_pair->second = pair->second * zoom_ratio -
+                     0.5f * active_array_dimension.height * (zoom_ratio - 1.0f);
+
+  ALOGV("%s: zoom: %f, active array: [%d x %d], pair: [%f, %f]", __FUNCTION__,
+        zoom_ratio, active_array_dimension.width, active_array_dimension.height,
+        new_pair->first, new_pair->second);
+}
+
+void RevertZoomRatio(const float zoom_ratio, int32_t* left, int32_t* top,
+                     int32_t* width, int32_t* height,
+                     const Dimension& active_array_dimension) {
+  if (left == nullptr || top == nullptr || width == nullptr ||
+      height == nullptr) {
+    ALOGE("%s, invalid params", __FUNCTION__);
+    return;
+  }
+
+  *left = std::round(*left * zoom_ratio -
+                     0.5f * active_array_dimension.width * (zoom_ratio - 1.0f));
+  *top = std::round(*top * zoom_ratio -
+                    0.5f * active_array_dimension.height * (zoom_ratio - 1.0f));
+  *width = std::round(*width * zoom_ratio);
+  *height = std::round(*height * zoom_ratio);
+
+  CorrectRegionBoundary(left, top, width, height, active_array_dimension.width,
+                        active_array_dimension.height);
+
+  ALOGV("%s: zoom: %f, active array: [%d x %d], rect: [%d, %d, %d, %d]",
+        __FUNCTION__, zoom_ratio, active_array_dimension.width,
+        active_array_dimension.height, *left, *top, *width, *height);
+}
+
+void RevertZoomRatio(const float zoom_ratio, Point* new_point,
+                     const Point* point,
+                     const Dimension& active_array_dimension) {
+  if (new_point == nullptr || point == nullptr) {
+    ALOGE("%s, invalid params", __FUNCTION__);
+    return;
+  }
+  new_point->x =
+      std::round(point->x * zoom_ratio -
+                 0.5f * active_array_dimension.width * (zoom_ratio - 1.0f));
+  new_point->y =
+      std::round(point->y * zoom_ratio -
+                 0.5f * active_array_dimension.height * (zoom_ratio - 1.0f));
+
+  ALOGV("%s: zoom: %f, active array: [%d x %d], point: [%d, %d]", __FUNCTION__,
+        zoom_ratio, active_array_dimension.width, active_array_dimension.height,
+        new_point->x, new_point->y);
+}
+
+void CorrectRegionBoundary(int32_t* left, int32_t* top, int32_t* width,
+                           int32_t* height, int32_t bound_w, int32_t bound_h) {
+  if (left == nullptr || top == nullptr || width == nullptr ||
+      height == nullptr) {
+    ALOGE("%s, invalid params", __FUNCTION__);
+    return;
+  }
+  *left = std::max(*left, 0);
+  *left = std::min(*left, bound_w - 1);
+
+  *top = std::max(*top, 0);
+  *top = std::min(*top, bound_h - 1);
+
+  *width = std::max(*width, 1);
+  *width = std::min(*width, bound_w - *left);
+
+  *height = std::max(*height, 1);
+  *height = std::min(*height, bound_h - *top);
+}
+
 }  // namespace utils
 }  // namespace google_camera_hal
 }  // namespace android
