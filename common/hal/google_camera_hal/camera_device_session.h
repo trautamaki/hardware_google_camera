@@ -19,6 +19,7 @@
 
 #include <android/hardware/graphics/mapper/2.0/IMapper.h>
 #include <android/hardware/graphics/mapper/3.0/IMapper.h>
+#include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include <memory>
 #include <set>
 #include <shared_mutex>
@@ -155,6 +156,9 @@ class CameraDeviceSession {
 
   status_t Initialize(std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl,
                       CameraBufferAllocatorHwl* camera_allocator_hwl);
+
+  // Initialize the latest available gralloc buffer mapper.
+  status_t InitializeBufferMapper();
 
   // Initialize callbacks from HWL and callbacks to the client.
   void InitializeCallbacks();
@@ -293,6 +297,7 @@ class CameraDeviceSession {
   // Graphics buffer mapper used to import and free buffers.
   sp<android::hardware::graphics::mapper::V2_0::IMapper> buffer_mapper_v2_;
   sp<android::hardware::graphics::mapper::V3_0::IMapper> buffer_mapper_v3_;
+  sp<android::hardware::graphics::mapper::V4_0::IMapper> buffer_mapper_v4_;
 
   // Assuming callbacks to framework is thread-safe, the shared mutex is only
   // used to protect member variable writing and reading.

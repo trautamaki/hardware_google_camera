@@ -117,6 +117,9 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
   static constexpr uint32_t kRequestMetadataQueueSizeBytes = 1 << 20;  // 1MB
   static constexpr uint32_t kResultMetadataQueueSizeBytes = 1 << 20;   // 1MB
 
+  // Initialize the latest available gralloc buffer mapper.
+  status_t InitializeBufferMapper();
+
   // Initialize HidlCameraDeviceSession with a CameraDeviceSession.
   status_t Initialize(
       const sp<V3_2::ICameraDeviceCallback>& callback,
@@ -185,6 +188,7 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
 
   sp<android::hardware::graphics::mapper::V2_0::IMapper> buffer_mapper_v2_;
   sp<android::hardware::graphics::mapper::V3_0::IMapper> buffer_mapper_v3_;
+  sp<android::hardware::graphics::mapper::V4_0::IMapper> buffer_mapper_v4_;
 
   std::mutex hidl_thermal_mutex_;
   sp<android::hardware::thermal::V2_0::IThermal> thermal_;
