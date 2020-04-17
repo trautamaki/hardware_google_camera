@@ -96,6 +96,7 @@ struct std::default_delete<android::SensorBuffer> {
     if (buffer != nullptr) {
       if (buffer->stream_buffer.buffer != nullptr) {
         buffer->importer.unlock(buffer->stream_buffer.buffer);
+        buffer->importer.freeBuffer(buffer->stream_buffer.buffer);
       }
 
       if (buffer->acquire_fence_fd >= 0) {
