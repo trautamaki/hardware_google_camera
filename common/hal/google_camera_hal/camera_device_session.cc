@@ -434,7 +434,9 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
     return;
   }
 
-  zoom_ratio_mapper_.Initialize(params);
+  params.zoom_ratio_mapper_hwl = device_session_hwl_->GetZoomRatioMapperHwl();
+
+  zoom_ratio_mapper_.Initialize(&params);
 }
 
 // Returns an array of regular files under dir_path.
