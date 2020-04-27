@@ -222,7 +222,8 @@ void ProfilerImpl::PrintResult() {
       continue;
     }
     float avg = sum_dt / std::max(1, num_samples);
-    float avg_count = num_samples / std::max(1, num_frames);
+    float avg_count = static_cast<float>(num_samples) /
+                      static_cast<float>(std::max(1, num_frames));
     sum_avg += avg * avg_count;
     sum_max += max_dt;
     max_max = std::max(max_max, max_dt);
