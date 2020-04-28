@@ -34,7 +34,7 @@ namespace google_camera_hal {
 
 bool DualIrCaptureSession::IsStreamConfigurationSupported(
     CameraDeviceSessionHwl* device_session_hwl,
-    const StreamConfiguration& /*stream_config*/) {
+    const StreamConfiguration& stream_config) {
   ATRACE_CALL();
   if (device_session_hwl == nullptr) {
     ALOGE("%s: device_session_hwl is nullptr", __FUNCTION__);
@@ -67,6 +67,20 @@ bool DualIrCaptureSession::IsStreamConfigurationSupported(
       ALOGD("%s: camera %u is not an IR or MONO camera", __FUNCTION__, id);
       return false;
     }
+  }
+
+  uint32_t physical_stream_number = 0;
+  uint32_t logical_stream_number = 0;
+  for (auto& stream : stream_config.streams) {
+    if (stream.is_physical_camera_stream) {
+      physical_stream_number++;
+    } else {
+      logical_stream_number++;
+    }
+  }
+  if (logical_stream_number > 0 && physical_stream_number > 0) {
+    ALOGD("%s: can't support mixed logical and physical stream", __FUNCTION__);
+    return false;
   }
 
   ALOGD("%s: DualIrCaptureSession supports the stream config", __FUNCTION__);
