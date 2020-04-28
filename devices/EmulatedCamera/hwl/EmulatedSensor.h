@@ -132,6 +132,8 @@ struct SensorCharacteristics {
   bool is_flash_supported = false;
   uint32_t lens_shading_map_size[2] = {0};
   uint32_t max_pipeline_depth = 0;
+  uint32_t orientation = 0;
+  bool is_front_facing = false;
 };
 
 // Maps logical/physical camera ids to sensor characteristics
@@ -291,7 +293,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   nsecs_t next_capture_time_;
 
-  std::unique_ptr<EmulatedScene> scene_;
+  sp<EmulatedScene> scene_;
 
   void CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width,
                   const SensorCharacteristics& chars);
