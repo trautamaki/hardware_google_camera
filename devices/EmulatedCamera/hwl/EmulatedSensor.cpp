@@ -364,9 +364,11 @@ status_t EmulatedSensor::StartUp(
 
   logical_camera_id_ = logical_camera_id;
   chars_ = std::move(logical_chars);
-  scene_ = std::make_unique<EmulatedScene>(device_chars->second.width,
-                                           device_chars->second.height,
-                                           kElectronsPerLuxSecond);
+  scene_ = new EmulatedScene(device_chars->second.width,
+                             device_chars->second.height,
+                             kElectronsPerLuxSecond,
+                             device_chars->second.orientation,
+                             device_chars->second.is_front_facing);
   jpeg_compressor_ = std::make_unique<JpegCompressor>();
 
   auto res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);

@@ -202,6 +202,24 @@ status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
     return BAD_VALUE;
   }
 
+  ret = metadata->Get(ANDROID_SENSOR_ORIENTATION, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    sensor_chars->orientation = entry.data.i32[0];
+  } else {
+    ALOGE("%s: Sensor orientation absent!", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  ret = metadata->Get(ANDROID_LENS_FACING, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    sensor_chars->is_front_facing = false;
+    if (ANDROID_LENS_FACING_FRONT == entry.data.u8[0]) {
+      sensor_chars->is_front_facing = true;
+    }
+  } else {
+    ALOGE("%s: Lens facing absent!", __FUNCTION__);
+    return BAD_VALUE;
+  }
   return ret;
 }
 
