@@ -26,14 +26,23 @@
 #ifndef HW_EMULATOR_CAMERA2_SCENE_H
 #define HW_EMULATOR_CAMERA2_SCENE_H
 
+#include "android/frameworks/sensorservice/1.0/ISensorManager.h"
+#include "android/frameworks/sensorservice/1.0/types.h"
 #include "utils/Timers.h"
 
 namespace android {
 
-class EmulatedScene {
+using ::android::frameworks::sensorservice::V1_0::IEventQueue;
+using ::android::frameworks::sensorservice::V1_0::IEventQueueCallback;
+using ::android::hardware::sensors::V1_0::Event;
+using ::android::hardware::Return;
+using ::android::hardware::Void;
+
+class EmulatedScene : public IEventQueueCallback {
  public:
   EmulatedScene(int sensor_width_px, int sensor_height_px,
-                float sensor_sensitivity);
+                float sensor_sensitivity, int sensor_orientation,
+                bool is_front_facing);
   ~EmulatedScene();
 
   void Initialize(int sensor_width_px, int sensor_height_px,
@@ -77,12 +86,29 @@ class EmulatedScene {
   // indexed with ColorChannels.
   const uint32_t* GetPixelElectronsColumn();
 
+  // IEventQueueCallback interface
+  Return<void> onEvent(const Event &e) override;
+
   enum ColorChannels { R = 0, Gr, Gb, B, Y, Cb, Cr, NUM_CHANNELS };
 
-  static const int kSceneWidth;
-  static const int kSceneHeight;
+  static const int kSceneWidth = 20;
+  static const int kSceneHeight = 20;
 
  private:
+  void InitiliazeSceneRotation(bool clock_wise);
+  void InitializeSensorQueue();
+
+  int32_t sensor_handle_;
+  sp<IEventQueue> sensor_event_queue_;
+  std::atomic_uint32_t screen_rotation_;
+  uint8_t scene_rot0_[kSceneWidth*kSceneHeight];
+  uint8_t scene_rot90_[kSceneWidth*kSceneHeight];
+  uint8_t scene_rot180_[kSceneWidth*kSceneHeight];
+  uint8_t scene_rot270_[kSceneWidth*kSceneHeight];
+  uint8_t *current_scene_;
+  int32_t sensor_orientation_;
+  bool is_front_facing_;
+
   // Sensor color filtering coefficients in XYZ
   float filter_r_[3];
   float filter_gr_[3];
