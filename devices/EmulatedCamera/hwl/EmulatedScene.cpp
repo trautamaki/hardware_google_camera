@@ -17,6 +17,7 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "EmulatedScene"
 #include "EmulatedScene.h"
+#include "EmulatedSensor.h"
 
 #include <stdlib.h>
 #include <utils/Log.h>
@@ -27,6 +28,11 @@
 // quality
 
 namespace android {
+
+using ::android::frameworks::sensorservice::V1_0::ISensorManager;
+using ::android::frameworks::sensorservice::V1_0::Result;
+using ::android::hardware::sensors::V1_0::SensorInfo;
+using ::android::hardware::sensors::V1_0::SensorType;
 
 // Define single-letter shortcuts for scene definition, for directly indexing
 // mCurrentColors
@@ -41,9 +47,6 @@ namespace android {
 #define U (EmulatedScene::SUN * EmulatedScene::NUM_CHANNELS)
 #define K (EmulatedScene::SKY * EmulatedScene::NUM_CHANNELS)
 #define M (EmulatedScene::MOON * EmulatedScene::NUM_CHANNELS)
-
-const int EmulatedScene::kSceneWidth = 20;
-const int EmulatedScene::kSceneHeight = 20;
 
 const uint8_t EmulatedScene::kScene[EmulatedScene::kSceneWidth *
                                     EmulatedScene::kSceneHeight] = {
@@ -84,8 +87,11 @@ const uint8_t EmulatedScene::kScene[EmulatedScene::kSceneWidth *
 #undef M
 
 EmulatedScene::EmulatedScene(int sensor_width_px, int sensor_height_px,
-                             float sensor_sensitivity)
-    : hour_(12), exposure_duration_(0.033f) {
+                             float sensor_sensitivity, int sensor_orientation,
+                             bool is_front_facing)
+    : sensor_handle_(-1), screen_rotation_(0), current_scene_(scene_rot0_),
+      sensor_orientation_(sensor_orientation), is_front_facing_(is_front_facing),
+      hour_(12), exposure_duration_(0.033f) {
   // Assume that sensor filters are sRGB primaries to start
   filter_r_[0] = 3.2406f;
   filter_r_[1] = -1.5372f;
@@ -100,10 +106,17 @@ EmulatedScene::EmulatedScene(int sensor_width_px, int sensor_height_px,
   filter_b_[1] = -0.2040f;
   filter_b_[2] = 1.0570f;
 
+  InitiliazeSceneRotation(!is_front_facing_);
+  InitializeSensorQueue();
   Initialize(sensor_width_px, sensor_height_px, sensor_sensitivity);
 }
 
 EmulatedScene::~EmulatedScene() {
+  if (sensor_event_queue_.get() != nullptr) {
+    sensor_event_queue_->disableSensor(sensor_handle_);
+    sensor_event_queue_.clear();
+    sensor_event_queue_ = nullptr;
+  }
 }
 
 void EmulatedScene::Initialize(int sensor_width_px, int sensor_height_px,
@@ -121,6 +134,33 @@ void EmulatedScene::Initialize(int sensor_width_px, int sensor_height_px,
   }
   offset_x_ = (kSceneWidth * map_div_ - sensor_width_) / 2;
   offset_y_ = (kSceneHeight * map_div_ - sensor_height_) / 2;
+
+}
+
+Return<void> EmulatedScene::onEvent(const Event &e) {
+  if (e.sensorType == SensorType::ACCELEROMETER) {
+    // Heuristic approach for deducing the screen
+    // rotation depending on the reported
+    // accelerometer readings. We switch
+    // the screen rotation when one of the
+    // x/y axis gets close enough to the earth
+    // acceleration.
+    const uint32_t earth_accel = 9; // Switch threshold [m/s^2]
+    uint32_t x_accel = e.u.vec3.x;
+    uint32_t y_accel = e.u.vec3.y;
+    if (x_accel == earth_accel) {
+      screen_rotation_ = 270;
+    } else if (x_accel == -earth_accel) {
+      screen_rotation_ = 90;
+    } else if (y_accel == -earth_accel) {
+      screen_rotation_ = 180;
+    } else {
+      screen_rotation_ = 0;
+    }
+  } else {
+    ALOGE("%s: unexpected event received type: %d", __func__, e.sensorType);
+  }
+  return Void();
 }
 
 void EmulatedScene::SetColorFilterXYZ(float rX, float rY, float rZ, float grX,
@@ -330,8 +370,103 @@ void EmulatedScene::CalculateScene(nsecs_t time, int32_t handshake_divider) {
     handshake_y_ /= handshake_divider;
   }
 
+  if (sensor_event_queue_.get() != nullptr) {
+    int32_t sensor_orientation = is_front_facing_ ? -sensor_orientation_ : sensor_orientation_;
+    int32_t scene_rotation = ((screen_rotation_ + 360) + sensor_orientation) % 360;
+    switch (scene_rotation) {
+      case 90:
+        current_scene_ = scene_rot90_;
+        break;
+      case 180:
+        current_scene_ = scene_rot180_;
+        break;
+      case 270:
+        current_scene_ = scene_rot270_;
+        break;
+      default:
+        current_scene_ = scene_rot0_;
+    }
+  } else {
+    current_scene_ = scene_rot0_;
+  }
+
   // Set starting pixel
   SetReadoutPixel(0, 0);
+}
+
+void EmulatedScene::InitiliazeSceneRotation(bool clock_wise) {
+  memcpy(scene_rot0_, kScene, sizeof(scene_rot0_));
+
+  size_t c = 0;
+  for (ssize_t i = kSceneHeight-1; i >= 0; i--) {
+    for (ssize_t j = kSceneWidth-1; j >= 0; j--) {
+      scene_rot180_[c++] = kScene[i*kSceneWidth + j];
+    }
+  }
+
+  c = 0;
+  for (ssize_t i = kSceneWidth-1; i >= 0; i--) {
+    for (size_t j = 0; j < kSceneHeight; j++) {
+      if (clock_wise) {
+        scene_rot90_[c++] = kScene[j*kSceneWidth + i];
+      } else {
+        scene_rot270_[c++] = kScene[j*kSceneWidth + i];
+      }
+    }
+  }
+
+  c = 0;
+  for (size_t i = 0; i < kSceneWidth; i++) {
+    for (ssize_t j = kSceneHeight-1; j >= 0; j--) {
+      if (clock_wise) {
+        scene_rot270_[c++] = kScene[j*kSceneWidth + i];
+      } else {
+        scene_rot90_[c++] = kScene[j*kSceneWidth + i];
+      }
+    }
+  }
+}
+
+void EmulatedScene::InitializeSensorQueue() {
+  sp<ISensorManager> manager = ISensorManager::getService();
+  if (manager == nullptr) {
+    ALOGE("%s: Cannot get ISensorManager", __func__);
+  } else {
+    bool sensor_found = false;
+    manager->getSensorList(
+        [&] (const auto& list, auto result) {
+        if (result != Result::OK) {
+          ALOGE("%s: Failed to retrieve sensor list!", __func__);
+        } else {
+          for (const SensorInfo& it : list) {
+            if (it.type == SensorType::ACCELEROMETER) {
+              sensor_found = true;
+              sensor_handle_ = it.sensorHandle;
+            }
+          }
+        }});
+    if (sensor_found) {
+      manager->createEventQueue(this,
+          [&] (const auto &q, auto result) {
+            if (result != Result::OK) {
+              ALOGE("%s: Cannot create event queue", __func__);
+              return;
+            }
+            sensor_event_queue_ = q;
+          });
+
+      if (sensor_event_queue_.get() != nullptr) {
+        auto res = sensor_event_queue_->enableSensor(sensor_handle_,
+            ns2us(EmulatedSensor::kSupportedFrameDurationRange[0]), 0/*maxBatchReportLatencyUs*/);
+        if (res.isOk()) {
+        } else {
+          ALOGE("%s: Failed to enable sensor", __func__);
+        }
+      } else {
+        ALOGE("%s: Failed to create event queue", __func__);
+      }
+    }
+  }
 }
 
 void EmulatedScene::SetReadoutPixel(int x, int y) {
@@ -342,7 +477,7 @@ void EmulatedScene::SetReadoutPixel(int x, int y) {
   scene_x_ = (x + offset_x_ + handshake_x_) / map_div_;
   scene_y_ = (y + offset_y_ + handshake_y_) / map_div_;
   scene_idx_ = scene_y_ * kSceneWidth + scene_x_;
-  current_scene_material_ = &(current_colors_[kScene[scene_idx_]]);
+  current_scene_material_ = &(current_colors_[current_scene_[scene_idx_]]);
 }
 
 const uint32_t* EmulatedScene::GetPixelElectrons() {
@@ -357,7 +492,7 @@ const uint32_t* EmulatedScene::GetPixelElectrons() {
   } else if (sub_x_ > map_div_) {
     scene_idx_++;
     scene_x_++;
-    current_scene_material_ = &(current_colors_[kScene[scene_idx_]]);
+    current_scene_material_ = &(current_colors_[current_scene_[scene_idx_]]);
     sub_x_ = 0;
   }
   return pixel;
@@ -375,7 +510,7 @@ const uint32_t* EmulatedScene::GetPixelElectronsColumn() {
   } else if (sub_y_ > map_div_) {
     scene_idx_ += kSceneWidth;
     scene_y_++;
-    current_scene_material_ = &(current_colors_[kScene[scene_idx_]]);
+    current_scene_material_ = &(current_colors_[current_scene_[scene_idx_]]);
     sub_y_ = 0;
   }
   return pixel;
