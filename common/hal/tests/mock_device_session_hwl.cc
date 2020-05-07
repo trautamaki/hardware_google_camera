@@ -278,6 +278,11 @@ status_t FakeCameraDeviceSessionHwl::IsReconfigurationRequired(
   return OK;
 }
 
+std::unique_ptr<ZoomRatioMapperHwl>
+FakeCameraDeviceSessionHwl::GetZoomRatioMapperHwl() {
+  return nullptr;
+}
+
 std::unique_ptr<IMulticamCoordinatorHwl>
 FakeCameraDeviceSessionHwl::CreateMulticamCoordinatorHwl() {
   // Multicam coordinator not supported in this mock
