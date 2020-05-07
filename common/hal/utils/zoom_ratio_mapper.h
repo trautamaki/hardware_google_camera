@@ -18,6 +18,7 @@
 #define HARDWARE_GOOGLE_CAMERA_HAL_UTILS_ZOOM_RATIO_MAPPER_H_
 
 #include "hal_types.h"
+#include "zoom_ratio_mapper_hwl.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -28,9 +29,10 @@ class ZoomRatioMapper {
     Dimension active_array_dimension;
     std::unordered_map<uint32_t, Dimension> physical_cam_active_array_dimension;
     ZoomRatioRange zoom_ratio_range;
+    std::unique_ptr<ZoomRatioMapperHwl> zoom_ratio_mapper_hwl;
   };
 
-  void Initialize(const InitParams& params);
+  void Initialize(InitParams* params);
 
   // Apply zoom ratio to capture request
   void UpdateCaptureRequest(CaptureRequest* request);
@@ -40,33 +42,26 @@ class ZoomRatioMapper {
 
  private:
   // Apply zoom ratio to the capture request or result.
-  void ApplyZoomRatio(HalCameraMetadata* metadata,
-                      const Dimension& active_array_dimension,
-                      const bool is_request);
+  void ApplyZoomRatio(const Dimension& active_array_dimension,
+                      const bool is_request, HalCameraMetadata* metadata);
 
-  // Update crop region.
-  void UpdateCropRegion(HalCameraMetadata* metadata, const float zoom_ratio,
-                        const Dimension& active_array_dimension,
-                        const bool is_request);
+  // Update rect region with respect to zoom ratio and active array
+  // dimension.
+  void UpdateRects(float zoom_ratio, const uint32_t tag_id,
+                   const Dimension& active_array_dimension,
+                   const bool is_request, HalCameraMetadata* metadata);
 
-  // Update AE/AF/AWB regions.
-  void Update3ARegion(HalCameraMetadata* metadata, const float zoom_ratio,
-                      const uint32_t tag_id,
-                      const Dimension& active_array_dimension,
-                      const bool is_request);
+  // Update weighted rect regions with respect to zoom ratio and active array
+  // dimension.
+  void UpdateWeightedRects(float zoom_ratio, const uint32_t tag_id,
+                           const Dimension& active_array_dimension,
+                           const bool is_request, HalCameraMetadata* metadata);
 
-  // Update face retangles.
-  void UpdateFaceRectangles(HalCameraMetadata* metadata, const float zoom_ratio,
-                            const Dimension& active_array_dimension);
-
-  // Update face landmarks.
-  void UpdateFaceLandmarks(HalCameraMetadata* metadata, const float zoom_ratio,
-                           const Dimension& active_array_dimension);
-
-  // Map the rectangle to the coordination of HAL.
-  void ConvertZoomRatio(const float zoom_ratio, int32_t* left, int32_t* top,
-                        int32_t* width, int32_t* height,
-                        const Dimension& active_array_dimension);
+  // Update point position with respect to zoom ratio and active array
+  // dimension.
+  void UpdatePoints(float zoom_ratio, const uint32_t tag_id,
+                    const Dimension& active_array_dimension,
+                    HalCameraMetadata* metadata);
 
   // Active array dimension of logical camera.
   Dimension active_array_dimension_;
@@ -79,6 +74,8 @@ class ZoomRatioMapper {
 
   // Indicate whether zoom ratio is supported.
   bool is_zoom_ratio_supported_ = false;
+
+  std::unique_ptr<ZoomRatioMapperHwl> zoom_ratio_mapper_hwl_;
 };
 
 }  // namespace google_camera_hal

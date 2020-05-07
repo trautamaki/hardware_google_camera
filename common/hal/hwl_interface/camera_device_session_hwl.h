@@ -23,6 +23,7 @@
 #include "hwl_types.h"
 #include "multicam_coordinator_hwl.h"
 #include "session_data_defs.h"
+#include "zoom_ratio_mapper_hwl.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -160,6 +161,9 @@ class CameraDeviceSessionHwl {
   virtual status_t IsReconfigurationRequired(
       const HalCameraMetadata* old_session, const HalCameraMetadata* new_session,
       bool* reconfiguration_required) const = 0;
+
+  // Get zoom ratio mapper from HWL.
+  virtual std::unique_ptr<ZoomRatioMapperHwl> GetZoomRatioMapperHwl() = 0;
 };
 
 }  // namespace google_camera_hal

@@ -100,6 +100,8 @@ class FakeCameraDeviceSessionHwl : public CameraDeviceSessionHwl {
       const HalCameraMetadata* old_session, const HalCameraMetadata* new_session,
       bool* reconfiguration_required) const override;
 
+  std::unique_ptr<ZoomRatioMapperHwl> GetZoomRatioMapperHwl() override;
+
  private:
   const uint32_t kCameraId;
   const std::vector<uint32_t> kPhysicalCameraIds;
@@ -189,6 +191,8 @@ class MockDeviceSessionHwl : public CameraDeviceSessionHwl {
                      status_t(const HalCameraMetadata* old_session,
                               const HalCameraMetadata* new_session,
                               bool* reconfiguration_required));
+
+  MOCK_METHOD0(GetZoomRatioMapperHwl, std::unique_ptr<ZoomRatioMapperHwl>());
 
   // Delegate all calls to FakeCameraDeviceSessionHwl.
   void DelegateCallsToFakeSession();
