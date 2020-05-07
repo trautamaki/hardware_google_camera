@@ -139,6 +139,11 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
     *reconfiguration_required = true;
     return OK;
   }
+
+  std::unique_ptr<google_camera_hal::ZoomRatioMapperHwl> GetZoomRatioMapperHwl()
+      override {
+    return nullptr;
+  }
   // End override functions in CameraDeviceSessionHwl
 
  private:
