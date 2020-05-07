@@ -302,6 +302,11 @@ struct Point {
   uint32_t y;
 };
 
+struct PointF {
+  float x = 0.0f;
+  float y = 0.0f;
+};
+
 // Hash function for std::pair
 struct PairHash {
   template <class T1, class T2>
