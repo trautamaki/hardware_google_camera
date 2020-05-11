@@ -55,6 +55,7 @@ class RgbirdDepthResultProcessor : public ResultProcessor {
   RgbirdDepthResultProcessor(InternalStreamManager* internal_stream_manager);
 
  private:
+  static constexpr int32_t kInvalidStreamId = -1;
   InternalStreamManager* internal_stream_manager_ = nullptr;
 
   std::mutex callback_lock_;
