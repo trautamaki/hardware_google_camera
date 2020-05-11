@@ -403,30 +403,39 @@ status_t RgbirdResultRequestProcessor::VerifyAndSubmitDepthRequest(
     return UNKNOWN_ERROR;
   }
 
-  auto input_buffer_size = depth_requests_[frame_number]->input_buffers.size();
+  uint32_t valid_input_buffer_num = 0;
+  auto& depth_request = depth_requests_[frame_number];
+  for (auto& input_buffer : depth_request->input_buffers) {
+    if (input_buffer.stream_id != kInvalidStreamId) {
+      valid_input_buffer_num++;
+    }
+  }
+
   if (IsAutocalRequest(frame_number)) {
-    if (input_buffer_size != /*rgb+ir1+ir2*/ 3) {
+    if (valid_input_buffer_num != /*rgb+ir1+ir2*/ 3) {
       // not all input buffers are ready, early return properly
       return OK;
     }
   } else {
-    if (input_buffer_size != /*ir1+ir2*/ 2) {
+    // The input buffer for RGB pipeline could be a place holder to be
+    // consistent with the input buffer metadata.
+    if (valid_input_buffer_num != /*ir1+ir2*/ 2) {
       // not all input buffers are ready, early return properly
       return OK;
     }
+  }
+
+  if (depth_request->input_buffer_metadata.empty()) {
+    // input buffer metadata is not ready(cloned) yet, early return properly
+    return OK;
   }
 
   // Check against all metadata needed before move on e.g. check against
   // cropping info, FD result for internal YUV stream
   status_t res = OK;
   if (IsAutocalRequest(frame_number)) {
-    if (depth_requests_[frame_number]->input_buffer_metadata.empty()) {
-      // input buffer metadata is not ready(cloned) yet, early return properly
-      return OK;
-    }
-
     bool is_ready = false;
-    for (auto& metadata : depth_requests_[frame_number]->input_buffer_metadata) {
+    for (auto& metadata : depth_request->input_buffer_metadata) {
       if (metadata != nullptr) {
         is_ready = IsAutocalMetadataReadyLocked(*(metadata.get()));
       }
@@ -437,13 +446,13 @@ status_t RgbirdResultRequestProcessor::VerifyAndSubmitDepthRequest(
     }
   }
 
-  res = CheckFenceStatus(depth_requests_[frame_number].get());
+  res = CheckFenceStatus(depth_request.get());
   if (res != OK) {
     ALOGE("%s:Fence status wait failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
 
-  res = ProcessRequest(*depth_requests_[frame_number].get());
+  res = ProcessRequest(*depth_request.get());
   if (res != OK) {
     ALOGE("%s: Failed to submit process request to depth process block.",
           __FUNCTION__);
@@ -475,10 +484,11 @@ status_t RgbirdResultRequestProcessor::TrySubmitDepthProcessBlockRequest(
       }
 
       // If input_buffer_metadata is not empty, the RGB pipeline result metadata
-      // must have been cloned(other entries for IRs set to nullptr). And this
-      // must be autocal request. The yuv_internal_stream buffer has to be
-      // inserted into the corresponding entry in input_buffers. Refer the logic
-      // below for result metadata handling.
+      // must have been cloned(other entries for IRs set to nullptr). The
+      // yuv_internal_stream buffer has to be inserted into the corresponding
+      // entry in input_buffers. Or if this is not a AutoCal request, the stream
+      // id for the place holder of the RGB input buffer must be invalid. Refer
+      // the logic below for result metadata handling.
       const auto& metadata_list =
           depth_requests_[frame_number]->input_buffer_metadata;
       auto& input_buffers = depth_requests_[frame_number]->input_buffers;
@@ -508,22 +518,23 @@ status_t RgbirdResultRequestProcessor::TrySubmitDepthProcessBlockRequest(
           }
           input_buffers[rgb_metadata_index] = output_buffer;
         } else {
-          for (auto& input_buffer : input_buffers) {
-            if (input_buffer.stream_id == kInvalidStreamId) {
-              input_buffer = output_buffer;
+          for (uint32_t i_buffer = 0; i_buffer < input_buffers.size();
+               i_buffer++) {
+            if (input_buffers[i_buffer].stream_id == kInvalidStreamId &&
+                rgb_metadata_index != i_buffer) {
+              input_buffers[i_buffer] = output_buffer;
               break;
             }
           }
         }
       } else {
-        depth_requests_[frame_number]->input_buffers.push_back(output_buffer);
+        input_buffers.push_back(output_buffer);
       }
       pending_request_updated = true;
     }
   }
 
-  if (result->result_metadata != nullptr && request_id == kRgbCameraId &&
-      IsAutocalRequest(frame_number)) {
+  if (result->result_metadata != nullptr && request_id == kRgbCameraId) {
     std::lock_guard<std::mutex> lock(depth_requests_mutex_);
 
     if (depth_requests_.find(frame_number) == depth_requests_.end()) {
@@ -536,7 +547,7 @@ status_t RgbirdResultRequestProcessor::TrySubmitDepthProcessBlockRequest(
     // input_buffer_metadata. Otherwise, insert the RGB pipeline metadata into
     // the entry that is not reserved for any existing IR input buffer. Refer
     // above logic for input buffer preparation.
-    const auto& input_buffers = depth_requests_[frame_number]->input_buffers;
+    auto& input_buffers = depth_requests_[frame_number]->input_buffers;
     auto& metadata_list = depth_requests_[frame_number]->input_buffer_metadata;
     metadata_list.resize(kNumOfAutoCalInputBuffers);
     uint32_t yuv_buffer_index = 0;
@@ -559,6 +570,11 @@ status_t RgbirdResultRequestProcessor::TrySubmitDepthProcessBlockRequest(
       return UNKNOWN_ERROR;
     }
     pending_request_updated = true;
+
+    // If metadata arrives after all IR buffers and there is not RGB buffer
+    if (input_buffers.size() < kNumOfAutoCalInputBuffers) {
+      input_buffers.resize(kNumOfAutoCalInputBuffers);
+    }
   }
 
   if (pending_request_updated) {
