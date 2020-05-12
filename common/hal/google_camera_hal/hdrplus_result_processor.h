@@ -46,6 +46,8 @@ class HdrplusResultProcessor : public ResultProcessor {
   void ProcessResult(ProcessBlockResult block_result) override;
 
   void Notify(const ProcessBlockNotifyMessage& block_message) override;
+
+  status_t FlushPendingRequests() override;
   // Override functions of ResultProcessor end.
 
  protected:
