@@ -295,9 +295,9 @@ status_t DepthProcessBlock::SubmitBlockingDepthRequest(
 
 status_t DepthProcessBlock::SubmitAsyncDepthRequest(
     const DepthRequestInfo& request_info) {
+  std::unique_lock<std::mutex> lock(depth_generator_api_lock_);
   ALOGV("%s: [ud] ExecuteProcessRequest for frame %d", __FUNCTION__,
         request_info.frame_number);
-
   status_t res = depth_generator_->EnqueueProcessRequest(request_info);
   if (res != OK) {
     ALOGE("%s: Failed to enqueue depth request.", __FUNCTION__);
@@ -309,6 +309,7 @@ status_t DepthProcessBlock::SubmitAsyncDepthRequest(
 
 status_t DepthProcessBlock::ProcessDepthResult(DepthResultStatus result_status,
                                                uint32_t frame_number) {
+  std::unique_lock<std::mutex> lock(depth_generator_api_lock_);
   ALOGV("%s: [ud] Depth result for frame %u notified.", __FUNCTION__,
         frame_number);
 
