@@ -137,7 +137,12 @@ void EmulatedScene::Initialize(int sensor_width_px, int sensor_height_px,
 
 }
 
-Return<void> EmulatedScene::onEvent(const Event &e) {
+Return<void> EmulatedScene::SensorHandler::onEvent(const Event& e) {
+  auto scene = scene_.promote();
+  if (scene.get() == nullptr) {
+    return Void();
+  }
+
   if (e.sensorType == SensorType::ACCELEROMETER) {
     // Heuristic approach for deducing the screen
     // rotation depending on the reported
@@ -149,13 +154,13 @@ Return<void> EmulatedScene::onEvent(const Event &e) {
     uint32_t x_accel = e.u.vec3.x;
     uint32_t y_accel = e.u.vec3.y;
     if (x_accel == earth_accel) {
-      screen_rotation_ = 270;
+      scene->screen_rotation_ = 270;
     } else if (x_accel == -earth_accel) {
-      screen_rotation_ = 90;
+      scene->screen_rotation_ = 90;
     } else if (y_accel == -earth_accel) {
-      screen_rotation_ = 180;
+      scene->screen_rotation_ = 180;
     } else {
-      screen_rotation_ = 0;
+      scene->screen_rotation_ = 0;
     }
   } else {
     ALOGE("%s: unexpected event received type: %d", __func__, e.sensorType);
@@ -446,8 +451,8 @@ void EmulatedScene::InitializeSensorQueue() {
           }
         }});
     if (sensor_found) {
-      manager->createEventQueue(this,
-          [&] (const auto &q, auto result) {
+      manager->createEventQueue(
+          new SensorHandler(this), [&](const auto& q, auto result) {
             if (result != Result::OK) {
               ALOGE("%s: Cannot create event queue", __func__);
               return;
