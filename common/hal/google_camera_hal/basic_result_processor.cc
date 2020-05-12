@@ -104,5 +104,10 @@ void BasicResultProcessor::Notify(const ProcessBlockNotifyMessage& block_message
   notify_(block_message.message);
 }
 
+status_t BasicResultProcessor::FlushPendingRequests() {
+  ATRACE_CALL();
+  return INVALID_OPERATION;
+}
+
 }  // namespace google_camera_hal
 }  // namespace android
