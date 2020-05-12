@@ -1102,6 +1102,17 @@ void RgbirdCaptureSession::NotifyHalMessage(const NotifyMessage& message) {
       return;
     }
   } else if (message.type == MessageType::kError) {
+    // drop the error notifications for the internal streams
+    auto error_stream_id = message.message.error.error_stream_id;
+    if (has_depth_stream_ &&
+        message.message.error.error_code == ErrorCode::kErrorBuffer &&
+        error_stream_id != kInvalidStreamId &&
+        (error_stream_id == rgb_internal_yuv_stream_id_ ||
+         error_stream_id == ir1_internal_raw_stream_id_ ||
+         error_stream_id == ir2_internal_raw_stream_id_)) {
+      return;
+    }
+
     status_t res = result_dispatcher_->AddError(message.message.error);
     if (res != OK) {
       ALOGE("%s: AddError for frame %u failed: %s (%d).", __FUNCTION__,

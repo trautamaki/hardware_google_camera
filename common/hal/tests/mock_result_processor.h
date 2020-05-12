@@ -38,6 +38,8 @@ class MockResultProcessor : public ResultProcessor {
   MOCK_METHOD1(ProcessResult, void(ProcessBlockResult result));
 
   MOCK_METHOD1(Notify, void(const ProcessBlockNotifyMessage& message));
+
+  MOCK_METHOD0(FlushPendingRequests, status_t());
 };
 
 }  // namespace google_camera_hal

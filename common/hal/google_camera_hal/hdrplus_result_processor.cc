@@ -130,5 +130,10 @@ void HdrplusResultProcessor::Notify(
   notify_(block_message.message);
 }
 
+status_t HdrplusResultProcessor::FlushPendingRequests() {
+  ATRACE_CALL();
+  return INVALID_OPERATION;
+}
+
 }  // namespace google_camera_hal
 }  // namespace android
