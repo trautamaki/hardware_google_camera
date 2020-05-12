@@ -59,6 +59,9 @@ class ResultProcessor {
 
   // Called by a ProcessBlock to notify a message.
   virtual void Notify(const ProcessBlockNotifyMessage& block_message) = 0;
+
+  // Flush all pending workload.
+  virtual status_t FlushPendingRequests() = 0;
 };
 
 }  // namespace google_camera_hal
