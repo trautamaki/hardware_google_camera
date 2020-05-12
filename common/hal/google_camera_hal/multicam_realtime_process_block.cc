@@ -422,6 +422,11 @@ status_t MultiCameraRtProcessBlock::Flush() {
     return res;
   }
 
+  if (result_processor_ == nullptr) {
+    ALOGW("%s: result processor is nullptr.", __FUNCTION__);
+    return res;
+  }
+
   return result_processor_->FlushPendingRequests();
 }
 
