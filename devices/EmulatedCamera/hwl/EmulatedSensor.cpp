@@ -346,15 +346,16 @@ status_t EmulatedSensor::StartUp(
     return BAD_VALUE;
   }
 
-  auto device_chars = logical_chars->find(logical_camera_id);
-  if (device_chars == logical_chars->end()) {
+  chars_ = std::move(logical_chars);
+  auto device_chars = chars_->find(logical_camera_id);
+  if (device_chars == chars_->end()) {
     ALOGE(
         "%s: Logical camera id: %u absent from logical camera characteristics!",
         __FUNCTION__, logical_camera_id);
     return BAD_VALUE;
   }
 
-  for (const auto& it : *logical_chars) {
+  for (const auto& it : *chars_) {
     if (!AreCharacteristicsSupported(it.second)) {
       ALOGE("%s: Sensor characteristics for camera id: %u not supported!",
             __FUNCTION__, it.first);
@@ -363,12 +364,10 @@ status_t EmulatedSensor::StartUp(
   }
 
   logical_camera_id_ = logical_camera_id;
-  chars_ = std::move(logical_chars);
-  scene_ = new EmulatedScene(device_chars->second.width,
-                             device_chars->second.height,
-                             kElectronsPerLuxSecond,
-                             device_chars->second.orientation,
-                             device_chars->second.is_front_facing);
+  scene_ = new EmulatedScene(
+      device_chars->second.width, device_chars->second.height,
+      kElectronsPerLuxSecond, device_chars->second.orientation,
+      device_chars->second.is_front_facing);
   jpeg_compressor_ = std::make_unique<JpegCompressor>();
 
   auto res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);
