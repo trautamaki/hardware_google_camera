@@ -346,5 +346,10 @@ status_t DualIrResultRequestProcessor::Flush() {
   return INVALID_OPERATION;
 }
 
+status_t DualIrResultRequestProcessor::FlushPendingRequests() {
+  ATRACE_CALL();
+  return OK;
+}
+
 }  // namespace google_camera_hal
 }  // namespace android
