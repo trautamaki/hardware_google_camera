@@ -398,9 +398,9 @@ status_t RgbirdResultRequestProcessor::VerifyAndSubmitDepthRequest(
     uint32_t frame_number) {
   std::lock_guard<std::mutex> lock(depth_requests_mutex_);
   if (depth_requests_.find(frame_number) == depth_requests_.end()) {
-    ALOGE("%s: Can not find depth request with frame number %u", __FUNCTION__,
+    ALOGW("%s: Can not find depth request with frame number %u", __FUNCTION__,
           frame_number);
-    return UNKNOWN_ERROR;
+    return NAME_NOT_FOUND;
   }
 
   uint32_t valid_input_buffer_num = 0;
@@ -414,6 +414,8 @@ status_t RgbirdResultRequestProcessor::VerifyAndSubmitDepthRequest(
   if (IsAutocalRequest(frame_number)) {
     if (valid_input_buffer_num != /*rgb+ir1+ir2*/ 3) {
       // not all input buffers are ready, early return properly
+      ALOGV("%s: Not all input buffers are ready for frame %u", __FUNCTION__,
+            frame_number);
       return OK;
     }
   } else {
@@ -421,12 +423,16 @@ status_t RgbirdResultRequestProcessor::VerifyAndSubmitDepthRequest(
     // consistent with the input buffer metadata.
     if (valid_input_buffer_num != /*ir1+ir2*/ 2) {
       // not all input buffers are ready, early return properly
+      ALOGV("%s: Not all input buffers are ready for frame %u", __FUNCTION__,
+            frame_number);
       return OK;
     }
   }
 
   if (depth_request->input_buffer_metadata.empty()) {
     // input buffer metadata is not ready(cloned) yet, early return properly
+    ALOGV("%s: Input buffer metadata is not ready for frame %u", __FUNCTION__,
+          frame_number);
     return OK;
   }
 
@@ -441,7 +447,8 @@ status_t RgbirdResultRequestProcessor::VerifyAndSubmitDepthRequest(
       }
     }
     if (!is_ready) {
-      ALOGV("%s: Not all AutoCal Metadata is ready.", __FUNCTION__);
+      ALOGV("%s: Not all AutoCal Metadata is ready for frame %u.", __FUNCTION__,
+            frame_number);
       return OK;
     }
   }
@@ -458,6 +465,7 @@ status_t RgbirdResultRequestProcessor::VerifyAndSubmitDepthRequest(
           __FUNCTION__);
     return UNKNOWN_ERROR;
   }
+
   depth_requests_.erase(frame_number);
   return OK;
 }
@@ -477,10 +485,19 @@ status_t RgbirdResultRequestProcessor::TrySubmitDepthProcessBlockRequest(
          IsAutocalRequest(frame_number))) {
       std::lock_guard<std::mutex> lock(depth_requests_mutex_);
 
+      // In case depth request is flushed
       if (depth_requests_.find(frame_number) == depth_requests_.end()) {
-        ALOGE("%s: Can not find depth request with frame number %u",
+        ALOGV("%s: Can not find depth request with frame number %u",
               __FUNCTION__, frame_number);
-        return UNKNOWN_ERROR;
+        status_t res =
+            internal_stream_manager_->ReturnStreamBuffer(output_buffer);
+        if (res != OK) {
+          ALOGW(
+              "%s: Failed to return internal buffer for flushed depth request"
+              " %u",
+              __FUNCTION__, frame_number);
+        }
+        continue;
       }
 
       // If input_buffer_metadata is not empty, the RGB pipeline result metadata
@@ -537,6 +554,7 @@ status_t RgbirdResultRequestProcessor::TrySubmitDepthProcessBlockRequest(
   if (result->result_metadata != nullptr && request_id == kRgbCameraId) {
     std::lock_guard<std::mutex> lock(depth_requests_mutex_);
 
+    // In case a depth request is flushed
     if (depth_requests_.find(frame_number) == depth_requests_.end()) {
       ALOGV("%s No depth request for Autocal", __FUNCTION__);
       return OK;
@@ -786,14 +804,71 @@ status_t RgbirdResultRequestProcessor::ProcessRequest(
 
 status_t RgbirdResultRequestProcessor::Flush() {
   ATRACE_CALL();
-  // TODO(b/127322570): Implement this method.
+
   std::lock_guard<std::mutex> lock(depth_process_block_lock_);
   if (depth_process_block_ == nullptr) {
-    ALOGE("%s: depth_process_block_ is null.", __FUNCTION__);
-    return BAD_VALUE;
+    ALOGW("%s: depth_process_block_ is null.", __FUNCTION__);
+    return OK;
   }
 
   return depth_process_block_->Flush();
+}
+
+status_t RgbirdResultRequestProcessor::FlushPendingRequests() {
+  ATRACE_CALL();
+
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  if (notify_ == nullptr) {
+    ALOGE("%s: notify_ is nullptr. Dropping a message.", __FUNCTION__);
+    return OK;
+  }
+
+  if (process_capture_result_ == nullptr) {
+    ALOGE("%s: process_capture_result_ is nullptr. Dropping a result.",
+          __FUNCTION__);
+    return OK;
+  }
+
+  std::lock_guard<std::mutex> requests_lock(depth_requests_mutex_);
+  for (auto& [frame_number, capture_request] : depth_requests_) {
+    // Returns all internal stream buffers
+    for (auto& input_buffer : capture_request->input_buffers) {
+      if (input_buffer.stream_id != kInvalidStreamId) {
+        status_t res =
+            internal_stream_manager_->ReturnStreamBuffer(input_buffer);
+        if (res != OK) {
+          ALOGW("%s: Failed to return internal buffer for depth request %d",
+                __FUNCTION__, frame_number);
+        }
+      }
+    }
+
+    // Notify buffer error for the depth stream output buffer
+    const NotifyMessage message = {
+        .type = MessageType::kError,
+        .message.error = {.frame_number = frame_number,
+                          .error_stream_id = depth_stream_id_,
+                          .error_code = ErrorCode::kErrorBuffer}};
+    notify_(message);
+
+    // Return output buffer for the depth stream
+    auto result = std::make_unique<CaptureResult>();
+    result->frame_number = frame_number;
+    for (auto& output_buffer : capture_request->output_buffers) {
+      if (output_buffer.stream_id == depth_stream_id_) {
+        result->output_buffers.push_back(output_buffer);
+        auto& buffer = result->output_buffers.back();
+        buffer.status = BufferStatus::kError;
+        buffer.acquire_fence = nullptr;
+        buffer.release_fence = nullptr;
+        break;
+      }
+    }
+    process_capture_result_(std::move(result));
+  }
+  depth_requests_.clear();
+  ALOGI("%s: Flushing depth requests done. ", __FUNCTION__);
+  return OK;
 }
 
 }  // namespace google_camera_hal
