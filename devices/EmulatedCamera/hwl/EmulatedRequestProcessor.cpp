@@ -198,9 +198,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
 
   auto width = static_cast<int32_t>(stream.width);
   auto height = static_cast<int32_t>(stream.height);
-  auto usage = stream.is_input
-                   ? GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN
-                   : stream.producer_usage;
+  auto usage = GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN;
   if (stream.override_format == HAL_PIXEL_FORMAT_YCBCR_420_888) {
     IMapper::Rect map_rect = {0, 0, width, height};
     auto yuv_layout = importer.lockYCbCr(buffer, usage, map_rect);
