@@ -38,7 +38,7 @@ using ::android::hardware::sensors::V1_0::Event;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
 
-class EmulatedScene : public IEventQueueCallback {
+class EmulatedScene : public RefBase {
  public:
   EmulatedScene(int sensor_width_px, int sensor_height_px,
                 float sensor_sensitivity, int sensor_orientation,
@@ -86,15 +86,24 @@ class EmulatedScene : public IEventQueueCallback {
   // indexed with ColorChannels.
   const uint32_t* GetPixelElectronsColumn();
 
-  // IEventQueueCallback interface
-  Return<void> onEvent(const Event &e) override;
-
   enum ColorChannels { R = 0, Gr, Gb, B, Y, Cb, Cr, NUM_CHANNELS };
 
   static const int kSceneWidth = 20;
   static const int kSceneHeight = 20;
 
  private:
+  class SensorHandler : public IEventQueueCallback {
+   public:
+    SensorHandler(wp<EmulatedScene> scene) : scene_(scene) {
+    }
+
+    // IEventQueueCallback interface
+    Return<void> onEvent(const Event& e) override;
+
+   private:
+    wp<EmulatedScene> scene_;
+  };
+
   void InitiliazeSceneRotation(bool clock_wise);
   void InitializeSensorQueue();
 
@@ -204,7 +213,7 @@ class EmulatedScene : public IEventQueueCallback {
   static const uint8_t kMaterialsFlags[NUM_MATERIALS];
 
   static const uint8_t kScene[];
-  };
+};
 
 }  // namespace android
 

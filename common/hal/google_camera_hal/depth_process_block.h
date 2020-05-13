@@ -198,6 +198,9 @@ class DepthProcessBlock : public ProcessBlock {
   int32_t ir1_internal_raw_stream_id_ = kInvalidStreamId;
   // stream id of the internal raw stream from IR 2
   int32_t ir2_internal_raw_stream_id_ = kInvalidStreamId;
+
+  // Guarding async depth generator API calls and the result processing calls
+  std::mutex depth_generator_api_lock_;
 };
 
 }  // namespace google_camera_hal

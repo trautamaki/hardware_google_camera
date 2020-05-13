@@ -416,7 +416,18 @@ status_t MultiCameraRtProcessBlock::Flush() {
     return OK;
   }
 
-  return device_session_hwl_->Flush();
+  status_t res = device_session_hwl_->Flush();
+  if (res != OK) {
+    ALOGE("%s: Flushing hwl device session failed.", __FUNCTION__);
+    return res;
+  }
+
+  if (result_processor_ == nullptr) {
+    ALOGW("%s: result processor is nullptr.", __FUNCTION__);
+    return res;
+  }
+
+  return result_processor_->FlushPendingRequests();
 }
 
 void MultiCameraRtProcessBlock::NotifyHwlPipelineResult(

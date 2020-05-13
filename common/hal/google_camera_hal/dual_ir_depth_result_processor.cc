@@ -133,5 +133,10 @@ void DualIrDepthResultProcessor::Notify(
   notify_(message);
 }
 
+status_t DualIrDepthResultProcessor::FlushPendingRequests() {
+  ATRACE_CALL();
+  return INVALID_OPERATION;
+}
+
 }  // namespace google_camera_hal
 }  // namespace android
