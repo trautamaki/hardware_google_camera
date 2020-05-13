@@ -1089,7 +1089,7 @@ void EmulatedSensor::CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width,
 
   for (unsigned int y = 0, out_y = 0; y < chars.height; y += inc_v, out_y++) {
     scene_->SetReadoutPixel(0, y);
-    uint16_t* px = ((uint16_t*)img) + out_y * stride;
+    uint16_t* px = (uint16_t*)(img + (out_y * stride));
     for (unsigned int x = 0; x < chars.width; x += inc_h) {
       uint32_t depth_count;
       // TODO: Make up real depth scene instead of using green channel
