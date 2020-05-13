@@ -277,11 +277,19 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
   // In case buffer processing is successful, flip this flag accordingly
   buffer->stream_buffer.status = BufferStatus::kError;
 
-  auto ret = LockSensorBuffer(stream, buffer->importer, stream_buffer.buffer,
-                              buffer.get());
-  if (ret != OK) {
+  if (!buffer->importer.importBuffer(buffer->stream_buffer.buffer)) {
+    ALOGE("%s: Failed importing stream buffer!", __FUNCTION__);
     buffer.release();
     buffer = nullptr;
+  }
+
+  if (buffer.get() != nullptr) {
+    auto ret = LockSensorBuffer(stream, buffer->importer,
+                                buffer->stream_buffer.buffer, buffer.get());
+    if (ret != OK) {
+      buffer.release();
+      buffer = nullptr;
+    }
   }
 
   if ((buffer.get() != nullptr) && (stream_buffer.acquire_fence != nullptr)) {
