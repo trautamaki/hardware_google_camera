@@ -230,21 +230,25 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
   } else {
     uint32_t buffer_size = 0, stride = 0;
     auto ret = GetBufferSizeAndStride(stream, &buffer_size, &stride);
-    if (ret == OK) {
-      sensor_buffer->plane.img.img =
-          static_cast<uint8_t*>(importer.lock(buffer, usage, buffer_size));
-      if (sensor_buffer->plane.img.img != nullptr) {
-        sensor_buffer->plane.img.stride = stride;
-        sensor_buffer->plane.img.buffer_size = buffer_size;
-      } else {
-        ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
-        return BAD_VALUE;
-      }
-    } else {
+    if (ret != OK) {
       ALOGE("%s: Unsupported pixel format: 0x%x", __FUNCTION__,
             stream.override_format);
       return BAD_VALUE;
     }
+    if (stream.override_format == HAL_PIXEL_FORMAT_BLOB) {
+      sensor_buffer->plane.img.img =
+          static_cast<uint8_t*>(importer.lock(buffer, usage, buffer_size));
+    } else {
+      IMapper::Rect region{0, 0, width, height};
+      sensor_buffer->plane.img.img =
+          static_cast<uint8_t*>(importer.lock(buffer, usage, region));
+    }
+    if (sensor_buffer->plane.img.img == nullptr) {
+      ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
+      return BAD_VALUE;
+    }
+    sensor_buffer->plane.img.stride = stride;
+    sensor_buffer->plane.img.buffer_size = buffer_size;
   }
 
   return OK;
