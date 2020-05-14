@@ -142,5 +142,10 @@ void RgbirdDepthResultProcessor::Notify(
   notify_(message);
 }
 
+status_t RgbirdDepthResultProcessor::FlushPendingRequests() {
+  ATRACE_CALL();
+  return INVALID_OPERATION;
+}
+
 }  // namespace google_camera_hal
 }  // namespace android
