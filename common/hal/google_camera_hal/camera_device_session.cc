@@ -255,6 +255,29 @@ void CameraDeviceSession::Notify(const NotifyMessage& result) {
   session_callback_.notify(result);
 }
 
+status_t CameraDeviceSession::InitializeBufferMapper() {
+  buffer_mapper_v4_ =
+      android::hardware::graphics::mapper::V4_0::IMapper::getService();
+  if (buffer_mapper_v4_ != nullptr) {
+    return OK;
+  }
+
+  buffer_mapper_v3_ =
+      android::hardware::graphics::mapper::V3_0::IMapper::getService();
+  if (buffer_mapper_v3_ != nullptr) {
+    return OK;
+  }
+
+  buffer_mapper_v2_ =
+      android::hardware::graphics::mapper::V2_0::IMapper::getService();
+  if (buffer_mapper_v2_ != nullptr) {
+    return OK;
+  }
+
+  ALOGE("%s: Getting buffer mapper failed.", __FUNCTION__);
+  return UNKNOWN_ERROR;
+}
+
 void CameraDeviceSession::InitializeCallbacks() {
   std::lock_guard lock(session_callback_lock_);
 
@@ -338,22 +361,17 @@ status_t CameraDeviceSession::Initialize(
   device_session_hwl_ = std::move(device_session_hwl);
   camera_allocator_hwl_ = camera_allocator_hwl;
 
-  // Initialize buffer mapper
-  buffer_mapper_v3_ =
-      android::hardware::graphics::mapper::V3_0::IMapper::getService();
-  if (buffer_mapper_v3_ == nullptr) {
-    buffer_mapper_v2_ =
-        android::hardware::graphics::mapper::V2_0::IMapper::getService();
-    if (buffer_mapper_v2_ == nullptr) {
-      ALOGE("%s: Getting buffer mapper failed.", __FUNCTION__);
-      return UNKNOWN_ERROR;
-    }
+  status_t res = InitializeBufferMapper();
+  if (res != OK) {
+    ALOGE("%s: Initialize buffer mapper failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
   }
 
   InitializeCallbacks();
 
   std::unique_ptr<google_camera_hal::HalCameraMetadata> characteristics;
-  status_t res = device_session_hwl_->GetCameraCharacteristics(&characteristics);
+  res = device_session_hwl_->GetCameraCharacteristics(&characteristics);
   if (res != OK) {
     ALOGE("%s: Get camera characteristics failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);
@@ -524,7 +542,10 @@ CameraDeviceSession::~CameraDeviceSession() {
     dlclose(lib_handle);
   }
 
-  if (buffer_mapper_v3_ != nullptr) {
+  if (buffer_mapper_v4_ != nullptr) {
+    FreeImportedBufferHandles<android::hardware::graphics::mapper::V4_0::IMapper>(
+        buffer_mapper_v4_);
+  } else if (buffer_mapper_v3_ != nullptr) {
     FreeImportedBufferHandles<android::hardware::graphics::mapper::V3_0::IMapper>(
         buffer_mapper_v3_);
   } else if (buffer_mapper_v2_ != nullptr) {
@@ -833,7 +854,12 @@ status_t CameraDeviceSession::ImportBufferHandles(
   for (auto& buffer : buffers) {
     if (!IsBufferImportedLocked(buffer.stream_id, buffer.buffer_id)) {
       status_t res = OK;
-      if (buffer_mapper_v3_ != nullptr) {
+      if (buffer_mapper_v4_ != nullptr) {
+        res = ImportBufferHandleLocked<
+            android::hardware::graphics::mapper::V4_0::IMapper,
+            android::hardware::graphics::mapper::V4_0::Error>(buffer_mapper_v4_,
+                                                              buffer);
+      } else if (buffer_mapper_v3_ != nullptr) {
         res = ImportBufferHandleLocked<
             android::hardware::graphics::mapper::V3_0::IMapper,
             android::hardware::graphics::mapper::V3_0::Error>(buffer_mapper_v3_,
@@ -1276,7 +1302,9 @@ void CameraDeviceSession::RemoveBufferCache(
       }
     };
 
-    if (buffer_mapper_v3_ != nullptr) {
+    if (buffer_mapper_v4_ != nullptr) {
+      free_buffer_mapper(buffer_mapper_v4_);
+    } else if (buffer_mapper_v3_ != nullptr) {
       free_buffer_mapper(buffer_mapper_v3_);
     } else {
       free_buffer_mapper(buffer_mapper_v2_);
@@ -1342,7 +1370,10 @@ void CameraDeviceSession::CleanupStaleStreamsLocked(
     if (!found) {
       std::lock_guard<std::mutex> lock(imported_buffer_handle_map_lock_);
       stream_it = configured_streams_map_.erase(stream_it);
-      if (buffer_mapper_v3_ != nullptr) {
+      if (buffer_mapper_v4_ != nullptr) {
+        FreeBufferHandlesLocked<android::hardware::graphics::mapper::V4_0::IMapper>(
+            buffer_mapper_v4_, stream_id);
+      } else if (buffer_mapper_v3_ != nullptr) {
         FreeBufferHandlesLocked<android::hardware::graphics::mapper::V3_0::IMapper>(
             buffer_mapper_v3_, stream_id);
       } else {
