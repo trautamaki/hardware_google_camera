@@ -217,7 +217,12 @@ HidlCameraDeviceSession::RequestStreamBuffers(
         // If buffer handle is not null, we need to import buffer handle and
         // return to the caller.
         if (hidl_buffer.buffer.getNativeHandle() != nullptr) {
-          if (buffer_mapper_v3_ != nullptr) {
+          if (buffer_mapper_v4_ != nullptr) {
+            hal_buffer.buffer = ImportBufferHandle<
+                android::hardware::graphics::mapper::V4_0::IMapper,
+                android::hardware::graphics::mapper::V4_0::Error>(
+                buffer_mapper_v4_, hidl_buffer.buffer);
+          } else if (buffer_mapper_v3_ != nullptr) {
             hal_buffer.buffer = ImportBufferHandle<
                 android::hardware::graphics::mapper::V3_0::IMapper,
                 android::hardware::graphics::mapper::V3_0::Error>(
@@ -284,6 +289,29 @@ void HidlCameraDeviceSession::ReturnStreamBuffers(
   hidl_device_callback_->returnStreamBuffers(hidl_return_buffers);
 }
 
+status_t HidlCameraDeviceSession::InitializeBufferMapper() {
+  buffer_mapper_v4_ =
+      android::hardware::graphics::mapper::V4_0::IMapper::getService();
+  if (buffer_mapper_v4_ != nullptr) {
+    return OK;
+  }
+
+  buffer_mapper_v3_ =
+      android::hardware::graphics::mapper::V3_0::IMapper::getService();
+  if (buffer_mapper_v3_ != nullptr) {
+    return OK;
+  }
+
+  buffer_mapper_v2_ =
+      android::hardware::graphics::mapper::V2_0::IMapper::getService();
+  if (buffer_mapper_v2_ != nullptr) {
+    return OK;
+  }
+
+  ALOGE("%s: Getting buffer mapper failed.", __FUNCTION__);
+  return UNKNOWN_ERROR;
+}
+
 status_t HidlCameraDeviceSession::Initialize(
     const sp<V3_2::ICameraDeviceCallback>& callback,
     std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session) {
@@ -318,15 +346,11 @@ status_t HidlCameraDeviceSession::Initialize(
   }
 
   // Initialize buffer mapper
-  buffer_mapper_v3_ =
-      android::hardware::graphics::mapper::V3_0::IMapper::getService();
-  if (buffer_mapper_v3_ == nullptr) {
-    buffer_mapper_v2_ =
-        android::hardware::graphics::mapper::V2_0::IMapper::getService();
-    if (buffer_mapper_v2_ == nullptr) {
-      ALOGE("%s: Getting buffer mapper failed.", __FUNCTION__);
-      return UNKNOWN_ERROR;
-    }
+  res = InitializeBufferMapper();
+  if (res != OK) {
+    ALOGE("%s: Initialize buffer mapper failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
   }
 
   thermal_ = android::hardware::thermal::V2_0::IThermal::getService();

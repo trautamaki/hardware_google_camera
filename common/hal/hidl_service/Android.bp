@@ -38,6 +38,7 @@ cc_library_shared {
         "android.hardware.camera.provider@2.6",
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@3.0",
+        "android.hardware.graphics.mapper@4.0",
         "android.hardware.thermal@2.0",
         "libcamera_metadata",
         "libcutils",
