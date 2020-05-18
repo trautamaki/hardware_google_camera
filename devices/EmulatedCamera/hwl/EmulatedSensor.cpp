@@ -368,6 +368,7 @@ status_t EmulatedSensor::StartUp(
       device_chars->second.width, device_chars->second.height,
       kElectronsPerLuxSecond, device_chars->second.orientation,
       device_chars->second.is_front_facing);
+  scene_->InitializeSensorQueue();
   jpeg_compressor_ = std::make_unique<JpegCompressor>();
 
   auto res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);
