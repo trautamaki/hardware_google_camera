@@ -45,6 +45,8 @@ class EmulatedScene : public RefBase {
                 bool is_front_facing);
   ~EmulatedScene();
 
+  void InitializeSensorQueue();
+
   void Initialize(int sensor_width_px, int sensor_height_px,
                   float sensor_sensitivity);
 
@@ -105,7 +107,6 @@ class EmulatedScene : public RefBase {
   };
 
   void InitiliazeSceneRotation(bool clock_wise);
-  void InitializeSensorQueue();
 
   int32_t sensor_handle_;
   sp<IEventQueue> sensor_event_queue_;
