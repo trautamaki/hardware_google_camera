@@ -89,9 +89,13 @@ const uint8_t EmulatedScene::kScene[EmulatedScene::kSceneWidth *
 EmulatedScene::EmulatedScene(int sensor_width_px, int sensor_height_px,
                              float sensor_sensitivity, int sensor_orientation,
                              bool is_front_facing)
-    : sensor_handle_(-1), screen_rotation_(0), current_scene_(scene_rot0_),
-      sensor_orientation_(sensor_orientation), is_front_facing_(is_front_facing),
-      hour_(12), exposure_duration_(0.033f) {
+    : sensor_handle_(-1),
+      screen_rotation_(0),
+      current_scene_(scene_rot0_),
+      sensor_orientation_(sensor_orientation),
+      is_front_facing_(is_front_facing),
+      hour_(12),
+      exposure_duration_(0.033f) {
   // Assume that sensor filters are sRGB primaries to start
   filter_r_[0] = 3.2406f;
   filter_r_[1] = -1.5372f;
@@ -107,7 +111,6 @@ EmulatedScene::EmulatedScene(int sensor_width_px, int sensor_height_px,
   filter_b_[2] = 1.0570f;
 
   InitiliazeSceneRotation(!is_front_facing_);
-  InitializeSensorQueue();
   Initialize(sensor_width_px, sensor_height_px, sensor_sensitivity);
 }
 
@@ -433,6 +436,10 @@ void EmulatedScene::InitiliazeSceneRotation(bool clock_wise) {
 }
 
 void EmulatedScene::InitializeSensorQueue() {
+  if (sensor_event_queue_.get() != nullptr) {
+    return;
+  }
+
   sp<ISensorManager> manager = ISensorManager::getService();
   if (manager == nullptr) {
     ALOGE("%s: Cannot get ISensorManager", __func__);
