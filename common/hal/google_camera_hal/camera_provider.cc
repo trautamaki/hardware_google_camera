@@ -297,7 +297,7 @@ status_t CameraProvider::CreateCameraProviderHwl(
   hwl_lib_handle_ = dlopen(kCameraHwlLib.c_str(), RTLD_NOW);
 
   if (hwl_lib_handle_ == nullptr) {
-    ALOGE("HWL loading %s failed.", kCameraHwlLib.c_str());
+    ALOGE("HWL loading %s failed due to error: %s", kCameraHwlLib.c_str(), dlerror());
     return NO_INIT;
   }
 
