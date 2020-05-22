@@ -120,6 +120,12 @@ std::unique_ptr<Buffers> EmulatedRequestProcessor::CreateSensorBuffers(
 
 void EmulatedRequestProcessor::NotifyFailedRequest(const PendingRequest& request) {
   if (request.output_buffers->at(0)->callback.notify != nullptr) {
+    // Mark all output buffers for this request in order not to send
+    // ERROR_BUFFER for them.
+    for (auto& output_buffer : *(request.output_buffers)) {
+      output_buffer->is_failed_request = true;
+    }
+
     auto output_buffer = std::move(request.output_buffers->at(0));
     NotifyMessage msg = {
         .type = MessageType::kError,
