@@ -1246,10 +1246,10 @@ status_t EmulatedRequestState::InitializeControlSceneDefaults() {
                               &overrides_entry);
   if ((ret == OK) && ((overrides_entry.count / 3) == available_scenes_.size()) &&
       ((overrides_entry.count % 3) == 0)) {
-    for (size_t i = 0; i < entry.count; i += 3) {
-      SceneOverride scene(overrides_entry.data.u8[i],
-                          overrides_entry.data.u8[i + 1],
-                          overrides_entry.data.u8[i + 2]);
+    for (size_t i = 0; i < entry.count; i++) {
+      SceneOverride scene(overrides_entry.data.u8[i*3],
+                          overrides_entry.data.u8[i*3 + 1],
+                          overrides_entry.data.u8[i*3 + 2]);
       if (available_ae_modes_.find(scene.ae_mode) == available_ae_modes_.end()) {
         ALOGE("%s: AE scene mode override: %d not supported!", __FUNCTION__,
               scene.ae_mode);
