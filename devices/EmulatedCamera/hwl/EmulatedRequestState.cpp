@@ -505,9 +505,11 @@ status_t EmulatedRequestState::ProcessAE() {
         sensor_exposure_time_ = entry.data.i64[0];
       } else {
         ALOGE(
-            "%s: Sensor exposure time"
+            "%s: Sensor exposure time %" PRId64
             " not within supported range[%" PRId64 ", %" PRId64 "]",
-            __FUNCTION__, sensor_exposure_time_range_.first,
+            __FUNCTION__,
+            entry.data.i64[0],
+            sensor_exposure_time_range_.first,
             sensor_exposure_time_range_.second);
         // Use last valid value
       }
@@ -521,9 +523,10 @@ status_t EmulatedRequestState::ProcessAE() {
         sensor_frame_duration_ = entry.data.i64[0];
       } else {
         ALOGE(
-            "%s: Sensor frame duration "
+            "%s: Sensor frame duration %" PRId64
             " not within supported range[%" PRId64 ", %" PRId64 "]",
-            __FUNCTION__, EmulatedSensor::kSupportedFrameDurationRange[0],
+            __FUNCTION__, entry.data.i64[0],
+            EmulatedSensor::kSupportedFrameDurationRange[0],
             sensor_max_frame_duration_);
         // Use last valid value
       }
@@ -539,8 +542,9 @@ status_t EmulatedRequestState::ProcessAE() {
           (entry.data.i32[0] <= sensor_sensitivity_range_.second)) {
         sensor_sensitivity_ = entry.data.i32[0];
       } else {
-        ALOGE("%s: Sensor sensitivity not within supported range[%d, %d]",
-              __FUNCTION__, sensor_sensitivity_range_.first,
+        ALOGE("%s: Sensor sensitivity %d not within supported range[%d, %d]",
+              __FUNCTION__, entry.data.i32[0],
+              sensor_sensitivity_range_.first,
               sensor_sensitivity_range_.second);
         // Use last valid value
       }
