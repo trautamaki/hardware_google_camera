@@ -115,6 +115,10 @@ status_t CameraDeviceSession::UpdatePendingRequest(CaptureResult* result) {
     return BAD_VALUE;
   }
 
+  if (result->result_metadata) {
+    pending_results_.erase(result->frame_number);
+  }
+
   if (result->output_buffers.empty()) {
     // Nothing to do if the result doesn't contain any output buffers.
     return OK;
@@ -235,6 +239,11 @@ void CameraDeviceSession::Notify(const NotifyMessage& result) {
     if (error_notified_requests_.find(frame_number) !=
         error_notified_requests_.end()) {
       return;
+    }
+
+    if (result.type == MessageType::kError &&
+        result.message.error.error_code == ErrorCode::kErrorResult) {
+      pending_results_.erase(frame_number);
     }
   }
 
@@ -720,6 +729,7 @@ status_t CameraDeviceSession::ConfigureStreams(
       pending_request_streams_.clear();
       error_notified_requests_.clear();
       dummy_buffer_observed_.clear();
+      pending_results_.clear();
     }
   }
 
@@ -912,17 +922,23 @@ status_t CameraDeviceSession::ImportRequestBufferHandles(
   return OK;
 }
 
-void CameraDeviceSession::NotifyErrorRequest(uint32_t frame_number) {
-  ALOGI(
-      "%s: [sbc] Request %d has inactive stream, return ERROR_REQUEST "
-      "immediately.",
-      __FUNCTION__, frame_number);
+void CameraDeviceSession::NotifyErrorMessage(uint32_t frame_number,
+                                             int32_t stream_id,
+                                             ErrorCode error_code) {
+  ALOGI("%s: [sbc] Request %d with stream (%d), return error code (%d)",
+        __FUNCTION__, frame_number, stream_id, error_code);
 
-  NotifyMessage message = {
-      .type = MessageType::kError,
-      .message.error = {.frame_number = frame_number,
-                        .error_stream_id = -1,
-                        .error_code = ErrorCode::kErrorRequest}};
+  if ((error_code == ErrorCode::kErrorResult ||
+       error_code == ErrorCode::kErrorRequest) &&
+      stream_id != kInvalidStreamId) {
+    ALOGW("%s: [sbc] Request %d reset setream id again", __FUNCTION__,
+          frame_number);
+    stream_id = kInvalidStreamId;
+  }
+  NotifyMessage message = {.type = MessageType::kError,
+                           .message.error = {.frame_number = frame_number,
+                                             .error_stream_id = stream_id,
+                                             .error_code = error_code}};
 
   std::shared_lock lock(session_callback_lock_);
   session_callback_.notify(message);
@@ -938,7 +954,7 @@ status_t CameraDeviceSession::TryHandleDummyResult(CaptureResult* result,
   uint32_t frame_number = result->frame_number;
   *result_handled = false;
   bool need_to_handle_result = false;
-  bool need_to_notify_error_request = false;
+  bool need_to_notify_error_result = false;
   {
     std::lock_guard<std::mutex> lock(request_record_lock_);
     if (error_notified_requests_.find(frame_number) ==
@@ -947,7 +963,10 @@ status_t CameraDeviceSession::TryHandleDummyResult(CaptureResult* result,
         if (dummy_buffer_observed_.find(stream_buffer.buffer) !=
             dummy_buffer_observed_.end()) {
           error_notified_requests_.insert(frame_number);
-          need_to_notify_error_request = true;
+          if (pending_results_.find(frame_number) != pending_results_.end()) {
+            need_to_notify_error_result = true;
+            pending_results_.erase(frame_number);
+          }
           need_to_handle_result = true;
           break;
         }
@@ -957,8 +976,8 @@ status_t CameraDeviceSession::TryHandleDummyResult(CaptureResult* result,
     }
   }
 
-  if (need_to_notify_error_request) {
-    NotifyErrorRequest(frame_number);
+  if (need_to_notify_error_result) {
+    NotifyErrorMessage(frame_number, kInvalidStreamId, ErrorCode::kErrorResult);
   }
 
   if (need_to_handle_result) {
@@ -972,6 +991,12 @@ status_t CameraDeviceSession::TryHandleDummyResult(CaptureResult* result,
 
       uint64_t buffer_id = (is_dummy_buffer ? /*Use invalid for dummy*/ 0
                                             : stream_buffer.buffer_id);
+      // To avoid publishing duplicated error buffer message, only publish
+      // it here when getting normal buffer status from HWL
+      if (stream_buffer.status == BufferStatus::kOk) {
+        NotifyErrorMessage(frame_number, stream_buffer.stream_id,
+                           ErrorCode::kErrorBuffer);
+      }
       NotifyBufferError(frame_number, stream_buffer.stream_id, buffer_id);
     }
 
@@ -1069,7 +1094,8 @@ status_t CameraDeviceSession::HandleInactiveStreams(const CaptureRequest& reques
     }
   }
   if (*all_active == false) {
-    NotifyErrorRequest(request.frame_number);
+    NotifyErrorMessage(request.frame_number, kInvalidStreamId,
+                       ErrorCode::kErrorRequest);
     NotifyBufferError(request);
   }
 
@@ -1092,6 +1118,7 @@ void CameraDeviceSession::CheckRequestForStreamBufferCacheManager(
   uint32_t frame_number = request.frame_number;
   if (*need_to_process) {
     std::lock_guard<std::mutex> lock(request_record_lock_);
+    pending_results_.insert(frame_number);
     for (auto& stream_buffer : request.output_buffers) {
       pending_request_streams_[frame_number].insert(stream_buffer.stream_id);
     }
@@ -1185,7 +1212,8 @@ status_t CameraDeviceSession::ProcessCaptureRequest(
     // If a processCaptureRequest() call is made during flushing,
     // notify CAMERA3_MSG_ERROR_REQUEST directly.
     if (is_flushing_) {
-      NotifyErrorRequest(request.frame_number);
+      NotifyErrorMessage(request.frame_number, kInvalidStreamId,
+                         ErrorCode::kErrorRequest);
       NotifyBufferError(request);
       need_to_process = false;
     } else if (buffer_management_supported_) {
@@ -1225,8 +1253,10 @@ status_t CameraDeviceSession::ProcessCaptureRequest(
         {
           std::lock_guard<std::mutex> lock(request_record_lock_);
           pending_request_streams_.erase(updated_request.frame_number);
+          pending_results_.erase(updated_request.frame_number);
         }
-        NotifyErrorRequest(updated_request.frame_number);
+        NotifyErrorMessage(updated_request.frame_number, kInvalidStreamId,
+                           ErrorCode::kErrorRequest);
         NotifyBufferError(updated_request);
         if (pending_requests_tracker_->TrackReturnedResultBuffers(buffers) !=
             OK) {
