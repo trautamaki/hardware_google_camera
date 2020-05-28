@@ -32,16 +32,14 @@ using namespace std::chrono_literals;
 namespace android {
 namespace google_camera_hal {
 
-// Use 900ms as the current tight bound for worst case buffer request latency in
-// certain scenario(e.g. ITS tests/scene1/test_param_shading_mode.py,
-// CTS testCameraDeviceCaptureFailure).
-// Typical buffer request from provider(e.g. framework) usually takes 1~2 ms.
-// In some CTS tests(e.g. testLongProcessingRepeatingFlexibleYuv), it may take
-// the buffer provider longer time(e.g. >1s) to fulfill/fail a buffer request.
-// Small timeout time here may cause more framedrop in certain cases. But large
-// timeout time can lead to extra long delay of traffic(in both ways) between
-// the framework and the layer below HWL.
-static constexpr auto kBufferWaitingTimeOutSec = 900ms;
+// For CTS testCameraDeviceCaptureFailure, it holds image buffers and hal hits
+// refill buffer timeout. Large timeout time also results in close session time
+// is larger than 5 second in this test case. Typical buffer request from
+// provider(e.g. framework) usually takes 1~2 ms. Small timeout time here may
+// cause more framedrop in certain cases. But large timeout time can lead to
+// extra long delay of traffic(in both ways) between the framework and the layer
+// below HWL.
+static constexpr auto kBufferWaitingTimeOutSec = 400ms;
 
 StreamBufferCacheManager::StreamBufferCacheManager() {
   workload_thread_ = std::thread([this] { this->WorkloadThreadLoop(); });
