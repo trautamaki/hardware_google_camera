@@ -249,9 +249,10 @@ class CameraDeviceSession {
   // Process the capture result returned from the HWL
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
 
-  // Notify ERROR_ERQUEST for frame[frame_number]. Caller is responsible to make
-  // sure this function is called only once for any frame.
-  void NotifyErrorRequest(uint32_t frame_number);
+  // Notify error message with error code for stream of frame[frame_number].
+  // Caller is responsible to make sure this function is called only once for any frame.
+  void NotifyErrorMessage(uint32_t frame_number, int32_t stream_id,
+                          ErrorCode error_code);
 
   // Notify buffer error for all output streams in request
   void NotifyBufferError(const CaptureRequest& request);
@@ -403,6 +404,12 @@ class CameraDeviceSession {
 
   // Zoom ratio mapper
   ZoomRatioMapper zoom_ratio_mapper_;
+
+  // Record the result metadata of pending request
+  // Protected by request_record_lock_;
+  std::set<uint32_t> pending_results_;
+
+  static constexpr int32_t kInvalidStreamId = -1;
 };
 
 }  // namespace google_camera_hal
