@@ -128,8 +128,16 @@ Status ConvertToHidlStatus(status_t hal_status) {
       return Status::OK;
     case BAD_VALUE:
       return Status::ILLEGAL_ARGUMENT;
+    case -EBUSY:
+      return Status::CAMERA_IN_USE;
+    case -EUSERS:
+      return Status::MAX_CAMERAS_IN_USE;
+    case UNKNOWN_TRANSACTION:
+      return Status::METHOD_NOT_SUPPORTED;
     case INVALID_OPERATION:
       return Status::OPERATION_NOT_SUPPORTED;
+    case DEAD_OBJECT:
+      return Status::CAMERA_DISCONNECTED;
     default:
       return Status::INTERNAL_ERROR;
   }
