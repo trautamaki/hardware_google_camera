@@ -61,7 +61,11 @@ enum class SmoothyMode : uint32_t {
 
   // Tracks an object of interest and keeps it at frame's salient position, e.g.
   // center.
-  kTrackingMode
+  kTrackingMode,
+
+  // Uses UW camera with a larger margin. In this way, we get a better video
+  // stabilization quality, while preserving a similar FoV as the main camera.
+  kSuperstabMode
 };
 
 // Logical camera vendor tags
