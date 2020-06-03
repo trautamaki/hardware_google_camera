@@ -27,6 +27,9 @@ class ZoomRatioMapperHwl {
  public:
   virtual ~ZoomRatioMapperHwl() = default;
 
+  // Limit zoom ratio if concurrent mode is on
+  virtual void LimitZoomRatioIfConcurrent(float* zoom_ratio) const = 0;
+
   // Apply zoom ratio to capture request
   virtual void UpdateCaptureRequest(CaptureRequest* request) = 0;
 
