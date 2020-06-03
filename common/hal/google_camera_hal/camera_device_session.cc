@@ -115,10 +115,6 @@ status_t CameraDeviceSession::UpdatePendingRequest(CaptureResult* result) {
     return BAD_VALUE;
   }
 
-  if (result->result_metadata) {
-    pending_results_.erase(result->frame_number);
-  }
-
   if (result->output_buffers.empty()) {
     // Nothing to do if the result doesn't contain any output buffers.
     return OK;
@@ -210,6 +206,11 @@ void CameraDeviceSession::ProcessCaptureResult(
   std::vector<StreamBuffer> buffers;
   buffers.insert(buffers.end(), result->output_buffers.begin(),
                  result->output_buffers.end());
+
+  if (result->result_metadata) {
+    std::lock_guard<std::mutex> lock(request_record_lock_);
+    pending_results_.erase(result->frame_number);
+  }
 
   {
     std::shared_lock lock(session_callback_lock_);
