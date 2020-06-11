@@ -210,6 +210,24 @@ bool IsBayerCamera(const HalCameraMetadata* characteristics) {
   return false;
 }
 
+bool IsFixedFocusCamera(const HalCameraMetadata* characteristics) {
+  if (characteristics == nullptr) {
+    ALOGE("%s: characteristics (%p) is nullptr", __FUNCTION__, characteristics);
+    return false;
+  }
+
+  camera_metadata_ro_entry entry = {};
+  status_t res =
+      characteristics->Get(ANDROID_LENS_INFO_MINIMUM_FOCUS_DISTANCE, &entry);
+  if (res != OK || entry.count != 1) {
+    ALOGE("%s: Getting ANDROID_LENS_INFO_MINIMUM_FOCUS_DISTANCE failed: %s(%d)",
+          __FUNCTION__, strerror(-res), res);
+    return false;
+  }
+
+  return entry.data.f[0] == 0.0f;
+}
+
 bool IsRequestHdrplusCompatible(const CaptureRequest& request,
                                 int32_t preview_stream_id) {
   if (request.settings == nullptr) {
