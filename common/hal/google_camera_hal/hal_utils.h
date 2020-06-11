@@ -67,6 +67,9 @@ bool IsBayerCamera(const HalCameraMetadata* characteristics);
 bool IsRequestHdrplusCompatible(const CaptureRequest& request,
                                 int32_t preview_stream_id);
 
+// Return true if this is a fixed-focus camera.
+bool IsFixedFocusCamera(const HalCameraMetadata* characteristics);
+
 // Return if HDR+ stream is supported
 bool IsStreamHdrplusCompatible(const StreamConfiguration& stream_config,
                                const HalCameraMetadata* characteristics);
