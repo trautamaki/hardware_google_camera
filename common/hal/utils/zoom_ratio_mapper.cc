@@ -282,12 +282,12 @@ void ZoomRatioMapper::UpdatePoints(const float zoom_ratio, const uint32_t tag_id
   // x, y
   const uint32_t kDataSizePerPoint = 2;
   const uint32_t point_num = entry.count / kDataSizePerPoint;
-  std::vector<Point> points(point_num);
+  std::vector<PointI> points(point_num);
   uint32_t data_index = 0;
 
   for (uint32_t i = 0; i < point_num; i++) {
     data_index = i * kDataSizePerPoint;
-    Point* transformed = &points.at(i);
+    PointI* transformed = &points.at(i);
     transformed->x = entry.data.i32[data_index];
     transformed->y = entry.data.i32[data_index + 1];
     utils::RevertZoomRatio(zoom_ratio, active_array_dimension, true,

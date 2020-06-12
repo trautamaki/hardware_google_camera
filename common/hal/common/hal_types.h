@@ -302,6 +302,11 @@ struct Point {
   uint32_t y;
 };
 
+struct PointI {
+  int32_t x;
+  int32_t y;
+};
+
 struct PointF {
   float x = 0.0f;
   float y = 0.0f;
