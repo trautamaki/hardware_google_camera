@@ -22,6 +22,7 @@
 #include <utils/Trace.h>
 
 #include <inttypes.h>
+#include <set>
 
 #include "hal_utils.h"
 #include "hdrplus_capture_session.h"
@@ -529,6 +530,13 @@ status_t HdrplusCaptureSession::Initialize(
     return res;
   }
 
+  res = PurgeHalConfiguredStream(stream_config, hal_configured_streams);
+  if (res != OK) {
+    ALOGE("%s: Removing internal streams from configured stream failed: %s(%d)",
+          __FUNCTION__, strerror(-res), res);
+    return res;
+  }
+
   // Connect realtime process chain
   res = ConnectProcessChain(request_processor_.get(),
                             std::move(realtime_process_block),
@@ -607,6 +615,30 @@ void HdrplusCaptureSession::ProcessCaptureResult(
     ALOGE("%s: fail to AddResult", __FUNCTION__);
     return;
   }
+}
+
+status_t HdrplusCaptureSession::PurgeHalConfiguredStream(
+    const StreamConfiguration& stream_config,
+    std::vector<HalStream>* hal_configured_streams) {
+  if (hal_configured_streams == nullptr) {
+    ALOGE("%s: HAL configured stream list is null.", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  std::set<int32_t> framework_stream_id_set;
+  for (auto& stream : stream_config.streams) {
+    framework_stream_id_set.insert(stream.id);
+  }
+
+  std::vector<HalStream> configured_streams;
+  for (auto& hal_stream : *hal_configured_streams) {
+    if (framework_stream_id_set.find(hal_stream.id) !=
+        framework_stream_id_set.end()) {
+      configured_streams.push_back(hal_stream);
+    }
+  }
+  *hal_configured_streams = configured_streams;
+  return OK;
 }
 
 void HdrplusCaptureSession::NotifyHalMessage(const NotifyMessage& message) {
