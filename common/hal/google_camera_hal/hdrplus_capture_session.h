@@ -121,6 +121,11 @@ class HdrplusCaptureSession : public CaptureSession {
                                std::unique_ptr<ProcessBlock> process_block,
                                std::unique_ptr<ResultProcessor> result_processor);
 
+  // Purge the hal_configured_streams such that only framework streams are left
+  status_t PurgeHalConfiguredStream(
+      const StreamConfiguration& stream_config,
+      std::vector<HalStream>* hal_configured_streams);
+
   // Invoked when receiving a result from result processor.
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
 
