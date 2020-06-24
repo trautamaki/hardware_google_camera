@@ -41,7 +41,9 @@ const char* EmulatedCameraProviderHwlImpl::kConfigurationFileLocation[] = {
     "/vendor/etc/config/emu_camera_depth.json",
 };
 
+constexpr StreamSize s240pStreamSize = std::pair(240, 180);
 constexpr StreamSize s720pStreamSize = std::pair(1280, 720);
+constexpr StreamSize s1440pStreamSize = std::pair(1920, 1440);
 
 std::unique_ptr<EmulatedCameraProviderHwlImpl>
 EmulatedCameraProviderHwlImpl::Create() {
@@ -135,30 +137,115 @@ status_t EmulatedCameraProviderHwlImpl::GetTagFromName(const char* name,
   return OK;
 }
 
-bool EmulatedCameraProviderHwlImpl::Supports720pYUVAndPrivate(uint32_t camera_id) {
-  auto map =
-      std::make_unique<StreamConfigurationMap>(*(static_metadata_[camera_id]));
+static bool IsMaxSupportedSizeGreaterThanOrEqual(
+    const std::set<StreamSize>& stream_sizes, StreamSize compare_size) {
+  for (const auto& stream_size : stream_sizes) {
+    if (stream_size.first * stream_size.second >=
+        compare_size.first * compare_size.second) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool SupportsCapability(const uint32_t camera_id,
+                               const HalCameraMetadata& static_metadata,
+                               uint8_t cap) {
+  camera_metadata_ro_entry_t entry;
+  auto ret = static_metadata.Get(ANDROID_REQUEST_AVAILABLE_CAPABILITIES, &entry);
+  if (ret != OK || (entry.count == 0)) {
+    ALOGE("Error getting capabilities for camera id %u", camera_id);
+    return false;
+  }
+  for (size_t i = 0; i < entry.count; i++) {
+    if (entry.data.u8[i] == cap) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool EmulatedCameraProviderHwlImpl::SupportsMandatoryConcurrentStreams(
+    uint32_t camera_id) {
+  HalCameraMetadata& static_metadata = *(static_metadata_[camera_id]);
+  auto map = std::make_unique<StreamConfigurationMap>(static_metadata);
   auto yuv_output_sizes = map->GetOutputSizes(HAL_PIXEL_FORMAT_YCBCR_420_888);
+  auto blob_output_sizes = map->GetOutputSizes(HAL_PIXEL_FORMAT_BLOB);
+  auto depth16_output_sizes = map->GetOutputSizes(HAL_PIXEL_FORMAT_Y16);
   auto priv_output_sizes =
       map->GetOutputSizes(HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED);
 
+  if (!SupportsCapability(
+          camera_id, static_metadata,
+          ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE) &&
+      IsMaxSupportedSizeGreaterThanOrEqual(depth16_output_sizes,
+                                           s240pStreamSize)) {
+    ALOGI("%s: Depth only output supported by camera id %u", __FUNCTION__,
+          camera_id);
+    return true;
+  }
   if (yuv_output_sizes.empty()) {
     ALOGW("%s: No YUV output supported by camera id %u", __FUNCTION__,
           camera_id);
     return false;
   }
+
   if (priv_output_sizes.empty()) {
     ALOGW("No PRIV output supported by camera id %u", camera_id);
     return false;
   }
-  // Check whether both sizes contain 720p
-  if (yuv_output_sizes.find(s720pStreamSize) == yuv_output_sizes.end()) {
+
+  if (blob_output_sizes.empty()) {
+    ALOGW("No BLOB output supported by camera id %u", camera_id);
+    return false;
+  }
+
+  // According to the HAL spec, if a device supports format sizes > 1440p and
+  // 720p, it must support both 1440p and 720p streams for PRIV, JPEG and YUV
+  // formats. Otherwise it must support 2 streams (YUV / PRIV + JPEG) of the max
+  // supported size.
+
+  // Check for YUV output sizes
+  if (IsMaxSupportedSizeGreaterThanOrEqual(yuv_output_sizes, s1440pStreamSize) &&
+      (yuv_output_sizes.find(s1440pStreamSize) == yuv_output_sizes.end() ||
+       yuv_output_sizes.find(s720pStreamSize) == yuv_output_sizes.end())) {
+    ALOGW("%s: 1440p+720p YUV outputs not found for camera id %u", __FUNCTION__,
+          camera_id);
+    return false;
+  } else if (IsMaxSupportedSizeGreaterThanOrEqual(yuv_output_sizes,
+                                                  s720pStreamSize) &&
+             yuv_output_sizes.find(s720pStreamSize) == yuv_output_sizes.end()) {
     ALOGW("%s: 720p YUV output not found for camera id %u", __FUNCTION__,
           camera_id);
     return false;
   }
-  if (priv_output_sizes.find(s720pStreamSize) == priv_output_sizes.end()) {
+
+  // Check for PRIV output sizes
+  if (IsMaxSupportedSizeGreaterThanOrEqual(priv_output_sizes, s1440pStreamSize) &&
+      (priv_output_sizes.find(s1440pStreamSize) == priv_output_sizes.end() ||
+       priv_output_sizes.find(s720pStreamSize) == priv_output_sizes.end())) {
+    ALOGW("%s: 1440p + 720p PRIV outputs not found for camera id %u",
+          __FUNCTION__, camera_id);
+    return false;
+  } else if (IsMaxSupportedSizeGreaterThanOrEqual(priv_output_sizes,
+                                                  s720pStreamSize) &&
+             priv_output_sizes.find(s720pStreamSize) == priv_output_sizes.end()) {
     ALOGW("%s: 720p PRIV output not found for camera id %u", __FUNCTION__,
+          camera_id);
+    return false;
+  }
+
+  // Check for BLOB output sizes
+  if (IsMaxSupportedSizeGreaterThanOrEqual(blob_output_sizes, s1440pStreamSize) &&
+      (blob_output_sizes.find(s1440pStreamSize) == blob_output_sizes.end() ||
+       blob_output_sizes.find(s720pStreamSize) == blob_output_sizes.end())) {
+    ALOGW("%s: 1440p + 720p BLOB outputs not found for camera id %u",
+          __FUNCTION__, camera_id);
+    return false;
+  } else if (IsMaxSupportedSizeGreaterThanOrEqual(blob_output_sizes,
+                                                  s720pStreamSize) &&
+             blob_output_sizes.find(s720pStreamSize) == blob_output_sizes.end()) {
+    ALOGW("%s: 720p BLOB output not found for camera id %u", __FUNCTION__,
           camera_id);
     return false;
   }
@@ -177,7 +264,7 @@ status_t EmulatedCameraProviderHwlImpl::GetConcurrentStreamingCameraIds(
   // of them at once in the emulated camera.
   std::unordered_set<uint32_t> candidate_ids;
   for (auto& entry : camera_id_map_) {
-    if (Supports720pYUVAndPrivate(entry.first)) {
+    if (SupportsMandatoryConcurrentStreams(entry.first)) {
       candidate_ids.insert(entry.first);
     }
   }
