@@ -78,7 +78,7 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   uint32_t ParseCharacteristics(const Json::Value& root, ssize_t id);
   status_t GetTagFromName(const char* name, uint32_t* tag);
   status_t WaitForQemuSfFakeCameraPropertyAvailable();
-  bool Supports720pYUVAndPrivate(uint32_t camera_id);
+  bool SupportsMandatoryConcurrentStreams(uint32_t camera_id);
 
   static const char* kConfigurationFileLocation[];
 
