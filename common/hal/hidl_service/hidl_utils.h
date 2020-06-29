@@ -92,6 +92,11 @@ status_t ConverToHidlNotifyMessage(
 // Convert from HAL status_t to HIDL Status
 // OK is converted to Status::OK.
 // BAD_VALUE is converted to Status::ILLEGAL_ARGUMENT.
+// -EBUSY is converted to Status::CAMERA_IN_USE.
+// -EUSERS is converted to Status::MAX_CAMERAS_IN_USE.
+// UNKNOWN_TRANSACTION is converted to Status::METHOD_NOT_SUPPORTED.
+// INVALID_OPERATION is converted to Status::OPERATION_NOT_SUPPORTED.
+// DEAD_OBJECT is converted to Status::CAMERA_DISCONNECTED.
 // All other errors are converted to Status::INTERNAL_ERROR.
 Status ConvertToHidlStatus(status_t hal_status);
 
