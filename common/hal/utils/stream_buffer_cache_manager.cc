@@ -26,6 +26,7 @@
 #include <chrono>
 
 #include "stream_buffer_cache_manager.h"
+#include "utils.h"
 
 using namespace std::chrono_literals;
 
@@ -43,6 +44,14 @@ static constexpr auto kBufferWaitingTimeOutSec = 400ms;
 
 StreamBufferCacheManager::StreamBufferCacheManager() {
   workload_thread_ = std::thread([this] { this->WorkloadThreadLoop(); });
+  if (utils::SupportRealtimeThread()) {
+    status_t res = utils::SetRealtimeThread(workload_thread_.native_handle());
+    if (res != OK) {
+      ALOGE("%s: SetRealtimeThread fail", __FUNCTION__);
+    } else {
+      ALOGI("%s: SetRealtimeThread OK", __FUNCTION__);
+    }
+  }
 }
 
 StreamBufferCacheManager::~StreamBufferCacheManager() {
