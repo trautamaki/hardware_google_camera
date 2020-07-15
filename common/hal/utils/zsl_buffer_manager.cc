@@ -407,6 +407,24 @@ void ZslBufferManager::GetMostRecentZslBuffers(
     zsl_buffer_iter++;
   }
 
+  // Fallback to realtime pipeline capture if there are any flash-fired frame
+  // in zsl buffers with AE_MODE_ON_AUTO_FLASH.
+  camera_metadata_ro_entry entry = {};
+  res = zsl_buffer_iter->second.metadata->Get(ANDROID_CONTROL_AE_MODE, &entry);
+  if (res == OK && entry.data.u8[0] == ANDROID_CONTROL_AE_MODE_ON_AUTO_FLASH) {
+    for (auto search_iter = filled_zsl_buffers_.begin();
+         search_iter != filled_zsl_buffers_.end(); search_iter++) {
+      res = search_iter->second.metadata->Get(ANDROID_FLASH_STATE, &entry);
+      if (res == OK && entry.count == 1) {
+        if (entry.data.u8[0] == ANDROID_FLASH_STATE_FIRED) {
+          ALOGD("%s: Returns empty zsl_buffers due to flash fired",
+                __FUNCTION__);
+          return;
+        }
+      }
+    }
+  }
+
   for (uint32_t i = 0; i < num_buffers; i++) {
     camera_metadata_ro_entry entry = {};
     int64_t buffer_timestamp;
