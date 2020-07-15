@@ -23,6 +23,7 @@
 #include <inttypes.h>
 
 #include "result_dispatcher.h"
+#include "utils.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -50,6 +51,16 @@ ResultDispatcher::ResultDispatcher(
   ATRACE_CALL();
   notify_callback_thread_ =
       std::thread([this] { this->NotifyCallbackThreadLoop(); });
+
+  if (utils::SupportRealtimeThread()) {
+    status_t res =
+        utils::SetRealtimeThread(notify_callback_thread_.native_handle());
+    if (res != OK) {
+      ALOGE("%s: SetRealtimeThread fail", __FUNCTION__);
+    } else {
+      ALOGI("%s: SetRealtimeThread OK", __FUNCTION__);
+    }
+  }
 }
 
 ResultDispatcher::~ResultDispatcher() {
