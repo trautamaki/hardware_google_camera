@@ -15,10 +15,13 @@
  */
 
 #define LOG_TAG "GCH_HidlCameraDeviceSession"
+#define ATRACE_TAG ATRACE_TAG_CAMERA
 //#define LOG_NDEBUG 0
 #include <log/log.h>
 
 #include <cutils/properties.h>
+#include <cutils/trace.h>
+#include <malloc.h>
 
 #include "hidl_camera_device_session.h"
 #include "hidl_profiler.h"
@@ -68,6 +71,8 @@ std::unique_ptr<HidlCameraDeviceSession> HidlCameraDeviceSession::Create(
 
 HidlCameraDeviceSession::~HidlCameraDeviceSession() {
   close();
+  // camera's closing, so flush any unused malloc pages
+  mallopt(M_PURGE, 0);
 }
 
 void HidlCameraDeviceSession::ProcessCaptureResult(
@@ -661,7 +666,6 @@ Return<void> HidlCameraDeviceSession::close() {
     auto profiler_item = hidl_profiler::OnCameraClose();
     device_session_ = nullptr;
   }
-
   return Void();
 }
 
