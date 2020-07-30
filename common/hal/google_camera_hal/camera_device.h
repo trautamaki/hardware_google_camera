@@ -38,7 +38,7 @@ class CameraDevice {
       std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
       CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
 
-  virtual ~CameraDevice() = default;
+  virtual ~CameraDevice();
 
   // Get the resource cost of this camera device.
   status_t GetResourceCost(CameraResourceCost* cost);
@@ -79,6 +79,8 @@ class CameraDevice {
   // supported. stream_config contains the stream configurations.
   bool IsStreamCombinationSupported(const StreamConfiguration& stream_config);
 
+  status_t LoadExternalCaptureSession();
+
  protected:
   CameraDevice() = default;
 
@@ -92,6 +94,10 @@ class CameraDevice {
 
   // hwl allocator
   CameraBufferAllocatorHwl* camera_allocator_hwl_ = nullptr;
+
+  std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries_;
+  // Opened library handles that should be closed on destruction
+  std::vector<void*> external_capture_session_lib_handles_;
 };
 
 }  // namespace google_camera_hal

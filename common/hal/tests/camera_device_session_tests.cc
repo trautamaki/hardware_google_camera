@@ -15,7 +15,9 @@
  */
 
 #define LOG_TAG "CameraDeviceSessionTests"
+#include <dlfcn.h>
 #include <log/log.h>
+#include <sys/stat.h>
 
 #include <gtest/gtest.h>
 
@@ -33,9 +35,90 @@ using ::testing::_;
 using ::testing::AtLeast;
 using ::testing::Return;
 
+// HAL external capture session library path
+#if defined(_LP64)
+constexpr char kExternalCaptureSessionDir[] =
+    "/vendor/lib64/camera/capture_sessions/";
+#else  // defined(_LP64)
+constexpr char kExternalCaptureSessionDir[] =
+    "/vendor/lib/camera/capture_sessions/";
+#endif
+
+// Returns an array of regular files under dir_path.
+static std::vector<std::string> FindLibraryPaths(const char* dir_path) {
+  std::vector<std::string> libs;
+
+  errno = 0;
+  DIR* dir = opendir(dir_path);
+  if (!dir) {
+    ALOGD("%s: Unable to open directory %s (%s)", __FUNCTION__, dir_path,
+          strerror(errno));
+    return libs;
+  }
+
+  struct dirent* entry = nullptr;
+  while ((entry = readdir(dir)) != nullptr) {
+    std::string lib_path(dir_path);
+    lib_path += entry->d_name;
+    struct stat st;
+    if (stat(lib_path.c_str(), &st) == 0) {
+      if (S_ISREG(st.st_mode)) {
+        libs.push_back(lib_path);
+      }
+    }
+  }
+
+  return libs;
+}
+
 class CameraDeviceSessionTests : public ::testing::Test {
  protected:
   static constexpr uint32_t kCaptureTimeoutMs = 3000;
+  std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries_;
+  std::vector<void*> external_capture_session_lib_handles_;
+
+  CameraDeviceSessionTests() {
+    LoadExternalCaptureSession();
+  }
+
+  ~CameraDeviceSessionTests() {
+    for (auto lib_handle : external_capture_session_lib_handles_) {
+      dlclose(lib_handle);
+    }
+  }
+
+  status_t LoadExternalCaptureSession() {
+    if (external_session_factory_entries_.size() > 0) {
+      ALOGI("%s: External capture session libraries already loaded; skip.",
+            __FUNCTION__);
+      return OK;
+    }
+
+    for (const auto& lib_path : FindLibraryPaths(kExternalCaptureSessionDir)) {
+      ALOGI("%s: Loading %s", __FUNCTION__, lib_path.c_str());
+      void* lib_handle = nullptr;
+      lib_handle = dlopen(lib_path.c_str(), RTLD_NOW);
+      if (lib_handle == nullptr) {
+        ALOGW("Failed loading %s.", lib_path.c_str());
+        continue;
+      }
+
+      GetCaptureSessionFactoryFunc external_session_factory_t =
+          reinterpret_cast<GetCaptureSessionFactoryFunc>(
+              dlsym(lib_handle, "GetCaptureSessionFactory"));
+      if (external_session_factory_t == nullptr) {
+        ALOGE("%s: dlsym failed (%s) when loading %s.", __FUNCTION__,
+              "GetCaptureSessionFactory", lib_path.c_str());
+        dlclose(lib_handle);
+        lib_handle = nullptr;
+        continue;
+      }
+
+      external_session_factory_entries_.push_back(external_session_factory_t);
+    }
+
+    return OK;
+  }
 
   void CreateMockSessionHwlAndCheck(
       std::unique_ptr<MockDeviceSessionHwl>* session_hwl) {
@@ -49,7 +132,8 @@ class CameraDeviceSessionTests : public ::testing::Test {
                              std::unique_ptr<CameraDeviceSession>* session) {
     ASSERT_NE(session, nullptr);
 
-    *session = CameraDeviceSession::Create(std::move(session_hwl));
+    *session = CameraDeviceSession::Create(std::move(session_hwl),
+                                           external_session_factory_entries_);
     ASSERT_NE(*session, nullptr);
   }
 
@@ -238,7 +322,8 @@ class CameraDeviceSessionTests : public ::testing::Test {
 };
 
 TEST_F(CameraDeviceSessionTests, Create) {
-  auto session = CameraDeviceSession::Create(/*device_session_hwl=*/nullptr);
+  auto session = CameraDeviceSession::Create(/*device_session_hwl=*/nullptr,
+                                             external_session_factory_entries_);
   EXPECT_EQ(session, nullptr);
 
   uint32_t num_sessions = 5;
