@@ -97,6 +97,7 @@ class CameraDeviceSession {
   // lifetime of CameraDeviceSession
   static std::unique_ptr<CameraDeviceSession> Create(
       std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl,
+      std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries,
       CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
 
   virtual ~CameraDeviceSession();
@@ -154,8 +155,10 @@ class CameraDeviceSession {
     }
   };
 
-  status_t Initialize(std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl,
-                      CameraBufferAllocatorHwl* camera_allocator_hwl);
+  status_t Initialize(
+      std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl,
+      CameraBufferAllocatorHwl* camera_allocator_hwl,
+      std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries);
 
   // Initialize the latest available gralloc buffer mapper.
   status_t InitializeBufferMapper();
@@ -288,7 +291,8 @@ class CameraDeviceSession {
   void UnregisterThermalCallback();
 
   // Load HAL external capture session libraries.
-  status_t LoadExternalCaptureSession();
+  status_t LoadExternalCaptureSession(
+      std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries);
 
   void InitializeZoomRatioMapper(HalCameraMetadata* characteristics);
 
