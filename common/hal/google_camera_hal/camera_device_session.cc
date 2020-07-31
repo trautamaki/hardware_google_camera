@@ -579,6 +579,28 @@ status_t CameraDeviceSession::ConfigureStreams(
     const StreamConfiguration& stream_config,
     std::vector<HalStream>* hal_config) {
   ATRACE_CALL();
+  bool set_realtime_thread = false;
+  int32_t schedule_policy;
+  struct sched_param schedule_param = {0};
+  if (utils::SupportRealtimeThread()) {
+    bool get_thread_schedule = false;
+    if (pthread_getschedparam(pthread_self(), &schedule_policy,
+                              &schedule_param) == 0) {
+      get_thread_schedule = true;
+    } else {
+      ALOGE("%s: pthread_getschedparam fail", __FUNCTION__);
+    }
+
+    if (get_thread_schedule) {
+      status_t res = utils::SetRealtimeThread(pthread_self());
+      if (res != OK) {
+        ALOGE("%s: SetRealtimeThread fail", __FUNCTION__);
+      } else {
+        set_realtime_thread = true;
+      }
+    }
+  }
+
   std::lock_guard<std::mutex> lock(session_lock_);
 
   std::lock_guard lock_capture_session(capture_session_lock_);
@@ -629,6 +651,9 @@ status_t CameraDeviceSession::ConfigureStreams(
   if (capture_session_ == nullptr) {
     ALOGE("%s: Cannot find a capture session compatible with stream config",
           __FUNCTION__);
+    if (set_realtime_thread) {
+      utils::UpdateThreadSched(pthread_self(), schedule_policy, &schedule_param);
+    }
     return BAD_VALUE;
   }
 
@@ -636,6 +661,10 @@ status_t CameraDeviceSession::ConfigureStreams(
     stream_buffer_cache_manager_ = StreamBufferCacheManager::Create();
     if (stream_buffer_cache_manager_ == nullptr) {
       ALOGE("%s: Failed to create stream buffer cache manager.", __FUNCTION__);
+      if (set_realtime_thread) {
+        utils::UpdateThreadSched(pthread_self(), schedule_policy,
+                                 &schedule_param);
+      }
       return UNKNOWN_ERROR;
     }
 
@@ -644,6 +673,10 @@ status_t CameraDeviceSession::ConfigureStreams(
     if (res != OK) {
       ALOGE("%s: Failed to register streams into stream buffer cache manager.",
             __FUNCTION__);
+      if (set_realtime_thread) {
+        utils::UpdateThreadSched(pthread_self(), schedule_policy,
+                                 &schedule_param);
+      }
       return res;
     }
   }
@@ -664,6 +697,10 @@ status_t CameraDeviceSession::ConfigureStreams(
     pending_requests_tracker_ = PendingRequestsTracker::Create(*hal_config);
     if (pending_requests_tracker_ == nullptr) {
       ALOGE("%s: Cannot create a pending request tracker.", __FUNCTION__);
+      if (set_realtime_thread) {
+        utils::UpdateThreadSched(pthread_self(), schedule_policy,
+                                 &schedule_param);
+      }
       return UNKNOWN_ERROR;
     }
 
@@ -681,6 +718,10 @@ status_t CameraDeviceSession::ConfigureStreams(
   thermal_throttling_notified_ = false;
   last_request_settings_ = nullptr;
   last_timestamp_ns_for_trace_ = 0;
+
+  if (set_realtime_thread) {
+    utils::UpdateThreadSched(pthread_self(), schedule_policy, &schedule_param);
+  }
 
   return OK;
 }
