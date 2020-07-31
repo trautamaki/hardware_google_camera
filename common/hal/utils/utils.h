@@ -68,6 +68,8 @@ bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
 
 bool SupportRealtimeThread();
 status_t SetRealtimeThread(pthread_t thread);
+status_t UpdateThreadSched(pthread_t thread, int32_t policy,
+                           struct sched_param* param);
 
 // Map the rectangle to the coordination of HAL.
 void ConvertZoomRatio(float zoom_ratio, const Dimension& active_array_dimension,
