@@ -384,7 +384,14 @@ void ConvertZoomRatio(const float zoom_ratio,
 }
 
 bool SupportRealtimeThread() {
-  return property_get_bool(kRealtimeThreadSetProp.c_str(), false);
+  static bool support_real_time = false;
+  static bool first_time = false;
+  if (first_time == false) {
+    first_time = true;
+    support_real_time = property_get_bool(kRealtimeThreadSetProp.c_str(), false);
+  }
+
+  return support_real_time;
 }
 
 status_t SetRealtimeThread(pthread_t thread) {
@@ -395,6 +402,21 @@ status_t SetRealtimeThread(pthread_t thread) {
       pthread_setschedparam(thread, SCHED_FIFO | SCHED_RESET_ON_FORK, &param);
   if (res != 0) {
     ALOGE("%s: Couldn't set SCHED_FIFO", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  return OK;
+}
+
+status_t UpdateThreadSched(pthread_t thread, int32_t policy,
+                           struct sched_param* param) {
+  if (param == nullptr) {
+    ALOGE("%s: sched_param is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+  int32_t res = pthread_setschedparam(thread, policy, param);
+  if (res != 0) {
+    ALOGE("%s: Couldn't set schedparam", __FUNCTION__);
     return BAD_VALUE;
   }
 
