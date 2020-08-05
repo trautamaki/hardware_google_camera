@@ -1544,6 +1544,7 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
         [this, stream_id](uint32_t num_buffer,
                           std::vector<StreamBuffer>* buffers,
                           StreamBufferRequestError* status) -> status_t {
+          ATRACE_NAME("StreamBufferRequestFunc");
           if (buffers == nullptr) {
             ALOGE("%s: buffers is nullptr.", __FUNCTION__);
             return BAD_VALUE;
