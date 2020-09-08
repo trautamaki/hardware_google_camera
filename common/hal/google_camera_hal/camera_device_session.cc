@@ -605,6 +605,7 @@ status_t CameraDeviceSession::ConfigureStreams(
 
   std::lock_guard lock_capture_session(capture_session_lock_);
   if (capture_session_ != nullptr) {
+    ATRACE_NAME("CameraDeviceSession::DestroyOldSession");
     capture_session_ = nullptr;
   }
 
