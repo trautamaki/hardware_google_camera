@@ -63,6 +63,11 @@ status_t HidlCameraDevice::Initialize(
 
   camera_id_ = google_camera_device->GetPublicCameraId();
   google_camera_device_ = std::move(google_camera_device);
+  hidl_profiler_ = HidlProfiler::Create(camera_id_);
+  if (hidl_profiler_ == nullptr) {
+    ALOGE("%s: Failed to create HidlProfiler.", __FUNCTION__);
+    return UNKNOWN_ERROR;
+  }
 
   return OK;
 }
@@ -134,8 +139,8 @@ Return<Status> HidlCameraDevice::setTorchMode(TorchMode mode) {
 Return<void> HidlCameraDevice::open(
     const sp<V3_2::ICameraDeviceCallback>& callback,
     ICameraDevice::open_cb _hidl_cb) {
-  auto profiler_item =
-      ::android::hardware::camera::implementation::hidl_profiler::OnCameraOpen();
+  auto profiler =
+      hidl_profiler_->MakeScopedProfiler(HidlProfiler::ScopedType::kOpen);
 
   std::unique_ptr<google_camera_hal::CameraDeviceSession> session;
   status_t res = google_camera_device_->CreateCameraDeviceSession(&session);
@@ -146,8 +151,8 @@ Return<void> HidlCameraDevice::open(
     return Void();
   }
 
-  auto hidl_session =
-      HidlCameraDeviceSession::Create(callback, std::move(session));
+  auto hidl_session = HidlCameraDeviceSession::Create(
+      callback, std::move(session), hidl_profiler_);
   if (hidl_session == nullptr) {
     ALOGE("%s: Creating HidlCameraDeviceSession failed.", __FUNCTION__);
     _hidl_cb(hidl_utils::ConvertToHidlStatus(res), nullptr);

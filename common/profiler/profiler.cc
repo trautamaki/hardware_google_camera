@@ -135,7 +135,7 @@ class ProfilerImpl : public Profiler {
   // Dump the result to the disk.
   // Argument:
   //   filepath: file path to dump file.
-  void DumpResult(std::string filepath);
+  virtual void DumpResult(std::string filepath);
 };
 
 ProfilerImpl::~ProfilerImpl() {
@@ -278,7 +278,12 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
       // it by ourself.
       PrintResult();
       // Erase the print bit to prevent parent class print again.
-      setting_ = static_cast<SetPropFlag>(setting_ & (!SetPropFlag::kPrintBit));
+      setting_ = static_cast<SetPropFlag>(setting_ & (~SetPropFlag::kPrintBit));
+    }
+    if (setting_ & SetPropFlag::kDumpBit) {
+      DumpResult(dump_file_prefix_ + use_case_ + "-TS" +
+                 std::to_string(object_init_time_) + ".txt");
+      setting_ = static_cast<SetPropFlag>(setting_ & (~SetPropFlag::kDumpBit));
     }
   }
 
@@ -308,6 +313,19 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
     }
 
     ALOGE("");
+  }
+
+  void DumpResult(std::string filepath) override {
+    if (std::ofstream fout(filepath, std::ios::out); fout.is_open()) {
+      for (const auto& [node_name, time_series] : timing_map_) {
+        fout << node_name << " ";
+        for (const auto& slot : time_series) {
+          fout << (slot.end - slot.start) * kNanoToMilli << " ";
+        }
+        fout << "\n";
+      }
+      fout.close();
+    }
   }
 };
 

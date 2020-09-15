@@ -26,8 +26,8 @@
 #include <shared_mutex>
 
 #include "camera_device_session.h"
+#include "hidl_profiler.h"
 #include "hidl_thermal_utils.h"
-#include "profiler.h"
 
 namespace android {
 namespace hardware {
@@ -43,6 +43,7 @@ using ::android::hardware::camera::device::V3_4::CaptureRequest;
 using ::android::hardware::camera::device::V3_5::ICameraDeviceCallback;
 using ::android::hardware::camera::device::V3_5::ICameraDeviceSession;
 using ::android::hardware::camera::device::V3_5::StreamConfiguration;
+using ::android::hardware::camera::implementation::HidlProfiler;
 
 using MetadataQueue =
     ::android::hardware::MessageQueue<uint8_t, kSynchronizedReadWrite>;
@@ -59,7 +60,8 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
   // nullptr.
   static std::unique_ptr<HidlCameraDeviceSession> Create(
       const sp<V3_2::ICameraDeviceCallback>& callback,
-      std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session);
+      std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session,
+      std::shared_ptr<HidlProfiler> hidl_profiler);
 
   virtual ~HidlCameraDeviceSession();
 
@@ -123,7 +125,8 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
   // Initialize HidlCameraDeviceSession with a CameraDeviceSession.
   status_t Initialize(
       const sp<V3_2::ICameraDeviceCallback>& callback,
-      std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session);
+      std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session,
+      std::shared_ptr<HidlProfiler> hidl_profiler);
 
   // Create a metadata queue.
   // If override_size_property contains a valid size, it will create a metadata
@@ -204,6 +207,8 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
   // Profiling first frame process time. Stop timer when it become 0.
   // Must be protected by pending_first_frame_buffers_mutex_
   size_t num_pending_first_frame_buffers_ = 0;
+
+  std::shared_ptr<HidlProfiler> hidl_profiler_;
 };
 
 }  // namespace implementation

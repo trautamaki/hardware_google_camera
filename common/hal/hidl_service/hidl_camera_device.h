@@ -21,6 +21,7 @@
 #include <android/hardware/camera/device/3.5/ICameraDeviceCallback.h>
 
 #include "camera_device.h"
+#include "hidl_profiler.h"
 
 namespace android {
 namespace hardware {
@@ -34,6 +35,7 @@ using ::android::hardware::camera::common::V1_0::Status;
 using ::android::hardware::camera::common::V1_0::TorchMode;
 using ::android::hardware::camera::device::V3_5::ICameraDevice;
 using ::android::hardware::camera::device::V3_5::ICameraDeviceCallback;
+using ::android::hardware::camera::implementation::HidlProfiler;
 
 using ::android::google_camera_hal::CameraDevice;
 
@@ -83,6 +85,7 @@ class HidlCameraDevice : public ICameraDevice {
 
   std::unique_ptr<CameraDevice> google_camera_device_;
   uint32_t camera_id_ = 0;
+  std::shared_ptr<HidlProfiler> hidl_profiler_;
 };
 
 }  // namespace implementation

@@ -36,8 +36,6 @@ namespace V3_5 {
 namespace implementation {
 
 namespace hidl_utils = ::android::hardware::camera::implementation::hidl_utils;
-namespace hidl_profiler =
-    ::android::hardware::camera::implementation::hidl_profiler;
 
 using ::android::hardware::camera::device::V3_2::NotifyMsg;
 using ::android::hardware::camera::device::V3_2::StreamBuffer;
@@ -52,7 +50,8 @@ using ::android::hardware::thermal::V2_0::TemperatureType;
 
 std::unique_ptr<HidlCameraDeviceSession> HidlCameraDeviceSession::Create(
     const sp<V3_2::ICameraDeviceCallback>& callback,
-    std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session) {
+    std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session,
+    std::shared_ptr<HidlProfiler> hidl_profiler) {
   ATRACE_NAME("HidlCameraDeviceSession::Create");
   auto session =
       std::unique_ptr<HidlCameraDeviceSession>(new HidlCameraDeviceSession());
@@ -61,7 +60,8 @@ std::unique_ptr<HidlCameraDeviceSession> HidlCameraDeviceSession::Create(
     return nullptr;
   }
 
-  status_t res = session->Initialize(callback, std::move(device_session));
+  status_t res =
+      session->Initialize(callback, std::move(device_session), hidl_profiler);
   if (res != OK) {
     ALOGE("%s: Initializing HidlCameraDeviceSession failed: %s(%d)",
           __FUNCTION__, strerror(-res), res);
@@ -92,7 +92,7 @@ void HidlCameraDeviceSession::ProcessCaptureResult(
         num_pending_first_frame_buffers_ > 0) {
       num_pending_first_frame_buffers_ -= hal_result->output_buffers.size();
       if (num_pending_first_frame_buffers_ == 0) {
-        hidl_profiler::OnFirstFrameResult();
+        hidl_profiler_->FirstFrameEnd();
         ATRACE_ASYNC_END("first_frame", 0);
       }
     }
@@ -323,10 +323,16 @@ status_t HidlCameraDeviceSession::InitializeBufferMapper() {
 
 status_t HidlCameraDeviceSession::Initialize(
     const sp<V3_2::ICameraDeviceCallback>& callback,
-    std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session) {
+    std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session,
+    std::shared_ptr<HidlProfiler> hidl_profiler) {
   ATRACE_NAME("HidlCameraDeviceSession::Initialize");
   if (device_session == nullptr) {
     ALOGE("%s: device_session is nullptr.", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  if (hidl_profiler == nullptr) {
+    ALOGE("%s: hidl_profiler is nullptr.", __FUNCTION__);
     return BAD_VALUE;
   }
 
@@ -371,6 +377,7 @@ status_t HidlCameraDeviceSession::Initialize(
 
   hidl_device_callback_ = cast_res;
   device_session_ = std::move(device_session);
+  hidl_profiler_ = hidl_profiler;
 
   SetSessionCallbacks();
   return OK;
@@ -547,7 +554,9 @@ Return<void> HidlCameraDeviceSession::configureStreams_3_5(
     return Void();
   }
 
-  auto profiler_item = hidl_profiler::OnCameraStreamConfigure();
+  auto profiler = hidl_profiler_->MakeScopedProfiler(
+      HidlProfiler::ScopedType::kConfigureStream);
+
   first_frame_requested_ = false;
   num_pending_first_frame_buffers_ = 0;
 
@@ -603,7 +612,7 @@ Return<void> HidlCameraDeviceSession::processCaptureRequest_3_4(
     profile_first_request = true;
     ATRACE_BEGIN("HidlCameraDeviceSession::FirstRequest");
     num_pending_first_frame_buffers_ = requests[0].v3_2.outputBuffers.size();
-    hidl_profiler::OnFirstFrameRequest();
+    hidl_profiler_->FirstFrameStart();
     ATRACE_ASYNC_BEGIN("first_frame", 0);
   }
 
@@ -670,7 +679,8 @@ Return<Status> HidlCameraDeviceSession::flush() {
     return Status::INTERNAL_ERROR;
   }
 
-  auto profiler_item = hidl_profiler::OnCameraFlush();
+  auto profiler =
+      hidl_profiler_->MakeScopedProfiler(HidlProfiler::ScopedType::kFlush);
 
   status_t res = device_session_->Flush();
   if (res != OK) {
@@ -685,7 +695,8 @@ Return<Status> HidlCameraDeviceSession::flush() {
 Return<void> HidlCameraDeviceSession::close() {
   ATRACE_NAME("HidlCameraDeviceSession::close");
   if (device_session_ != nullptr) {
-    auto profiler_item = hidl_profiler::OnCameraClose();
+    auto profiler =
+        hidl_profiler_->MakeScopedProfiler(HidlProfiler::ScopedType::kClose);
     device_session_ = nullptr;
   }
   return Void();

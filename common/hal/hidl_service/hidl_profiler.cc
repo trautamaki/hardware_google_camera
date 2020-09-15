@@ -16,175 +16,201 @@
 
 //#define LOG_NDEBUG 0
 #define LOG_TAG "GCH_HidlProfiler"
-#include <log/log.h>
-#include <utility>
 
 #include "hidl_profiler.h"
+
+#include <log/log.h>
+
+#include <memory>
+#include <mutex>
+#include <utility>
+
+#include "profiler.h"
 
 namespace android {
 namespace hardware {
 namespace camera {
 namespace implementation {
-namespace hidl_profiler {
 namespace {
 
-struct HidlProfiler {
-  HidlProfiler() {
-    int32_t mode = property_get_int32("persist.camera.profiler.open_close", 0);
-    if (mode) {
-      // Use stop watch mode to print result.
-      mode |= google::camera_common::Profiler::SetPropFlag::kStopWatch;
+using ::google::camera_common::Profiler;
+
+// setprop key for profiling open/close camera
+constexpr char kPropKeyProfileOpenClose[] =
+    "persist.camera.profiler.open_close";
+
+constexpr char kFirstFrame[] = "First frame";
+constexpr char kHalTotal[] = "HAL Total";
+constexpr char kIdleString[] = "<-- IDLE -->";
+constexpr char kOverall[] = "Overall";
+
+class HidlProfilerImpl : public HidlProfiler {
+ public:
+  HidlProfilerImpl(uint32_t camera_id, int32_t flag)
+      : kCameraIdString("Cam" + std::to_string(camera_id)),
+        kProfilerFlag(flag) {
+  }
+
+  std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(
+      ScopedType type) override {
+    std::lock_guard lock(api_mutex_);
+    if (profiler_ == nullptr) {
+      CreateProfilerLocked();
+      if (profiler_ == nullptr) {
+        return nullptr;
+      }
     }
-    profiler = google::camera_common::Profiler::Create(mode);
-    if (profiler != nullptr) {
-      profiler->SetDumpFilePrefix(
-          "/data/vendor/camera/profiler/hidl_open_close_");
-      profiler->Start("Overall", 0);
+
+    IdleEndLocked();
+
+    const char* name = nullptr;
+    int32_t id = 0;
+    switch (type) {
+      case ScopedType::kOpen:
+        name = "Open";
+        has_camera_open_ = true;
+        profiler_->SetUseCase(kCameraIdString + "-Open");
+        break;
+      case ScopedType::kConfigureStream:
+        name = "ConfigureStream";
+        if (!has_camera_open_) {
+          profiler_->SetUseCase(kCameraIdString + "-Reconfiguration");
+        }
+        id = config_count_++;
+        break;
+      case ScopedType::kFlush:
+        name = "Flush";
+        profiler_->SetUseCase(kCameraIdString + "-Flush");
+        id = flush_count_++;
+        break;
+      case ScopedType::kClose:
+        name = "Close";
+        profiler_->SetUseCase(kCameraIdString + "-Close");
+        break;
+      default:
+        ALOGE("%s: Unknown type %d", __FUNCTION__, type);
+        return nullptr;
+    }
+    return std::make_unique<HidlScopedProfiler>(
+        profiler_, name, id, [this, type]() {
+          std::lock_guard lock(api_mutex_);
+          if (type == ScopedType::kClose) {
+            DeleteProfilerLocked();
+          } else {
+            IdleStartLocked();
+          }
+        });
+  }
+
+  void FirstFrameStart() override {
+    std::lock_guard lock(api_mutex_);
+    IdleEndLocked();
+    if (profiler_) {
+      profiler_->Start(kFirstFrame, Profiler::kInvalidRequestId);
+      profiler_->Start(kHalTotal, Profiler::kInvalidRequestId);
     }
   }
 
-  ~HidlProfiler() {
-    if (profiler != nullptr) {
-      profiler->End("Overall", 0);
+  void FirstFrameEnd() override {
+    std::lock_guard lock(api_mutex_);
+    if (profiler_) {
+      profiler_->End(kFirstFrame, Profiler::kInvalidRequestId);
+      profiler_->End(kHalTotal, Profiler::kInvalidRequestId);
+      DeleteProfilerLocked();
     }
   }
 
-  std::shared_ptr<google::camera_common::Profiler> profiler = nullptr;
-  bool has_camera_open = false;
-  uint8_t config_counter = 0;
-  uint8_t flush_counter = 0;
-  uint8_t connector_counter = 0;
+ private:
+  void CreateProfilerLocked() {
+    profiler_ = Profiler::Create(kProfilerFlag);
+    if (profiler_ == nullptr) {
+      ALOGE("%s: Failed to create profiler", __FUNCTION__);
+      return;
+    }
+    has_camera_open_ = false;
+    config_count_ = 0;
+    flush_count_ = 0;
+    idle_count_ = 0;
+    profiler_->SetDumpFilePrefix(
+        "/data/vendor/camera/profiler/hidl_open_close_");
+    profiler_->Start(kOverall, Profiler::kInvalidRequestId);
+  }
+
+  void DeleteProfilerLocked() {
+    if (profiler_) {
+      profiler_->End(kOverall, Profiler::kInvalidRequestId);
+      profiler_ = nullptr;
+    }
+  }
+
+  void IdleStartLocked() {
+    if (profiler_) {
+      profiler_->Start(kIdleString, idle_count_++);
+    }
+  }
+
+  void IdleEndLocked() {
+    if (profiler_ && idle_count_) {
+      profiler_->End(kIdleString, idle_count_ - 1);
+    }
+  }
+
+  const std::string kCameraIdString;
+  const int32_t kProfilerFlag = Profiler::SetPropFlag::kDisable;
+
+  std::mutex api_mutex_;
+  std::shared_ptr<Profiler> profiler_;
+  bool has_camera_open_;
+  uint8_t config_count_;
+  uint8_t flush_count_;
+  uint8_t idle_count_;
 };
 
-std::unique_ptr<HidlProfiler> gHidlProfiler = nullptr;
-
-void StartNewConnector() {
-  if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
-    gHidlProfiler->profiler->Start("<-- IDLE -->",
-                                   ++gHidlProfiler->connector_counter);
+class HidlProfilerMock : public HidlProfiler {
+  std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(ScopedType) override {
+    return nullptr;
   }
-}
 
-void EndConnector() {
-  if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr &&
-      gHidlProfiler->connector_counter != 0) {
-    gHidlProfiler->profiler->End("<-- IDLE -->",
-                                 gHidlProfiler->connector_counter);
+  void FirstFrameStart() override {
   }
-}
 
-void EndProfiler() {
-  gHidlProfiler = nullptr;
-}
+  void FirstFrameEnd() override {
+  }
+};
 
 }  // anonymous namespace
 
-std::unique_ptr<HidlProfilerItem> OnCameraOpen() {
-  gHidlProfiler = std::make_unique<HidlProfiler>();
-  if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
-    ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
-    return nullptr;
+std::shared_ptr<HidlProfiler> HidlProfiler::Create(uint32_t camera_id) {
+  int32_t flag = property_get_int32(kPropKeyProfileOpenClose, 0);
+  if (flag == Profiler::SetPropFlag::kDisable) {
+    return std::make_shared<HidlProfilerMock>();
   }
-
-  gHidlProfiler->has_camera_open = true;
-  gHidlProfiler->profiler->SetUseCase("Open Camera");
-
-  return std::make_unique<HidlProfilerItem>(gHidlProfiler->profiler, "Open",
-                                            StartNewConnector);
+  // Use stopwatch flag to print result.
+  if (flag & Profiler::SetPropFlag::kPrintBit) {
+    flag |= Profiler::SetPropFlag::kStopWatch;
+  }
+  return std::make_shared<HidlProfilerImpl>(camera_id, flag);
 }
 
-std::unique_ptr<HidlProfilerItem> OnCameraFlush() {
-  EndConnector();
-  if (gHidlProfiler == nullptr) {
-    gHidlProfiler = std::make_unique<HidlProfiler>();
-  }
-
-  if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
-    ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
-    return nullptr;
-  }
-  gHidlProfiler->profiler->SetUseCase("Flush Camera");
-  return std::make_unique<HidlProfilerItem>(gHidlProfiler->profiler, "Flush",
-                                            StartNewConnector,
-                                            gHidlProfiler->flush_counter++);
+HidlScopedProfiler::HidlScopedProfiler(std::shared_ptr<Profiler> profiler,
+                                       const std::string name, int id,
+                                       std::function<void()> end_callback)
+    : profiler_(profiler),
+      name_(std::move(name)),
+      id_(id),
+      end_callback_(end_callback) {
+  profiler_->Start(name_, id_);
+  profiler_->Start(kHalTotal, Profiler::kInvalidRequestId);
 }
 
-std::unique_ptr<HidlProfilerItem> OnCameraClose() {
-  EndConnector();
-  if (gHidlProfiler == nullptr) {
-    gHidlProfiler = std::make_unique<HidlProfiler>();
-  }
-
-  if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
-    ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
-    return nullptr;
-  }
-
-  gHidlProfiler->profiler->SetUseCase("Close Camera");
-  return std::make_unique<HidlProfilerItem>(gHidlProfiler->profiler, "Close",
-                                            EndProfiler);
-}
-
-std::unique_ptr<HidlProfilerItem> OnCameraStreamConfigure() {
-  EndConnector();
-  if (gHidlProfiler == nullptr) {
-    gHidlProfiler = std::make_unique<HidlProfiler>();
-  }
-
-  if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
-    ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
-    return nullptr;
-  }
-
-  if (!gHidlProfiler->has_camera_open) {
-    gHidlProfiler->profiler->SetUseCase("Reconfigure Stream");
-  }
-
-  return std::make_unique<HidlProfilerItem>(
-      gHidlProfiler->profiler, "configureStreams", StartNewConnector,
-      gHidlProfiler->config_counter++);
-}
-
-void OnFirstFrameRequest() {
-  EndConnector();
-  if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
-    gHidlProfiler->profiler->Start(
-        "First frame", google::camera_common::Profiler::kInvalidRequestId);
-    gHidlProfiler->profiler->Start(
-        "HAL Total", google::camera_common::Profiler::kInvalidRequestId);
+HidlScopedProfiler::~HidlScopedProfiler() {
+  profiler_->End(kHalTotal, Profiler::kInvalidRequestId);
+  profiler_->End(name_, id_);
+  if (end_callback_) {
+    end_callback_();
   }
 }
 
-void OnFirstFrameResult() {
-  if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
-    gHidlProfiler->profiler->End(
-        "First frame", google::camera_common::Profiler::kInvalidRequestId);
-    gHidlProfiler->profiler->End(
-        "HAL Total", google::camera_common::Profiler::kInvalidRequestId);
-    EndProfiler();
-  }
-}
-
-HidlProfilerItem::HidlProfilerItem(
-    std::shared_ptr<google::camera_common::Profiler> profiler,
-    const std::string target, std::function<void()> on_end, int request_id)
-    : profiler_(profiler), target_(std::move(target)), request_id_(request_id) {
-  on_end_ = on_end;
-  profiler_->Start(target_, request_id_);
-  profiler_->Start("HAL Total",
-                   google::camera_common::Profiler::kInvalidRequestId);
-}
-
-HidlProfilerItem::~HidlProfilerItem() {
-  profiler_->End("HAL Total",
-                 google::camera_common::Profiler::kInvalidRequestId);
-  profiler_->End(target_, request_id_);
-  if (on_end_) {
-    on_end_();
-  }
-}
-
-}  // namespace hidl_profiler
 }  // namespace implementation
 }  // namespace camera
 }  // namespace hardware
