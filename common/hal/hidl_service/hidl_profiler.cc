@@ -37,7 +37,7 @@ using ::google::camera_common::Profiler;
 
 // setprop key for profiling open/close camera
 constexpr char kPropKeyProfileOpenClose[] =
-    "persist.camera.profiler.open_close";
+    "persist.vendor.camera.profiler.open_close";
 
 constexpr char kFirstFrame[] = "First frame";
 constexpr char kHalTotal[] = "HAL Total";
