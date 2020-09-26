@@ -34,12 +34,12 @@ using google_camera_hal::NotifyMessage;
 JpegCompressor::JpegCompressor() {
   ATRACE_CALL();
   char value[PROPERTY_VALUE_MAX];
-  if (property_get("ro.product.vendor.manufacturer", value, "unknown") <= 0) {
+  if (property_get("ro.product.manufacturer", value, "unknown") <= 0) {
     ALOGW("%s: No Exif make data!", __FUNCTION__);
   }
   exif_make_ = std::string(value);
 
-  if (property_get("ro.product.vendor.model", value, "unknown") <= 0) {
+  if (property_get("ro.product.model", value, "unknown") <= 0) {
     ALOGW("%s: No Exif model data!", __FUNCTION__);
   }
   exif_model_ = std::string(value);
