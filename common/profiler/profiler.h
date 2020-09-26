@@ -39,6 +39,66 @@ namespace camera_common {
 //    $ adb shell setprop persist.vendor.camera.profiler 2
 //  - To print and dump the profiling result to "/data/vendor/camera/profiler":
 //    $ adb shell setprop persist.vendor.camera.profiler 3
+//  After add FPS option, here are the combination results.
+//  Option 0 (kDisable): Disable Profiler
+//  Option 1 (kPrintBit):
+//    When close, Print the result
+//    - Processing time
+//    - FPS with total frames on process start function
+//  Option 2 (kDumpBit):
+//    When close, dump the result to file(dump_file_prefix)
+//    - Processing time
+//    - FPS with total frames on process start function
+//  Option 3 (kPrintBit|kDumpBit):
+//    When close, print and dump the result
+//    - Processing time
+//    - FPS with total frames on process start function
+//  Option 8 (kPrintFpsEverySecBit):
+//    Print FPS every second on ProcessFrameRate function
+//  Option 9 (kPrintFpsEverySecBit|kPrintBit):
+//    Print FPS every second on process start and ProcessFrameRate function
+//    When close, print the result
+//    - Processing time
+//    - FPS with total frames on process start function
+//  Option 10 (kPrintFpsEverySecBit|kDumpBit):
+//    Print FPS every second on process start and ProcessFrameRate function
+//    When close, dump the result
+//    - Processing time
+//    - FPS with total frames on process start function
+//  Option 11 (kPrintFpsEverySecBit|kPrintBit|kDumpBit):
+//    Print FPS every second on process start and ProcessFrameRate function
+//    When close, print and dump the result
+//    - Processing time
+//    - FPS with total frames on process start function
+//  Option 16 (kCalculateFpsOnEndBit):
+//    Calculate FPS on process end function instead of process start function
+//  Option 17 (kCalculateFpsOnEndBit|kPrintBit):
+//    When close, print the result
+//    - Processing time
+//    - FPS with total frames on process "end" function
+//  Option 18 (kCalculateFpsOnEndBit|kDumpBit):
+//    When close, dump the result
+//    - Processing time
+//    - FPS with total frames on process "end" function
+//  Option 19 (kCalculateFpsOnEndBit|kPrintBitk|DumpBit):
+//    When close, print and dump the result
+//    - Processing time
+//    - FPS with total frames on process "end" function
+//  Option 25 (kCalculateFpsOnEndBit|kPrintFpsEverySecBit|kPrintBit):
+//    Print FPS every second on process start and ProcessFrameRate function
+//    When close, print the result
+//    - Processing time
+//    - FPS with total frames on process "end" function
+//  Option 26 (kCalculateFpsOnEndBit|kPrintFpsEverySecBit|DumpBit):
+//    Print FPS every second on process start and ProcessFrameRate function
+//    When close, dump the result
+//    - Processing time
+//    - FPS with total frames on process "end" function
+//  Option 27 (kCalculateFpsOnEndBit|kPrintFpsEverySecBit|kPrintBitk|DumpBit):
+//    Print FPS every second on process start and ProcessFrameRate function
+//    When close, print and dump the result
+//    - Processing time
+//    - FPS with total frames on process "end" function
 //
 //  By default the profiler is disabled.
 //
@@ -93,7 +153,11 @@ class Profiler {
     kDisable = 0,
     kPrintBit = 1 << 0,
     kDumpBit = 1 << 1,
-    kStopWatch = 1 << 2
+    kStopWatch = 1 << 2,
+    // Print FPS every second
+    kPrintFpsEverySecBit = 1 << 3,
+    // Calculate FPS on process end function instead of process start function
+    kCalculateFpsOnEndBit = 1 << 4
   };
 
   // Setup the name of use case the profiler is running.
@@ -125,6 +189,12 @@ class Profiler {
 
   // Print out the profiling result in the standard output (ANDROID_LOG_ERROR).
   virtual void PrintResult() = 0;
+
+  // Process the frame rate
+  // If only call this function without start() and End(),
+  // creating profiler needs to set option with kPrintFpsEverySecBit bit.
+  // It can print FPS every second.
+  virtual void ProcessFrameRate(const std::string& name) = 0;
 
  protected:
   Profiler(){};

@@ -74,6 +74,9 @@ class ProfilerImpl : public Profiler {
   // Print out the profiling result in the standard output (ANDROID_LOG_ERROR).
   virtual void PrintResult() override;
 
+  // Process the frame rate
+  virtual void ProcessFrameRate(const std::string&) override final;
+
  protected:
   // A structure to hold start time, end time, and count of profiling code
   // snippet.
@@ -91,16 +94,20 @@ class ProfilerImpl : public Profiler {
     float max_dt;
     float avg_dt;
     float avg_count;
-    TimeResult(std::string node_name, float max_dt, float avg_dt, float count)
+    float fps;
+    TimeResult(std::string node_name, float max_dt, float avg_dt, float count,
+               float fps)
         : node_name(node_name),
           max_dt(max_dt),
           avg_dt(avg_dt),
-          avg_count(count) {
+          avg_count(count),
+          fps(fps) {
     }
   };
 
   using TimeSeries = std::vector<TimeSlot>;
   using NodeTimingMap = std::unordered_map<std::string, TimeSeries>;
+  using NodeFrameRateMap = std::unordered_map<std::string, TimeSlot>;
 
   static constexpr int64_t kNsPerSec = 1000000000;
   static constexpr float kNanoToMilli = 0.000001f;
@@ -109,6 +116,10 @@ class ProfilerImpl : public Profiler {
   SetPropFlag setting_;
   // The map to record the timing of all nodes.
   NodeTimingMap timing_map_;
+  // The map to record the timing to print fps when close.
+  NodeFrameRateMap frame_rate_map_;
+  // The map to record the timing to print fps per second.
+  NodeFrameRateMap realtime_frame_rate_map_;
   // Use case name.
   std::string use_case_;
   // The prefix for the dump filename.
@@ -171,19 +182,60 @@ void ProfilerImpl::SetDumpFilePrefix(std::string dump_file_prefix) {
   }
 }
 
+void ProfilerImpl::ProcessFrameRate(const std::string& name) {
+  std::lock_guard<std::mutex> lk(lock_);
+  // Save the timeing for each whole process
+  TimeSlot& frame_rate = frame_rate_map_[name];
+  if (frame_rate.start == 0) {
+    frame_rate.start = CurrentTime();
+    frame_rate.count = 0;
+    frame_rate.end = 0;
+  } else {
+    ++frame_rate.count;
+    frame_rate.end = CurrentTime();
+  }
+
+  if ((setting_ & SetPropFlag::kPrintFpsEverySecBit) == 0) {
+    return;
+  }
+  // Print FPS every second
+  TimeSlot& realtime_frame_rate = realtime_frame_rate_map_[name];
+  if (realtime_frame_rate.start == 0) {
+    realtime_frame_rate.start = CurrentTime();
+    realtime_frame_rate.count = 0;
+  } else {
+    ++realtime_frame_rate.count;
+    int64_t current = CurrentTime();
+    int64_t elapsed = current - realtime_frame_rate.start;
+    if (elapsed > kNsPerSec) {
+      float fps =
+          realtime_frame_rate.count * kNsPerSec / static_cast<float>(elapsed);
+      ALOGE("Name: %s:  %8.2f fps.", name.c_str(), fps);
+      realtime_frame_rate.count = 0;
+      realtime_frame_rate.start = current;
+    }
+  }
+}
+
 void ProfilerImpl::Start(const std::string name, int request_id) {
   if (setting_ == SetPropFlag::kDisable) {
     return;
   }
   int index = (request_id == kInvalidRequestId ? 0 : request_id);
 
-  std::lock_guard<std::mutex> lk(lock_);
-  TimeSeries& time_series = timing_map_[name];
-  for (int i = time_series.size(); i <= index; i++) {
-    time_series.push_back(TimeSlot());
+  {
+    std::lock_guard<std::mutex> lk(lock_);
+    TimeSeries& time_series = timing_map_[name];
+    for (int i = time_series.size(); i <= index; ++i) {
+      time_series.push_back(TimeSlot());
+    }
+    TimeSlot& slot = time_series[index];
+    slot.start += CurrentTime();
   }
-  TimeSlot& slot = time_series[index];
-  slot.start += CurrentTime();
+
+  if ((setting_ & SetPropFlag::kCalculateFpsOnEndBit) == 0) {
+    ProcessFrameRate(name);
+  }
 }
 
 void ProfilerImpl::End(const std::string name, int request_id) {
@@ -192,12 +244,17 @@ void ProfilerImpl::End(const std::string name, int request_id) {
   }
   int index = (request_id == kInvalidRequestId ? 0 : request_id);
 
-  std::lock_guard<std::mutex> lk(lock_);
+  {
+    std::lock_guard<std::mutex> lk(lock_);
+    if (index < timing_map_[name].size()) {
+      TimeSlot& slot = timing_map_[name][index];
+      slot.end += CurrentTime();
+      ++slot.count;
+    }
+  }
 
-  if (index < timing_map_[name].size()) {
-    TimeSlot& slot = timing_map_[name][index];
-    slot.end += CurrentTime();
-    slot.count++;
+  if ((setting_ & SetPropFlag::kCalculateFpsOnEndBit) != 0) {
+    ProcessFrameRate(name);
   }
 }
 
@@ -234,15 +291,30 @@ void ProfilerImpl::PrintResult() {
     sum_max += max_dt;
     max_max = std::max(max_max, max_dt);
 
-    time_results.push_back({node_name, max_dt, avg * avg_count, avg_count});
+    TimeSlot& frame_rate = frame_rate_map_[node_name];
+    int64_t duration = frame_rate.end - frame_rate.start;
+    float fps = 0;
+    if (duration > kNsPerSec) {
+      fps = frame_rate.count * kNsPerSec / static_cast<float>(duration);
+    }
+    time_results.push_back({node_name, max_dt, avg * avg_count, avg_count, fps});
   }
 
   std::sort(time_results.begin(), time_results.end(),
             [](auto a, auto b) { return a.avg_dt > b.avg_dt; });
 
   for (const auto it : time_results) {
-    ALOGE("%51.51s Max: %8.3f ms       Avg: %7.3f ms (Count = %3.1f)",
+    if (it.fps == 0) {
+      ALOGE(
+          "%51.51s Max: %8.3f ms       Avg: %7.3f ms (Count = %3.1f) fps:    "
+          "NA",
           it.node_name.c_str(), it.max_dt, it.avg_dt, it.avg_count);
+    } else {
+      ALOGE(
+          "%51.51s Max: %8.3f ms       Avg: %7.3f ms (Count = %3.1f) fps: "
+          "%8.2f",
+          it.node_name.c_str(), it.max_dt, it.avg_dt, it.avg_count, it.fps);
+    }
   }
 
   ALOGE("%43.43s     MAX SUM: %8.3f ms,  AVG SUM: %7.3f ms", "", sum_max,
@@ -258,6 +330,18 @@ void ProfilerImpl::DumpResult(std::string filepath) {
         float elapsed = static_cast<float>(time_slot.end - time_slot.start) /
                         std::max(1, time_slot.count);
         fout << elapsed * kNanoToMilli << " ";
+      }
+      fout << "\n";
+      TimeSlot& frame_rate = frame_rate_map_[node_name];
+      int64_t duration = frame_rate.end - frame_rate.start;
+      float fps = 0;
+      if (duration > kNsPerSec) {
+        fps = frame_rate.count * kNsPerSec / static_cast<float>(duration);
+      }
+      if (fps > 0) {
+        fout << node_name << " fps:" << fps;
+      } else {
+        fout << node_name << " fps: NA";
       }
       fout << "\n";
     }
@@ -348,6 +432,10 @@ class ProfilerDummy : public Profiler {
   }
 
   void PrintResult() override final {
+  }
+
+  // Process the frame rate
+  virtual void ProcessFrameRate(const std::string&) override final {
   }
 };
 
