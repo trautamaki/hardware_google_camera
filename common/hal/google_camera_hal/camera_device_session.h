@@ -29,6 +29,7 @@
 #include "capture_session.h"
 #include "hal_camera_metadata.h"
 #include "hal_types.h"
+#include "hwl_types.h"
 #include "pending_requests_tracker.h"
 #include "stream_buffer_cache_manager.h"
 #include "thermal_types.h"
@@ -71,7 +72,7 @@ using CaptureSessionCreateFunc = std::function<std::unique_ptr<CaptureSession>(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlRequestBuffersFunc request_stream_buffers,
+    HwlSessionCallback session_callback,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* camera_allocator_hwl)>;
 

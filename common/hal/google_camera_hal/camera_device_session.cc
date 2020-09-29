@@ -626,9 +626,8 @@ status_t CameraDeviceSession::ConfigureStreams(
       capture_session_ = externalSession->CreateSession(
           device_session_hwl_.get(), stream_config,
           camera_device_session_callback_.process_capture_result,
-          camera_device_session_callback_.notify,
-          hwl_session_callback_.request_stream_buffers, hal_config,
-          camera_allocator_hwl_);
+          camera_device_session_callback_.notify, hwl_session_callback_,
+          hal_config, camera_allocator_hwl_);
       break;
     }
   }
@@ -641,9 +640,8 @@ status_t CameraDeviceSession::ConfigureStreams(
         capture_session_ = sessionEntry.CreateSession(
             device_session_hwl_.get(), stream_config,
             camera_device_session_callback_.process_capture_result,
-            camera_device_session_callback_.notify,
-            hwl_session_callback_.request_stream_buffers, hal_config,
-            camera_allocator_hwl_);
+            camera_device_session_callback_.notify, hwl_session_callback_,
+            hal_config, camera_allocator_hwl_);
         break;
       }
     }
