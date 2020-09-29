@@ -90,7 +90,7 @@ std::unique_ptr<CaptureSession> RgbirdCaptureSession::Create(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlSessionCallback session_callback,
+    HwlRequestBuffersFunc request_stream_buffers,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();
@@ -103,7 +103,7 @@ std::unique_ptr<CaptureSession> RgbirdCaptureSession::Create(
 
   status_t res = session->Initialize(
       device_session_hwl, stream_config, process_capture_result, notify,
-      session_callback.request_stream_buffers, hal_configured_streams);
+      request_stream_buffers, hal_configured_streams);
   if (res != OK) {
     ALOGE("%s: Initializing RgbirdCaptureSession failed: %s (%d).",
           __FUNCTION__, strerror(-res), res);
