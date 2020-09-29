@@ -74,8 +74,12 @@ class ProfilerImpl : public Profiler {
   // Print out the profiling result in the standard output (ANDROID_LOG_ERROR).
   virtual void PrintResult() override;
 
-  // Process the frame rate
-  virtual void ProcessFrameRate(const std::string&) override final;
+  // Profile the frame rate
+  virtual void ProfileFrameRate(const std::string&) override final;
+
+  // Set the interval of FPS print
+  // The unit is second and interval_seconds must >= 1
+  virtual void SetFpsPrintInterval(int32_t interval_seconds) override final;
 
  protected:
   // A structure to hold start time, end time, and count of profiling code
@@ -147,6 +151,8 @@ class ProfilerImpl : public Profiler {
   // Argument:
   //   filepath: file path to dump file.
   virtual void DumpResult(std::string filepath);
+
+  int32_t fps_print_interval_seconds_ = 1;
 };
 
 ProfilerImpl::~ProfilerImpl() {
@@ -182,7 +188,15 @@ void ProfilerImpl::SetDumpFilePrefix(std::string dump_file_prefix) {
   }
 }
 
-void ProfilerImpl::ProcessFrameRate(const std::string& name) {
+void ProfilerImpl::SetFpsPrintInterval(int32_t interval_seconds) {
+  if (interval_seconds < 1) {
+    ALOGE("Wrong interval: %d, must >= 1", interval_seconds);
+    return;
+  }
+  fps_print_interval_seconds_ = interval_seconds;
+}
+
+void ProfilerImpl::ProfileFrameRate(const std::string& name) {
   std::lock_guard<std::mutex> lk(lock_);
   // Save the timeing for each whole process
   TimeSlot& frame_rate = frame_rate_map_[name];
@@ -195,7 +209,7 @@ void ProfilerImpl::ProcessFrameRate(const std::string& name) {
     frame_rate.end = CurrentTime();
   }
 
-  if ((setting_ & SetPropFlag::kPrintFpsEverySecBit) == 0) {
+  if ((setting_ & SetPropFlag::kPrintFpsPerIntervalBit) == 0) {
     return;
   }
   // Print FPS every second
@@ -207,7 +221,7 @@ void ProfilerImpl::ProcessFrameRate(const std::string& name) {
     ++realtime_frame_rate.count;
     int64_t current = CurrentTime();
     int64_t elapsed = current - realtime_frame_rate.start;
-    if (elapsed > kNsPerSec) {
+    if (elapsed > kNsPerSec * fps_print_interval_seconds_) {
       float fps =
           realtime_frame_rate.count * kNsPerSec / static_cast<float>(elapsed);
       ALOGE("Name: %s:  %8.2f fps.", name.c_str(), fps);
@@ -234,7 +248,7 @@ void ProfilerImpl::Start(const std::string name, int request_id) {
   }
 
   if ((setting_ & SetPropFlag::kCalculateFpsOnEndBit) == 0) {
-    ProcessFrameRate(name);
+    ProfileFrameRate(name);
   }
 }
 
@@ -254,7 +268,7 @@ void ProfilerImpl::End(const std::string name, int request_id) {
   }
 
   if ((setting_ & SetPropFlag::kCalculateFpsOnEndBit) != 0) {
-    ProcessFrameRate(name);
+    ProfileFrameRate(name);
   }
 }
 
@@ -434,8 +448,10 @@ class ProfilerDummy : public Profiler {
   void PrintResult() override final {
   }
 
-  // Process the frame rate
-  virtual void ProcessFrameRate(const std::string&) override final {
+  void ProfileFrameRate(const std::string&) override final {
+  }
+
+  void SetFpsPrintInterval(int32_t) override final {
   }
 };
 

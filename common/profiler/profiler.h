@@ -53,20 +53,21 @@ namespace camera_common {
 //    When close, print and dump the result
 //    - Processing time
 //    - FPS with total frames on process start function
-//  Option 8 (kPrintFpsEverySecBit):
-//    Print FPS every second on ProcessFrameRate function
-//  Option 9 (kPrintFpsEverySecBit|kPrintBit):
-//    Print FPS every second on process start and ProcessFrameRate function
+//  Option 8 (kPrintFpsPerIntervalBit):
+//    Print FPS per interval on ProfileFrameRate function
+//    The frequency is based on the value of SetFpsPrintInterval()
+//  Option 9 (kPrintFpsPerIntervalBit|kPrintBit):
+//    Print FPS per interval on process start and ProfileFrameRate function
 //    When close, print the result
 //    - Processing time
 //    - FPS with total frames on process start function
-//  Option 10 (kPrintFpsEverySecBit|kDumpBit):
-//    Print FPS every second on process start and ProcessFrameRate function
+//  Option 10 (kPrintFpsPerIntervalBit|kDumpBit):
+//    Print FPS per interval on process start and ProfileFrameRate function
 //    When close, dump the result
 //    - Processing time
 //    - FPS with total frames on process start function
-//  Option 11 (kPrintFpsEverySecBit|kPrintBit|kDumpBit):
-//    Print FPS every second on process start and ProcessFrameRate function
+//  Option 11 (kPrintFpsPerIntervalBit|kPrintBit|kDumpBit):
+//    Print FPS per interval on process start and ProfileFrameRate function
 //    When close, print and dump the result
 //    - Processing time
 //    - FPS with total frames on process start function
@@ -84,18 +85,18 @@ namespace camera_common {
 //    When close, print and dump the result
 //    - Processing time
 //    - FPS with total frames on process "end" function
-//  Option 25 (kCalculateFpsOnEndBit|kPrintFpsEverySecBit|kPrintBit):
-//    Print FPS every second on process start and ProcessFrameRate function
+//  Option 25 (kCalculateFpsOnEndBit|kPrintFpsPerIntervalBit|kPrintBit):
+//    Print FPS per interval on process start and ProfileFrameRate function
 //    When close, print the result
 //    - Processing time
 //    - FPS with total frames on process "end" function
-//  Option 26 (kCalculateFpsOnEndBit|kPrintFpsEverySecBit|DumpBit):
-//    Print FPS every second on process start and ProcessFrameRate function
+//  Option 26 (kCalculateFpsOnEndBit|kPrintFpsPerIntervalBit|DumpBit):
+//    Print FPS per interval on process start and ProfileFrameRate function
 //    When close, dump the result
 //    - Processing time
 //    - FPS with total frames on process "end" function
-//  Option 27 (kCalculateFpsOnEndBit|kPrintFpsEverySecBit|kPrintBitk|DumpBit):
-//    Print FPS every second on process start and ProcessFrameRate function
+//  Option 27 (kCalculateFpsOnEndBit|kPrintFpsPerIntervalBit|kPrintBitk|DumpBit):
+//    Print FPS per interval on process start and ProfileFrameRate function
 //    When close, print and dump the result
 //    - Processing time
 //    - FPS with total frames on process "end" function
@@ -154,8 +155,8 @@ class Profiler {
     kPrintBit = 1 << 0,
     kDumpBit = 1 << 1,
     kStopWatch = 1 << 2,
-    // Print FPS every second
-    kPrintFpsEverySecBit = 1 << 3,
+    // Print FPS per interval time based on the value of SetFpsPrintInterval()
+    kPrintFpsPerIntervalBit = 1 << 3,
     // Calculate FPS on process end function instead of process start function
     kCalculateFpsOnEndBit = 1 << 4
   };
@@ -190,11 +191,15 @@ class Profiler {
   // Print out the profiling result in the standard output (ANDROID_LOG_ERROR).
   virtual void PrintResult() = 0;
 
-  // Process the frame rate
+  // Profile the frame rate
   // If only call this function without start() and End(),
-  // creating profiler needs to set option with kPrintFpsEverySecBit bit.
+  // creating profiler needs to set option with kPrintFpsPerIntervalBit bit.
   // It can print FPS every second.
-  virtual void ProcessFrameRate(const std::string& name) = 0;
+  virtual void ProfileFrameRate(const std::string& name) = 0;
+
+  // Set the interval of FPS print
+  // The interval unit is second and interval_seconds must >= 1
+  virtual void SetFpsPrintInterval(int32_t interval_seconds) = 0;
 
  protected:
   Profiler(){};
