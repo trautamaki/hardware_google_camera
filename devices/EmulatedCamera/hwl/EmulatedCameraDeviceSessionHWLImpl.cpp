@@ -80,21 +80,26 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
     return ret;
   }
 
-  auto logical_chars = std::make_unique<LogicalCharacteristics>();
-  logical_chars->emplace(camera_id_, sensor_chars_);
+  logical_chars_.emplace(camera_id_, sensor_chars_);
   for (const auto& it : *physical_device_map_) {
     SensorCharacteristics physical_chars;
     auto stat = GetSensorCharacteristics(it.second.second.get(), &physical_chars);
     if (stat == OK) {
-      logical_chars->emplace(it.first, physical_chars);
+      logical_chars_.emplace(it.first, physical_chars);
     } else {
       ALOGE("%s: Unable to extract physical device: %u characteristics %s (%d)",
             __FUNCTION__, it.first, strerror(-ret), ret);
       return ret;
     }
   }
+
+  return InitializeRequestProcessor();
+}
+
+status_t EmulatedCameraDeviceSessionHwlImpl::InitializeRequestProcessor() {
   sp<EmulatedSensor> emulated_sensor = new EmulatedSensor();
-  ret = emulated_sensor->StartUp(camera_id_, std::move(logical_chars));
+  auto logical_chars = std::make_unique<LogicalCharacteristics>(logical_chars_);
+  auto ret = emulated_sensor->StartUp(camera_id_, std::move(logical_chars));
   if (ret != OK) {
     ALOGE("%s: Failed on sensor start up %s (%d)", __FUNCTION__, strerror(-ret),
           ret);
@@ -229,7 +234,14 @@ status_t EmulatedCameraDeviceSessionHwlImpl::BuildPipelines() {
     return NO_INIT;
   }
 
-  pipelines_built_ = true;
+  status_t ret = OK;
+  if (request_processor_ == nullptr) {
+    ret = InitializeRequestProcessor();
+  }
+
+  if (ret == OK) {
+    pipelines_built_ = true;
+  }
 
   return OK;
 }
@@ -245,6 +257,7 @@ void EmulatedCameraDeviceSessionHwlImpl::DestroyPipelines() {
 
   pipelines_built_ = false;
   pipelines_.clear();
+  request_processor_ = nullptr;
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(
