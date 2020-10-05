@@ -63,6 +63,9 @@ class HidlProfiler {
   // Call when all bufer in first frame is received.
   virtual void FirstFrameEnd() = 0;
 
+  // Call to profile frame rate for each stream.
+  virtual void ProfileFrameRate(const std::string& name) = 0;
+
  protected:
   HidlProfiler() = default;
 };

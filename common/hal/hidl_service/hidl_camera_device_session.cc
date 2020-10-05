@@ -97,6 +97,10 @@ void HidlCameraDeviceSession::ProcessCaptureResult(
       }
     }
   }
+  for (auto& buffer : hal_result->output_buffers) {
+    hidl_profiler_->ProfileFrameRate("Stream " +
+                                     std::to_string(buffer.stream_id));
+  }
 
   hidl_vec<CaptureResult> hidl_results(1);
   status_t res = hidl_utils::ConvertToHidlCaptureResult(

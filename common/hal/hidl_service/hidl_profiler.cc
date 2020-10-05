@@ -38,6 +38,8 @@ using ::google::camera_common::Profiler;
 // setprop key for profiling open/close camera
 constexpr char kPropKeyProfileOpenClose[] =
     "persist.vendor.camera.profiler.open_close";
+// setprop key for profiling camera fps
+constexpr char kPropKeyProfileFps[] = "persist.vendor.camera.profiler.fps";
 
 constexpr char kFirstFrame[] = "First frame";
 constexpr char kHalTotal[] = "HAL Total";
@@ -46,17 +48,28 @@ constexpr char kOverall[] = "Overall";
 
 class HidlProfilerImpl : public HidlProfiler {
  public:
-  HidlProfilerImpl(uint32_t camera_id, int32_t flag)
-      : kCameraIdString("Cam" + std::to_string(camera_id)),
-        kProfilerFlag(flag) {
+  HidlProfilerImpl(uint32_t camera_id, int32_t latency_flag, int32_t fps_flag)
+      : camera_id_string_("Cam" + std::to_string(camera_id)),
+        latency_flag_(latency_flag),
+        fps_flag_(fps_flag) {
   }
 
   std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(
       ScopedType type) override {
     std::lock_guard lock(api_mutex_);
-    if (profiler_ == nullptr) {
-      CreateProfilerLocked();
-      if (profiler_ == nullptr) {
+
+    if (type == ScopedType::kConfigureStream) {
+      fps_profiler_ = CreateFpsProfiler();
+    }
+
+    if (latency_profiler_ == nullptr) {
+      latency_profiler_ = CreateLatencyProfiler();
+      if (latency_profiler_ != nullptr) {
+        has_camera_open_ = false;
+        config_count_ = 0;
+        flush_count_ = 0;
+        idle_count_ = 0;
+      } else {
         return nullptr;
       }
     }
@@ -69,30 +82,30 @@ class HidlProfilerImpl : public HidlProfiler {
       case ScopedType::kOpen:
         name = "Open";
         has_camera_open_ = true;
-        profiler_->SetUseCase(kCameraIdString + "-Open");
+        latency_profiler_->SetUseCase(camera_id_string_ + "-Open");
         break;
       case ScopedType::kConfigureStream:
         name = "ConfigureStream";
         if (!has_camera_open_) {
-          profiler_->SetUseCase(kCameraIdString + "-Reconfiguration");
+          latency_profiler_->SetUseCase(camera_id_string_ + "-Reconfiguration");
         }
         id = config_count_++;
         break;
       case ScopedType::kFlush:
         name = "Flush";
-        profiler_->SetUseCase(kCameraIdString + "-Flush");
+        latency_profiler_->SetUseCase(camera_id_string_ + "-Flush");
         id = flush_count_++;
         break;
       case ScopedType::kClose:
         name = "Close";
-        profiler_->SetUseCase(kCameraIdString + "-Close");
+        latency_profiler_->SetUseCase(camera_id_string_ + "-Close");
         break;
       default:
         ALOGE("%s: Unknown type %d", __FUNCTION__, type);
         return nullptr;
     }
     return std::make_unique<HidlScopedProfiler>(
-        profiler_, name, id, [this, type]() {
+        latency_profiler_, name, id, [this, type]() {
           std::lock_guard lock(api_mutex_);
           if (type == ScopedType::kClose) {
             DeleteProfilerLocked();
@@ -105,61 +118,85 @@ class HidlProfilerImpl : public HidlProfiler {
   void FirstFrameStart() override {
     std::lock_guard lock(api_mutex_);
     IdleEndLocked();
-    if (profiler_) {
-      profiler_->Start(kFirstFrame, Profiler::kInvalidRequestId);
-      profiler_->Start(kHalTotal, Profiler::kInvalidRequestId);
+    if (latency_profiler_ != nullptr) {
+      latency_profiler_->Start(kFirstFrame, Profiler::kInvalidRequestId);
+      latency_profiler_->Start(kHalTotal, Profiler::kInvalidRequestId);
     }
   }
 
   void FirstFrameEnd() override {
     std::lock_guard lock(api_mutex_);
-    if (profiler_) {
-      profiler_->End(kFirstFrame, Profiler::kInvalidRequestId);
-      profiler_->End(kHalTotal, Profiler::kInvalidRequestId);
+    if (latency_profiler_ != nullptr) {
+      latency_profiler_->End(kFirstFrame, Profiler::kInvalidRequestId);
+      latency_profiler_->End(kHalTotal, Profiler::kInvalidRequestId);
       DeleteProfilerLocked();
     }
   }
 
- private:
-  void CreateProfilerLocked() {
-    profiler_ = Profiler::Create(kProfilerFlag);
-    if (profiler_ == nullptr) {
-      ALOGE("%s: Failed to create profiler", __FUNCTION__);
-      return;
+  void ProfileFrameRate(const std::string& name) override {
+    std::lock_guard lock(api_mutex_);
+    if (fps_profiler_ != nullptr) {
+      fps_profiler_->ProfileFrameRate(name);
     }
-    has_camera_open_ = false;
-    config_count_ = 0;
-    flush_count_ = 0;
-    idle_count_ = 0;
-    profiler_->SetDumpFilePrefix(
+  }
+
+ private:
+  std::shared_ptr<Profiler> CreateLatencyProfiler() {
+    if (latency_flag_ == Profiler::SetPropFlag::kDisable) {
+      return nullptr;
+    }
+    std::shared_ptr<Profiler> profiler = Profiler::Create(latency_flag_);
+    if (profiler == nullptr) {
+      ALOGE("%s: Failed to create profiler", __FUNCTION__);
+      return nullptr;
+    }
+    profiler->SetDumpFilePrefix(
         "/data/vendor/camera/profiler/hidl_open_close_");
-    profiler_->Start(kOverall, Profiler::kInvalidRequestId);
+    profiler->Start(kOverall, Profiler::kInvalidRequestId);
+    return profiler;
+  }
+
+  std::shared_ptr<Profiler> CreateFpsProfiler() {
+    if (fps_flag_ == Profiler::SetPropFlag::kDisable) {
+      return nullptr;
+    }
+    std::shared_ptr<Profiler> profiler = Profiler::Create(fps_flag_);
+    if (profiler == nullptr) {
+      ALOGE("%s: Failed to create profiler", __FUNCTION__);
+      return nullptr;
+    }
+    profiler->SetDumpFilePrefix("/data/vendor/camera/profiler/hidl_fps_");
+    return profiler;
   }
 
   void DeleteProfilerLocked() {
-    if (profiler_) {
-      profiler_->End(kOverall, Profiler::kInvalidRequestId);
-      profiler_ = nullptr;
+    if (latency_profiler_ != nullptr) {
+      latency_profiler_->End(kOverall, Profiler::kInvalidRequestId);
+      latency_profiler_ = nullptr;
     }
   }
 
   void IdleStartLocked() {
-    if (profiler_) {
-      profiler_->Start(kIdleString, idle_count_++);
+    if (latency_profiler_ != nullptr) {
+      latency_profiler_->Start(kIdleString, idle_count_++);
     }
   }
 
   void IdleEndLocked() {
-    if (profiler_ && idle_count_) {
-      profiler_->End(kIdleString, idle_count_ - 1);
+    if (latency_profiler_ != nullptr && idle_count_ > 0) {
+      latency_profiler_->End(kIdleString, idle_count_ - 1);
     }
   }
 
-  const std::string kCameraIdString;
-  const int32_t kProfilerFlag = Profiler::SetPropFlag::kDisable;
+  const std::string camera_id_string_;
+  const int32_t latency_flag_;
+  const int32_t fps_flag_;
 
+  // Protect all API functions mutually exclusive, all member variables should
+  // also be protected by this mutex.
   std::mutex api_mutex_;
-  std::shared_ptr<Profiler> profiler_;
+  std::shared_ptr<Profiler> latency_profiler_;
+  std::shared_ptr<Profiler> fps_profiler_;
   bool has_camera_open_;
   uint8_t config_count_;
   uint8_t flush_count_;
@@ -176,20 +213,30 @@ class HidlProfilerMock : public HidlProfiler {
 
   void FirstFrameEnd() override {
   }
+
+  void ProfileFrameRate(const std::string&) override {
+  }
 };
 
 }  // anonymous namespace
 
 std::shared_ptr<HidlProfiler> HidlProfiler::Create(uint32_t camera_id) {
-  int32_t flag = property_get_int32(kPropKeyProfileOpenClose, 0);
-  if (flag == Profiler::SetPropFlag::kDisable) {
+  int32_t latency_flag = property_get_int32(kPropKeyProfileOpenClose, 0);
+  int32_t fps_flag = property_get_int32(kPropKeyProfileFps, 0);
+  if (latency_flag == Profiler::SetPropFlag::kDisable &&
+      fps_flag == Profiler::SetPropFlag::kDisable) {
     return std::make_shared<HidlProfilerMock>();
   }
   // Use stopwatch flag to print result.
-  if (flag & Profiler::SetPropFlag::kPrintBit) {
-    flag |= Profiler::SetPropFlag::kStopWatch;
+  if ((latency_flag & Profiler::SetPropFlag::kPrintBit) != 0) {
+    latency_flag |= Profiler::SetPropFlag::kStopWatch;
   }
-  return std::make_shared<HidlProfilerImpl>(camera_id, flag);
+  // Use interval flag to print fps instead of print on end.
+  if ((fps_flag & Profiler::SetPropFlag::kPrintBit) != 0) {
+    fps_flag |= Profiler::SetPropFlag::kPrintFpsPerIntervalBit;
+    fps_flag &= ~Profiler::SetPropFlag::kPrintBit;
+  }
+  return std::make_shared<HidlProfilerImpl>(camera_id, latency_flag, fps_flag);
 }
 
 HidlScopedProfiler::HidlScopedProfiler(std::shared_ptr<Profiler> profiler,

@@ -224,7 +224,9 @@ void ProfilerImpl::ProfileFrameRate(const std::string& name) {
     if (elapsed > kNsPerSec * fps_print_interval_seconds_) {
       float fps =
           realtime_frame_rate.count * kNsPerSec / static_cast<float>(elapsed);
-      ALOGE("Name: %s:  %8.2f fps.", name.c_str(), fps);
+      float avg_fps = frame_rate.count * kNsPerSec /
+                      static_cast<float>(frame_rate.end - frame_rate.start);
+      ALOGE("%s: current FPS %3.2f, avg %3.2f", name.c_str(), fps, avg_fps);
       realtime_frame_rate.count = 0;
       realtime_frame_rate.start = current;
     }
