@@ -207,6 +207,12 @@ void ZslBufferManager::FreeUnusedBuffersLocked() {
   ATRACE_CALL();
   if (empty_zsl_buffers_.size() <= kMaxUnusedBuffers ||
       buffers_.size() <= buffer_descriptor_.immediate_num_buffers) {
+    idle_buffer_frame_counter_ = 0;
+    return;
+  }
+
+  idle_buffer_frame_counter_++;
+  if (idle_buffer_frame_counter_ <= kMaxIdelBufferFrameCounter) {
     return;
   }
 

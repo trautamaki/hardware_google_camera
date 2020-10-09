@@ -19,10 +19,8 @@
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "camera_device_session.h"
 
-#include <dlfcn.h>
 #include <inttypes.h>
 #include <log/log.h>
-#include <sys/stat.h>
 #include <utils/Trace.h>
 
 #include "basic_capture_session.h"
@@ -53,17 +51,9 @@ std::vector<CaptureSessionEntryFuncs>
              BasicCaptureSession::IsStreamConfigurationSupported,
          .CreateSession = BasicCaptureSession::Create}};
 
-// HAL external capture session library path
-#if defined(_LP64)
-constexpr char kExternalCaptureSessionDir[] =
-    "/vendor/lib64/camera/capture_sessions/";
-#else  // defined(_LP64)
-constexpr char kExternalCaptureSessionDir[] =
-    "/vendor/lib/camera/capture_sessions/";
-#endif
-
 std::unique_ptr<CameraDeviceSession> CameraDeviceSession::Create(
     std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl,
+    std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries,
     CameraBufferAllocatorHwl* camera_allocator_hwl) {
   ATRACE_CALL();
   if (device_session_hwl == nullptr) {
@@ -83,7 +73,8 @@ std::unique_ptr<CameraDeviceSession> CameraDeviceSession::Create(
   }
 
   status_t res =
-      session->Initialize(std::move(device_session_hwl), camera_allocator_hwl);
+      session->Initialize(std::move(device_session_hwl), camera_allocator_hwl,
+                          external_session_factory_entries);
   if (res != OK) {
     ALOGE("%s: Initializing CameraDeviceSession failed: %s (%d).", __FUNCTION__,
           strerror(-res), res);
@@ -360,7 +351,8 @@ status_t CameraDeviceSession::InitializeBufferManagement(
 
 status_t CameraDeviceSession::Initialize(
     std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl,
-    CameraBufferAllocatorHwl* camera_allocator_hwl) {
+    CameraBufferAllocatorHwl* camera_allocator_hwl,
+    std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries) {
   ATRACE_CALL();
   if (device_session_hwl == nullptr) {
     ALOGE("%s: device_session_hwl cannot be nullptr.", __FUNCTION__);
@@ -395,7 +387,7 @@ status_t CameraDeviceSession::Initialize(
     return res;
   }
 
-  res = LoadExternalCaptureSession();
+  res = LoadExternalCaptureSession(external_session_factory_entries);
   if (res != OK) {
     ALOGE("%s: Loading external capture sessions failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);
@@ -467,34 +459,8 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
   zoom_ratio_mapper_.Initialize(&params);
 }
 
-// Returns an array of regular files under dir_path.
-static std::vector<std::string> FindLibraryPaths(const char* dir_path) {
-  std::vector<std::string> libs;
-
-  errno = 0;
-  DIR* dir = opendir(dir_path);
-  if (!dir) {
-    ALOGD("%s: Unable to open directory %s (%s)", __FUNCTION__, dir_path,
-          strerror(errno));
-    return libs;
-  }
-
-  struct dirent* entry = nullptr;
-  while ((entry = readdir(dir)) != nullptr) {
-    std::string lib_path(dir_path);
-    lib_path += entry->d_name;
-    struct stat st;
-    if (stat(lib_path.c_str(), &st) == 0) {
-      if (S_ISREG(st.st_mode)) {
-        libs.push_back(lib_path);
-      }
-    }
-  }
-
-  return libs;
-}
-
-status_t CameraDeviceSession::LoadExternalCaptureSession() {
+status_t CameraDeviceSession::LoadExternalCaptureSession(
+    std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries) {
   ATRACE_CALL();
 
   if (external_capture_session_entries_.size() > 0) {
@@ -503,36 +469,16 @@ status_t CameraDeviceSession::LoadExternalCaptureSession() {
     return OK;
   }
 
-  for (const auto& lib_path : FindLibraryPaths(kExternalCaptureSessionDir)) {
-    ALOGI("%s: Loading %s", __FUNCTION__, lib_path.c_str());
-    void* lib_handle = nullptr;
-    lib_handle = dlopen(lib_path.c_str(), RTLD_NOW);
-    if (lib_handle == nullptr) {
-      ALOGW("Failed loading %s.", lib_path.c_str());
-      continue;
-    }
-
-    GetCaptureSessionFactoryFunc external_session_factory_t =
-        reinterpret_cast<GetCaptureSessionFactoryFunc>(
-            dlsym(lib_handle, "GetCaptureSessionFactory"));
-    if (external_session_factory_t == nullptr) {
-      ALOGE("%s: dlsym failed (%s) when loading %s.", __FUNCTION__,
-            "GetCaptureSessionFactory", lib_path.c_str());
-      dlclose(lib_handle);
-      lib_handle = nullptr;
-      continue;
-    }
-
+  for (const auto& external_session_factory_t :
+       external_session_factory_entries) {
     ExternalCaptureSessionFactory* external_session =
         external_session_factory_t();
     if (!external_session) {
-      ALOGE("%s: External session from (%s) may be incomplete", __FUNCTION__,
-            lib_path.c_str());
+      ALOGE("%s: External session may be incomplete", __FUNCTION__);
       continue;
     }
 
     external_capture_session_entries_.push_back(external_session);
-    external_capture_session_lib_handles_.push_back(lib_handle);
   }
 
   return OK;
@@ -546,10 +492,6 @@ CameraDeviceSession::~CameraDeviceSession() {
 
   for (auto external_session : external_capture_session_entries_) {
     delete external_session;
-  }
-
-  for (auto lib_handle : external_capture_session_lib_handles_) {
-    dlclose(lib_handle);
   }
 
   if (buffer_mapper_v4_ != nullptr) {
@@ -637,6 +579,28 @@ status_t CameraDeviceSession::ConfigureStreams(
     const StreamConfiguration& stream_config,
     std::vector<HalStream>* hal_config) {
   ATRACE_CALL();
+  bool set_realtime_thread = false;
+  int32_t schedule_policy;
+  struct sched_param schedule_param = {0};
+  if (utils::SupportRealtimeThread()) {
+    bool get_thread_schedule = false;
+    if (pthread_getschedparam(pthread_self(), &schedule_policy,
+                              &schedule_param) == 0) {
+      get_thread_schedule = true;
+    } else {
+      ALOGE("%s: pthread_getschedparam fail", __FUNCTION__);
+    }
+
+    if (get_thread_schedule) {
+      status_t res = utils::SetRealtimeThread(pthread_self());
+      if (res != OK) {
+        ALOGE("%s: SetRealtimeThread fail", __FUNCTION__);
+      } else {
+        set_realtime_thread = true;
+      }
+    }
+  }
+
   std::lock_guard<std::mutex> lock(session_lock_);
 
   std::lock_guard lock_capture_session(capture_session_lock_);
@@ -687,6 +651,9 @@ status_t CameraDeviceSession::ConfigureStreams(
   if (capture_session_ == nullptr) {
     ALOGE("%s: Cannot find a capture session compatible with stream config",
           __FUNCTION__);
+    if (set_realtime_thread) {
+      utils::UpdateThreadSched(pthread_self(), schedule_policy, &schedule_param);
+    }
     return BAD_VALUE;
   }
 
@@ -694,6 +661,10 @@ status_t CameraDeviceSession::ConfigureStreams(
     stream_buffer_cache_manager_ = StreamBufferCacheManager::Create();
     if (stream_buffer_cache_manager_ == nullptr) {
       ALOGE("%s: Failed to create stream buffer cache manager.", __FUNCTION__);
+      if (set_realtime_thread) {
+        utils::UpdateThreadSched(pthread_self(), schedule_policy,
+                                 &schedule_param);
+      }
       return UNKNOWN_ERROR;
     }
 
@@ -702,6 +673,10 @@ status_t CameraDeviceSession::ConfigureStreams(
     if (res != OK) {
       ALOGE("%s: Failed to register streams into stream buffer cache manager.",
             __FUNCTION__);
+      if (set_realtime_thread) {
+        utils::UpdateThreadSched(pthread_self(), schedule_policy,
+                                 &schedule_param);
+      }
       return res;
     }
   }
@@ -722,6 +697,10 @@ status_t CameraDeviceSession::ConfigureStreams(
     pending_requests_tracker_ = PendingRequestsTracker::Create(*hal_config);
     if (pending_requests_tracker_ == nullptr) {
       ALOGE("%s: Cannot create a pending request tracker.", __FUNCTION__);
+      if (set_realtime_thread) {
+        utils::UpdateThreadSched(pthread_self(), schedule_policy,
+                                 &schedule_param);
+      }
       return UNKNOWN_ERROR;
     }
 
@@ -739,6 +718,10 @@ status_t CameraDeviceSession::ConfigureStreams(
   thermal_throttling_notified_ = false;
   last_request_settings_ = nullptr;
   last_timestamp_ns_for_trace_ = 0;
+
+  if (set_realtime_thread) {
+    utils::UpdateThreadSched(pthread_self(), schedule_policy, &schedule_param);
+  }
 
   return OK;
 }
@@ -1561,6 +1544,7 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
         [this, stream_id](uint32_t num_buffer,
                           std::vector<StreamBuffer>* buffers,
                           StreamBufferRequestError* status) -> status_t {
+          ATRACE_NAME("StreamBufferRequestFunc");
           if (buffers == nullptr) {
             ALOGE("%s: buffers is nullptr.", __FUNCTION__);
             return BAD_VALUE;

@@ -121,6 +121,11 @@ class ZslBufferManager {
   // kMaxUnusedBuffers, it will try to free excessive buffers.
   static const uint32_t kMaxUnusedBuffers = 2;
 
+  // Maximum number of frames with enough unused buffers. When the number of
+  // counter > kMaxIdelBufferFrameCounter, it will try to free excessive
+  // buffers.
+  static const uint32_t kMaxIdelBufferFrameCounter = 300;
+
   const bool kMemoryProfilingEnabled;
 
   // Remove the oldest metadata.
@@ -173,6 +178,9 @@ class ZslBufferManager {
   // Store the buffer descriptor when call AllocateBuffers()
   // Use it for AllocateExtraBuffers()
   HalBufferDescriptor buffer_descriptor_;
+
+  // Count the number when there are enough unused buffers.
+  uint32_t idle_buffer_frame_counter_ = 0;
 };
 
 }  // namespace google_camera_hal

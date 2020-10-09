@@ -51,6 +51,23 @@ enum VendorTagIds : uint32_t {
   kEndMarker
 };
 
+enum class SmoothyMode : uint32_t {
+  // Stablizes frames while moves with user's intentional motion, e.g. panning.
+  // Similar to normal EIS.
+  kSteadyCamMode = 0,
+
+  // Fixes the viewport as if videos are captured on a tripod.
+  kTripodMode,
+
+  // Tracks an object of interest and keeps it at frame's salient position, e.g.
+  // center.
+  kTrackingMode,
+
+  // Uses UW camera with a larger margin. In this way, we get a better video
+  // stabilization quality, while preserving a similar FoV as the main camera.
+  kSuperstabMode
+};
+
 // Logical camera vendor tags
 static const std::vector<VendorTag> kLogicalCameraVendorTags = {
     // Logical camera default physical camera ID
