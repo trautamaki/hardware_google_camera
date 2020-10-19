@@ -19,6 +19,7 @@
 
 #include "utils.h"
 
+#include <cutils/properties.h>
 #include <hardware/gralloc.h>
 
 #include "vendor_tag_defs.h"
@@ -26,6 +27,8 @@
 namespace android {
 namespace google_camera_hal {
 namespace utils {
+
+const std::string kRealtimeThreadSetProp = "persist.camera.realtimethread";
 
 bool IsDepthStream(const Stream& stream) {
   if (stream.stream_type == StreamType::kOutput &&
@@ -378,6 +381,46 @@ void ConvertZoomRatio(const float zoom_ratio,
   if (zoom_ratio >= 1.0f) {
     utils::ClampBoundary(active_array_dimension, left, top, width, height);
   }
+}
+
+bool SupportRealtimeThread() {
+  static bool support_real_time = false;
+  static bool first_time = false;
+  if (first_time == false) {
+    first_time = true;
+    support_real_time = property_get_bool(kRealtimeThreadSetProp.c_str(), false);
+  }
+
+  return support_real_time;
+}
+
+status_t SetRealtimeThread(pthread_t thread) {
+  struct sched_param param = {
+      .sched_priority = 1,
+  };
+  int32_t res =
+      pthread_setschedparam(thread, SCHED_FIFO | SCHED_RESET_ON_FORK, &param);
+  if (res != 0) {
+    ALOGE("%s: Couldn't set SCHED_FIFO", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  return OK;
+}
+
+status_t UpdateThreadSched(pthread_t thread, int32_t policy,
+                           struct sched_param* param) {
+  if (param == nullptr) {
+    ALOGE("%s: sched_param is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+  int32_t res = pthread_setschedparam(thread, policy, param);
+  if (res != 0) {
+    ALOGE("%s: Couldn't set schedparam", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  return OK;
 }
 
 }  // namespace utils

@@ -157,6 +157,8 @@ status_t HidlCameraProvider::Initialize() {
   };
 
   google_camera_provider_->SetCallback(&camera_provider_callback_);
+  // purge pending malloc pages after initialization
+  mallopt(M_PURGE, 0);
   return OK;
 }
 

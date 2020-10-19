@@ -23,6 +23,7 @@
 #include <android/hardware/camera/provider/2.6/ICameraProvider.h>
 #include <binder/ProcessState.h>
 #include <hidl/LegacySupport.h>
+#include <malloc.h>
 
 using android::hardware::defaultLazyPassthroughServiceImplementation;
 using android::hardware::defaultPassthroughServiceImplementation;
@@ -38,6 +39,7 @@ int main() {
   ALOGI("Google camera provider service is starting.");
   // The camera HAL may communicate to other vendor components via
   // /dev/vndbinder
+  mallopt(M_DECAY_TIME, 1);
   android::ProcessState::initWithDriver("/dev/vndbinder");
   int res;
   if (kLazyService) {

@@ -35,7 +35,9 @@ namespace {
 // Profiler implementatoin.
 class ProfilerImpl : public Profiler {
  public:
-  ProfilerImpl(SetPropFlag setting) : setting_(setting){};
+  ProfilerImpl(SetPropFlag setting) : setting_(setting){
+    object_init_time_ = CurrentTime();
+  };
   ~ProfilerImpl();
 
   // Setup the name of use case the profiler is running.
@@ -124,6 +126,9 @@ class ProfilerImpl : public Profiler {
     }
   }
 
+  // Timestamp of the class object initialized.
+  int64_t object_init_time_;
+
   // Create folder if not exist.
   void CreateFolder(std::string folder_path);
 
@@ -141,7 +146,8 @@ ProfilerImpl::~ProfilerImpl() {
     PrintResult();
   }
   if (setting_ & SetPropFlag::kDumpBit) {
-    DumpResult(dump_file_prefix_ + use_case_ + ".txt");
+    DumpResult(dump_file_prefix_ + use_case_ + "-TS" +
+        std::to_string(object_init_time_) + ".txt");
   }
 }
 

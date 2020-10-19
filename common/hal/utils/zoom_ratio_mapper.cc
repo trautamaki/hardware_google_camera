@@ -16,9 +16,11 @@
 
 #define LOG_TAG "GCH_ZoomRatioMapper"
 
-#include "zoom_ratio_mapper.h"
 #include <log/log.h>
+#include <cmath>
+
 #include "utils.h"
+#include "zoom_ratio_mapper.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -138,6 +140,14 @@ void ZoomRatioMapper::ApplyZoomRatio(const Dimension& active_array_dimension,
     ALOGE("%s, zoom_ratio(%f) is larger than upper bound(%f)", __FUNCTION__,
           zoom_ratio, zoom_ratio_range_.max);
     zoom_ratio = zoom_ratio_range_.max;
+  }
+
+  if (zoom_ratio_mapper_hwl_ != nullptr && is_request) {
+    zoom_ratio_mapper_hwl_->LimitZoomRatioIfConcurrent(&zoom_ratio);
+  }
+
+  if (fabs(zoom_ratio - entry.data.f[0]) > 1e-9) {
+    metadata->Set(ANDROID_CONTROL_ZOOM_RATIO, &zoom_ratio, entry.count);
   }
 
   for (auto tag_id : kRectToConvert) {
@@ -272,12 +282,12 @@ void ZoomRatioMapper::UpdatePoints(const float zoom_ratio, const uint32_t tag_id
   // x, y
   const uint32_t kDataSizePerPoint = 2;
   const uint32_t point_num = entry.count / kDataSizePerPoint;
-  std::vector<Point> points(point_num);
+  std::vector<PointI> points(point_num);
   uint32_t data_index = 0;
 
   for (uint32_t i = 0; i < point_num; i++) {
     data_index = i * kDataSizePerPoint;
-    Point* transformed = &points.at(i);
+    PointI* transformed = &points.at(i);
     transformed->x = entry.data.i32[data_index];
     transformed->y = entry.data.i32[data_index + 1];
     utils::RevertZoomRatio(zoom_ratio, active_array_dimension, true,
