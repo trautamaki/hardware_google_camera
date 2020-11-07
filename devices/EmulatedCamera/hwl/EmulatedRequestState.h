@@ -293,7 +293,7 @@ class EmulatedRequestState {
   std::set<uint8_t> available_ois_modes_;
   uint8_t ois_mode_ = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_OFF;
   bool report_ois_mode_ = false;
-  float pose_rotation_[5] = {.0f};
+  float pose_rotation_[4] = {.0f};
   float pose_translation_[3] = {.0f};
   float distortion_[5] = {.0f};
   float intrinsic_calibration_[5] = {.0f};
