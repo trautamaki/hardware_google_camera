@@ -1,6 +1,7 @@
 cc_library {
     name: "lib_sensor_listener",
-    vendor_available: true,
+    vendor: true,
+    owner: "google",
 
     srcs: [
         "goog_gyro_direct.cc",
