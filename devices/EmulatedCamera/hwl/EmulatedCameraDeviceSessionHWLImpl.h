@@ -149,6 +149,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
  private:
   status_t Initialize(uint32_t camera_id,
                       std::unique_ptr<HalCameraMetadata> static_meta);
+  status_t InitializeRequestProcessor();
 
   EmulatedCameraDeviceSessionHwlImpl(
       PhysicalDeviceMapPtr physical_devices,
@@ -171,6 +172,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   SensorCharacteristics sensor_chars_;
   std::shared_ptr<EmulatedTorchState> torch_state_;
   PhysicalDeviceMapPtr physical_device_map_;
+  LogicalCharacteristics logical_chars_;
 };
 
 }  // namespace android
