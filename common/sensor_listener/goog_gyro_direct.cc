@@ -74,7 +74,7 @@ std::unique_ptr<GoogGyroDirect> GoogGyroDirect::Create(
   RateLevel rate_level;
   if (sampling_rate < 110.f) {
     rate_level = RateLevel::NORMAL;
-  } else if (sampling_rate >= 110.f || sampling_rate < 440.f) {
+  } else if (sampling_rate >= 110.f && sampling_rate < 440.f) {
     rate_level = RateLevel::FAST;
   } else {
     rate_level = RateLevel::VERY_FAST;
