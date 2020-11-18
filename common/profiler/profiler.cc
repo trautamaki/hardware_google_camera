@@ -32,6 +32,17 @@ namespace {
 #undef LOG_TAG
 #define LOG_TAG "profiler"
 
+float StandardDeviation(std::vector<float> samples, float mean) {
+  int size = samples.size();
+
+  double sum = 0;
+  for (int i = 0; i < size; i++) {
+    sum += pow((samples[i] - mean), 2);
+  }
+
+  return static_cast<float>(sqrt(sum / (size - 1)));
+}
+
 // Profiler implementatoin.
 class ProfilerImpl : public Profiler {
  public:
@@ -95,17 +106,21 @@ class ProfilerImpl : public Profiler {
   // A structure to store node's profiling result.
   struct TimeResult {
     std::string node_name;
+    float min_dt;
     float max_dt;
     float avg_dt;
     float avg_count;
     float fps;
-    TimeResult(std::string node_name, float max_dt, float avg_dt, float count,
-               float fps)
+    float mean_max_stddevs;
+    TimeResult(std::string node_name, float min_dt, float max_dt, float avg_dt,
+               float count, float fps, float mean_max_stddevs)
         : node_name(node_name),
+          min_dt(min_dt),
           max_dt(max_dt),
           avg_dt(avg_dt),
           avg_count(count),
-          fps(fps) {
+          fps(fps),
+          mean_max_stddevs(mean_max_stddevs) {
     }
   };
 
@@ -282,19 +297,25 @@ void ProfilerImpl::PrintResult() {
 
   float sum_avg = 0.f;
   float max_max = 0.f;
+  float sum_min = 0.f;
   float sum_max = 0.f;
   for (const auto& [node_name, time_series] : timing_map_) {
     int num_frames = 0;
     int num_samples = 0;
-    float sum_dt = 0;
-    float max_dt = 0;
+    float sum_dt = 0.f;
+    float min_dt = std::numeric_limits<float>::max();
+    float max_dt = 0.f;
+    float mean_dt = 0.f;
+    std::vector<float> elapses;
     for (const auto& slot : time_series) {
       if (slot.count > 0) {
         float elapsed = (slot.end - slot.start) * kNanoToMilli;
         sum_dt += elapsed;
         num_samples += slot.count;
+        min_dt = std::min(min_dt, elapsed);
         max_dt = std::max(max_dt, elapsed);
         num_frames++;
+        elapses.push_back(elapsed);
       }
     }
     if (num_samples == 0) {
@@ -303,9 +324,18 @@ void ProfilerImpl::PrintResult() {
     float avg = sum_dt / std::max(1, num_samples);
     float avg_count = static_cast<float>(num_samples) /
                       static_cast<float>(std::max(1, num_frames));
-    sum_avg += avg * avg_count;
+    mean_dt = avg * avg_count;
+    sum_avg += mean_dt;
+    sum_min += min_dt;
     sum_max += max_dt;
     max_max = std::max(max_max, max_dt);
+
+    // calculate StandardDeviation
+    float mean_max_stddevs = 0.f;
+    if (elapses.size() > 1) {
+      float dev_dt = StandardDeviation(elapses, mean_dt);
+      mean_max_stddevs = (max_dt - mean_dt) / dev_dt;
+    }
 
     TimeSlot& frame_rate = frame_rate_map_[node_name];
     int64_t duration = frame_rate.end - frame_rate.start;
@@ -313,7 +343,8 @@ void ProfilerImpl::PrintResult() {
     if (duration > kNsPerSec) {
       fps = frame_rate.count * kNsPerSec / static_cast<float>(duration);
     }
-    time_results.push_back({node_name, max_dt, avg * avg_count, avg_count, fps});
+    time_results.push_back(
+        {node_name, min_dt, max_dt, mean_dt, avg_count, fps, mean_max_stddevs});
   }
 
   std::sort(time_results.begin(), time_results.end(),
@@ -322,19 +353,21 @@ void ProfilerImpl::PrintResult() {
   for (const auto it : time_results) {
     if (it.fps == 0) {
       ALOGE(
-          "%51.51s Max: %8.3f ms       Avg: %7.3f ms (Count = %3.1f) fps:    "
-          "NA",
-          it.node_name.c_str(), it.max_dt, it.avg_dt, it.avg_count);
+          "%51.51s Min: %8.3f ms,  Max: %8.3f ms,  Avg: %7.3f ms "
+          "(Count = %3.1f),  mean_max_stddevs: %6.2f,  fps:    NA",
+          it.node_name.c_str(), it.min_dt, it.max_dt, it.avg_dt, it.avg_count,
+          it.mean_max_stddevs);
     } else {
       ALOGE(
-          "%51.51s Max: %8.3f ms       Avg: %7.3f ms (Count = %3.1f) fps: "
-          "%8.2f",
-          it.node_name.c_str(), it.max_dt, it.avg_dt, it.avg_count, it.fps);
+          "%51.51s Min: %8.3f ms,  Max: %8.3f ms,  Avg: %7.3f ms "
+          "(Count = %3.1f),  mean_max_stddevs: %6.2f,  fps: %8.2f",
+          it.node_name.c_str(), it.min_dt, it.max_dt, it.avg_dt, it.avg_count,
+          it.mean_max_stddevs, it.fps);
     }
   }
 
-  ALOGE("%43.43s     MAX SUM: %8.3f ms,  AVG SUM: %7.3f ms", "", sum_max,
-        sum_avg);
+  ALOGE("%43.43s     MIN SUM: %8.3f ms,  MAX SUM: %8.3f ms,  AVG SUM: %7.3f ms",
+        "", sum_min, sum_max, sum_avg);
   ALOGE("");
 }
 
