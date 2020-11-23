@@ -36,13 +36,17 @@ struct HidlProfiler {
       mode |= google::camera_common::Profiler::SetPropFlag::kStopWatch;
     }
     profiler = google::camera_common::Profiler::Create(mode);
-    profiler->SetDumpFilePrefix(
-        "/data/vendor/camera/profiler/hidl_open_close_");
-    profiler->Start("Overall", 0);
+    if (profiler != nullptr) {
+      profiler->SetDumpFilePrefix(
+          "/data/vendor/camera/profiler/hidl_open_close_");
+      profiler->Start("Overall", 0);
+    }
   }
 
   ~HidlProfiler() {
-    profiler->End("Overall", 0);
+    if (profiler != nullptr) {
+      profiler->End("Overall", 0);
+    }
   }
 
   std::shared_ptr<google::camera_common::Profiler> profiler = nullptr;
@@ -55,14 +59,15 @@ struct HidlProfiler {
 std::unique_ptr<HidlProfiler> gHidlProfiler = nullptr;
 
 void StartNewConnector() {
-  if (gHidlProfiler != nullptr) {
+  if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
     gHidlProfiler->profiler->Start("<-- IDLE -->",
                                    ++gHidlProfiler->connector_counter);
   }
 }
 
 void EndConnector() {
-  if (gHidlProfiler != nullptr && gHidlProfiler->connector_counter != 0) {
+  if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr &&
+      gHidlProfiler->connector_counter != 0) {
     gHidlProfiler->profiler->End("<-- IDLE -->",
                                  gHidlProfiler->connector_counter);
   }
@@ -76,6 +81,11 @@ void EndProfiler() {
 
 std::unique_ptr<HidlProfilerItem> OnCameraOpen() {
   gHidlProfiler = std::make_unique<HidlProfiler>();
+  if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
+    ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
+    return nullptr;
+  }
+
   gHidlProfiler->has_camera_open = true;
   gHidlProfiler->profiler->SetUseCase("Open Camera");
 
@@ -88,6 +98,11 @@ std::unique_ptr<HidlProfilerItem> OnCameraFlush() {
   if (gHidlProfiler == nullptr) {
     gHidlProfiler = std::make_unique<HidlProfiler>();
   }
+
+  if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
+    ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
+    return nullptr;
+  }
   gHidlProfiler->profiler->SetUseCase("Flush Camera");
   return std::make_unique<HidlProfilerItem>(gHidlProfiler->profiler, "Flush",
                                             StartNewConnector,
@@ -99,6 +114,12 @@ std::unique_ptr<HidlProfilerItem> OnCameraClose() {
   if (gHidlProfiler == nullptr) {
     gHidlProfiler = std::make_unique<HidlProfiler>();
   }
+
+  if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
+    ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
+    return nullptr;
+  }
+
   gHidlProfiler->profiler->SetUseCase("Close Camera");
   return std::make_unique<HidlProfilerItem>(gHidlProfiler->profiler, "Close",
                                             EndProfiler);
@@ -109,6 +130,12 @@ std::unique_ptr<HidlProfilerItem> OnCameraStreamConfigure() {
   if (gHidlProfiler == nullptr) {
     gHidlProfiler = std::make_unique<HidlProfiler>();
   }
+
+  if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
+    ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
+    return nullptr;
+  }
+
   if (!gHidlProfiler->has_camera_open) {
     gHidlProfiler->profiler->SetUseCase("Reconfigure Stream");
   }
@@ -120,7 +147,7 @@ std::unique_ptr<HidlProfilerItem> OnCameraStreamConfigure() {
 
 void OnFirstFrameRequest() {
   EndConnector();
-  if (gHidlProfiler != nullptr) {
+  if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
     gHidlProfiler->profiler->Start(
         "First frame", google::camera_common::Profiler::kInvalidRequestId);
     gHidlProfiler->profiler->Start(
@@ -129,7 +156,7 @@ void OnFirstFrameRequest() {
 }
 
 void OnFirstFrameResult() {
-  if (gHidlProfiler != nullptr) {
+  if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
     gHidlProfiler->profiler->End(
         "First frame", google::camera_common::Profiler::kInvalidRequestId);
     gHidlProfiler->profiler->End(
