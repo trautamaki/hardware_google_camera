@@ -46,7 +46,7 @@ class GoogSensorSync : public GoogSensorWrapper {
   // Get whether sensor is enabled.
   // Return true if sensor is enabled, false otherwise.
   bool GetSensorEnablingStatus() const {
-    return enabled_;
+    return IsEnabled();
   }
 
   // Get latest n vsync timestamps, boottime_timestamps, frame_ids and

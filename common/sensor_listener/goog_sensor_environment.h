@@ -83,7 +83,7 @@ class GoogSensorEnvironment : public GoogSensorWrapper {
   // Get whether sensor is enabled.
   // Return true if sensor is enabled, false otherwise.
   bool GetSensorEnablingStatus() const {
-    return enabled_;
+    return IsEnabled();
   }
 
   // Get latest n sensor events' timestamps, event data and arrival times.
@@ -108,7 +108,7 @@ class GoogSensorEnvironment : public GoogSensorWrapper {
 
   // Get sensor name.
   const char* GetSensorName() const {
-    return kEnvironmentSensorName[environment_sensor_type_index_];
+    return GetSensorName(environment_sensor_type_);
   }
 
  protected:
@@ -125,20 +125,12 @@ class GoogSensorEnvironment : public GoogSensorWrapper {
   GoogSensorEnvironment(EnvironmentSensorType environment_sensor_type,
                         size_t event_queue_size);
 
-  // Integer index of enum type EnvironmentSensorType.
-  int environment_sensor_type_index_;
+  static const char* GetSensorName(EnvironmentSensorType motion_sensor_type);
 
-  // Corresponding ::android::hardware::sensors::V1_0::SensorType of
-  // ::android::camera_sensor_listener::EnvironmentSensorType.
-  ::android::hardware::sensors::V1_0::SensorType sensor_type_;
+  EnvironmentSensorType environment_sensor_type_;
 
   // Default sensor event queue size is set to 20.
   static constexpr size_t kDefaultEventQueueSize = 20;
-
-  // Sensor names of supported sensor types.
-  static constexpr const char* kEnvironmentSensorName[static_cast<int>(
-      EnvironmentSensorType::TOTAL_NUM)] = {"device_orientation", "light",
-                                            "proximity"};
 };
 
 }  // namespace camera_sensor_listener

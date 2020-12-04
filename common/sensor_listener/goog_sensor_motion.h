@@ -28,7 +28,7 @@ namespace camera_sensor_listener {
 // ::android::hardware::sensors::V1_0::SensorType::GYROSCOPE
 // ::android::hardware::sensors::V1_0::SensorType::LINEAR_ACCELERATION
 // ::android::hardware::sensors::V1_0::SensorType::MAGNETIC_FIELD
-enum class MotionSensorType {
+enum class MotionSensorType : int {
   ACCELEROMETER = 0,
   GRAVITY,
   GYROSCOPE,
@@ -106,7 +106,7 @@ class GoogSensorMotion : public GoogSensorWrapper {
   // Get whether sensor is enabled.
   // Return true if sensor is enabled, false otherwise.
   bool GetSensorEnablingStatus() const {
-    return enabled_;
+    return IsEnabled();
   }
 
   // Get latest n sensor events' timestamps, event data and arrival times.
@@ -152,9 +152,8 @@ class GoogSensorMotion : public GoogSensorWrapper {
       std::vector<float>* motion_vector_z,
       std::vector<int64_t>* event_arrival_timestamps) const;
 
-  // Get sensor name.
   const char* GetSensorName() const {
-    return kMotionSensorName[motion_sensor_type_index_];
+    return GetSensorName(motion_sensor_type_);
   }
 
  protected:
@@ -172,26 +171,13 @@ class GoogSensorMotion : public GoogSensorWrapper {
   GoogSensorMotion(MotionSensorType motion_sensor_type,
                    int64_t sampling_period_us, size_t event_queue_size);
 
-  // Integer index of enum type MotionSensorType.
-  int motion_sensor_type_index_;
+  static const char* GetSensorName(MotionSensorType motion_sensor_type);
 
-  // Corresponding ::android::hardware::sensors::V1_0::SensorType of
-  // ::android::camera_sensor_listener::MotionSensorType.
-  ::android::hardware::sensors::V1_0::SensorType sensor_type_;
+  MotionSensorType motion_sensor_type_;
 
-  // Default sensor event queue size is set to 20.
   static constexpr size_t kDefaultEventQueueSize = 20;
-
-  // Default sensor sampling period is set to 20000us(1e-6s), i.e. 50Hz.
-  static constexpr int64_t kDefaultSamplingPeriodUs = 20000;
-
-  // Minimum sampling period is 2500us, as supported max sampling rate is 400Hz.
-  static constexpr int64_t kMinSamplingPeriodUs = 2500;
-
-  // Sensor names of supported sensor types.
-  static constexpr const char* kMotionSensorName[static_cast<int>(
-      MotionSensorType::TOTAL_NUM)] = {"accelerometer", "gravity", "gyroscope",
-                                       "linear_acceleration", "magnetic_field"};
+  static constexpr int64_t kDefaultSamplingPeriodUs = 20000;  // = 50 Hz
+  static constexpr int64_t kMinSamplingPeriodUs = 2500;       // = 400 Hz
 };
 
 }  // namespace camera_sensor_listener

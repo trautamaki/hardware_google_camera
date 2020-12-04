@@ -107,26 +107,21 @@ void GoogSensorSync::GetLatestNSamples(
   latest_n_boottime_timestamps->clear();
   latest_n_arrival_timestamps->clear();
 
-  Mutex::Autolock el(event_deque_lock_);
-  if (!event_deque_.empty()) {
-    for (auto event = event_deque_.crbegin(); event != event_deque_.crend();
-         ++event) {
-      auto vsync_iter = latest_n_vsync_timestamps->begin();
-      latest_n_vsync_timestamps->insert(vsync_iter,
-                                        event->sensor_event.timestamp);
-      auto arrival_iter = latest_n_arrival_timestamps->begin();
-      latest_n_arrival_timestamps->insert(arrival_iter,
-                                          event->event_arrival_time_ns);
-      int64_t frame_id, boottime_timestamp;
-      ExtractFrameIdAndBoottimeTimestamp(*event, &frame_id, &boottime_timestamp);
-      auto frame_id_iter = latest_n_frame_ids->begin();
-      latest_n_frame_ids->insert(frame_id_iter, frame_id);
-      auto boottime_iter = latest_n_boottime_timestamps->begin();
-      latest_n_boottime_timestamps->insert(boottime_iter, boottime_timestamp);
-      if (latest_n_vsync_timestamps->size() >= num_sample) {
-        break;
-      }
-    }
+  if (num_sample < 0) {
+    return;
+  }
+  std::lock_guard<std::mutex> el(event_buffer_lock_);
+  int start_index =
+      std::max(0, static_cast<int>(event_buffer_.size()) - num_sample);
+  auto event = event_buffer_.begin();
+  std::advance(event, start_index);
+  for (; event != event_buffer_.end(); ++event) {
+    latest_n_vsync_timestamps->push_back(event->sensor_event.timestamp);
+    latest_n_arrival_timestamps->push_back(event->event_arrival_time_ns);
+    int64_t frame_id, boottime_timestamp;
+    ExtractFrameIdAndBoottimeTimestamp(*event, &frame_id, &boottime_timestamp);
+    latest_n_frame_ids->push_back(frame_id);
+    latest_n_boottime_timestamps->push_back(boottime_timestamp);
   }
 }
 
@@ -176,15 +171,15 @@ int32_t GoogSensorSync::GetSensorHandle() {
 int64_t GoogSensorSync::SyncTimestamp(int64_t timestamp) {
   status_t ret;
 
-  if (!enabled_) {
+  if (!IsEnabled()) {
     ALOGE("%s %d sensor_sync sensor is not enabled", __func__, __LINE__);
     return timestamp;
   }
 
-  Mutex::Autolock el(event_deque_lock_);
+  std::lock_guard<std::mutex> el(event_buffer_lock_);
   int64_t min_delta = kMaxTimeDriftNs;
   int64_t nearest_sync = timestamp;
-  for (auto event : event_deque_) {
+  for (auto event : event_buffer_) {
     if (llabs(event.sensor_event.timestamp - timestamp) < min_delta) {
       min_delta = llabs(event.sensor_event.timestamp - timestamp);
       nearest_sync = event.sensor_event.timestamp;
@@ -215,14 +210,14 @@ int64_t GoogSensorSync::SyncTimestamp(int64_t timestamp) {
 
 std::optional<ExtendedSensorEvent> GoogSensorSync::FindNearestEvent(
     int64_t timestamp) {
-  if (!enabled_) {
+  if (!IsEnabled()) {
     ALOGE("%s %d sensor_sync sensor is not enabled", __func__, __LINE__);
     return std::nullopt;
   }
-  Mutex::Autolock el(event_deque_lock_);
+  std::lock_guard<std::mutex> el(event_buffer_lock_);
   int64_t min_delta = kMaxTimeDriftNs;
   std::optional<ExtendedSensorEvent> nearest_event;
-  for (auto event : event_deque_) {
+  for (auto event : event_buffer_) {
     int64_t delta = llabs(event.sensor_event.timestamp - timestamp);
     if (delta < min_delta) {
       min_delta = delta;
@@ -233,13 +228,13 @@ std::optional<ExtendedSensorEvent> GoogSensorSync::FindNearestEvent(
 }
 
 int64_t GoogSensorSync::MatchTimestamp(int64_t timestamp, int64_t frame_id) {
-  if (!enabled_) {
+  if (!IsEnabled()) {
     ALOGE("%s %d sensor_sync sensor is not enabled", __func__, __LINE__);
     return timestamp;
   }
 
-  Mutex::Autolock el(event_deque_lock_);
-  for (auto event : event_deque_) {
+  std::lock_guard<std::mutex> el(event_buffer_lock_);
+  for (auto event : event_buffer_) {
     int64_t event_frame_id, event_timestamp;
     ExtractFrameIdAndBoottimeTimestamp(event, &event_frame_id, &event_timestamp);
     if (frame_id == event_frame_id && timestamp == event_timestamp) {

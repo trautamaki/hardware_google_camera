@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "android-base/thread_annotations.h"
 #define LOG_TAG "goog_sensor_wrapper"
 
 #include <algorithm>
@@ -61,14 +62,13 @@ class EventQueueCallback : public IEventQueueCallback {
   wp<GoogSensorWrapper> master_;
 };
 
-GoogSensorWrapper::GoogSensorWrapper(size_t event_queue_size,
+GoogSensorWrapper::GoogSensorWrapper(size_t event_buffer_size,
                                      int64_t sensor_sampling_period_us)
-    : enabled_(false),
-      event_queue_size_(event_queue_size),
+    : event_queue_(nullptr),
+      event_buffer_size_limit_(event_buffer_size),
       sensor_sampling_period_us_(sensor_sampling_period_us),
-      event_queue_(nullptr),
       handle_(-1),
-      event_processor_(nullptr) {
+      enabled_(false) {
   ALOGV("%s %d", __func__, __LINE__);
 }
 
@@ -78,14 +78,14 @@ GoogSensorWrapper::~GoogSensorWrapper() {
 
 status_t GoogSensorWrapper::SetEventProcessor(
     std::function<void(const ExtendedSensorEvent& event)> event_processor) {
-  Mutex::Autolock l(event_processor_lock_);
+  std::lock_guard<std::mutex> l(event_processor_lock_);
   event_processor_ = std::move(event_processor);
   return OK;
 }
 
 status_t GoogSensorWrapper::Enable() {
   status_t res = OK;
-  Mutex::Autolock l(event_queue_lock_);
+  std::lock_guard<std::mutex> l(event_queue_lock_);
 
   if (event_queue_ == nullptr) {
     res = InitializeEventQueueLocked();
@@ -113,7 +113,7 @@ status_t GoogSensorWrapper::Enable() {
 }
 
 status_t GoogSensorWrapper::Disable() {
-  Mutex::Autolock l(event_queue_lock_);
+  std::lock_guard<std::mutex> l(event_queue_lock_);
 
   if (enabled_) {
     if (event_queue_ != nullptr) {
@@ -152,6 +152,8 @@ status_t GoogSensorWrapper::InitializeEventQueueLocked() {
 
   manager->createEventQueue(
       new EventQueueCallback(this), [this](const auto& q, auto result) {
+        // The lock will be held when this synchronous callback executes
+        base::ScopedLockAssertion assertion(event_queue_lock_);
         if (result != Result::OK) {
           ALOGE("%s %d Cannot create event queue", __func__, __LINE__);
           return;
@@ -169,21 +171,21 @@ status_t GoogSensorWrapper::InitializeEventQueueLocked() {
 int GoogSensorWrapper::EventCallback(const Event& e) {
   ExtendedSensorEvent event;
   memset(&event, 0, sizeof(event));
-  Mutex::Autolock l(event_queue_lock_);
+  std::lock_guard<std::mutex> l(event_queue_lock_);
   event.sensor_event = e;
   if (event.sensor_event.sensorHandle == handle_ &&
       event.sensor_event.sensorType != SensorType::ADDITIONAL_INFO) {
     {
-      Mutex::Autolock l(event_deque_lock_);
-      if (event_deque_.size() >= GetEventQueueSize()) {
-        event_deque_.pop_front();
+      std::lock_guard<std::mutex> l(event_buffer_lock_);
+      if (event_buffer_.size() >= event_buffer_size_limit_) {
+        event_buffer_.pop_front();
       }
       event.event_arrival_time_ns = elapsedRealtimeNano();
-      event_deque_.push_back(event);
+      event_buffer_.push_back(event);
     }
 
     if (event_processor_ != nullptr) {
-      Mutex::Autolock el(event_processor_lock_);
+      std::lock_guard<std::mutex> el(event_processor_lock_);
       event_processor_(event);
     }
   }
