@@ -42,6 +42,10 @@ namespace google_camera_hal {
 enum SessionDataKey : uint64_t {
   kSessionDataKeyInvalidKey = 0,
   // Add HAL-visible keys here (visible to GCH and HWL).
+  // A pointer to an int variable that indicates current
+  // Eis frame delay number.
+  // The pointer will be valid for the entire session.
+  kSessionDataKeyEisFrameDelayIntPtr,
   kSessionDataKeyBeginHwlKeys = 0xFFFFFFFF
 };
 
