@@ -46,7 +46,7 @@ float StandardDeviation(std::vector<float> samples, float mean) {
 // Profiler implementatoin.
 class ProfilerImpl : public Profiler {
  public:
-  ProfilerImpl(SetPropFlag setting) : setting_(setting){
+  ProfilerImpl(SetPropFlag setting) : setting_(setting) {
     object_init_time_ = CurrentTime();
   };
   ~ProfilerImpl();
@@ -179,7 +179,7 @@ ProfilerImpl::~ProfilerImpl() {
   }
   if (setting_ & SetPropFlag::kDumpBit) {
     DumpResult(dump_file_prefix_ + use_case_ + "-TS" +
-        std::to_string(object_init_time_) + ".txt");
+               std::to_string(object_init_time_) + ".txt");
   }
 }
 
@@ -350,19 +350,19 @@ void ProfilerImpl::PrintResult() {
   std::sort(time_results.begin(), time_results.end(),
             [](auto a, auto b) { return a.avg_dt > b.avg_dt; });
 
-  for (const auto it : time_results) {
-    if (it.fps == 0) {
+  for (const auto& result : time_results) {
+    if (result.fps == 0) {
       ALOGE(
           "%51.51s Min: %8.3f ms,  Max: %8.3f ms,  Avg: %7.3f ms "
           "(Count = %3.1f),  mean_max_stddevs: %6.2f,  fps:    NA",
-          it.node_name.c_str(), it.min_dt, it.max_dt, it.avg_dt, it.avg_count,
-          it.mean_max_stddevs);
+          result.node_name.c_str(), result.min_dt, result.max_dt, result.avg_dt,
+          result.avg_count, result.mean_max_stddevs);
     } else {
       ALOGE(
           "%51.51s Min: %8.3f ms,  Max: %8.3f ms,  Avg: %7.3f ms "
           "(Count = %3.1f),  mean_max_stddevs: %6.2f,  fps: %8.2f",
-          it.node_name.c_str(), it.min_dt, it.max_dt, it.avg_dt, it.avg_count,
-          it.mean_max_stddevs, it.fps);
+          result.node_name.c_str(), result.min_dt, result.max_dt, result.avg_dt,
+          result.avg_count, result.mean_max_stddevs, result.fps);
     }
   }
 
@@ -496,11 +496,11 @@ std::shared_ptr<Profiler> Profiler::Create(int option) {
   SetPropFlag flag = static_cast<SetPropFlag>(option);
 
   if (flag == SetPropFlag::kDisable) {
-    return std::make_unique<ProfilerDummy>();
+    return std::make_shared<ProfilerDummy>();
   } else if (flag & SetPropFlag::kStopWatch) {
-    return std::make_unique<ProfilerStopwatchImpl>(flag);
+    return std::make_shared<ProfilerStopwatchImpl>(flag);
   } else {
-    return std::make_unique<ProfilerImpl>(flag);
+    return std::make_shared<ProfilerImpl>(flag);
   }
 }
 
