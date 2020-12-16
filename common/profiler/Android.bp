@@ -38,4 +38,5 @@ cc_library_shared {
 
     owner: "google",
     vendor_available: true,
+    host_supported: true,
 }
