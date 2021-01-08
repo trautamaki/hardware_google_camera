@@ -53,7 +53,7 @@ struct SensorBuffer {
   android_pixel_format_t format;
   android_dataspace_t dataSpace;
   StreamBuffer stream_buffer;
-  HandleImporter importer;
+  std::shared_ptr<HandleImporter> importer;
   HwlPipelineCallback callback;
   int acquire_fence_fd;
   bool is_input;
@@ -64,7 +64,7 @@ struct SensorBuffer {
     YCbCrPlanes img_y_crcb;
   } plane;
 
-  SensorBuffer()
+  SensorBuffer(std::shared_ptr<HandleImporter> handle_importer)
       : width(0),
         height(0),
         frame_number(0),
@@ -72,6 +72,7 @@ struct SensorBuffer {
         camera_id(0),
         format(HAL_PIXEL_FORMAT_RGBA_8888),
         dataSpace(HAL_DATASPACE_UNKNOWN),
+        importer(handle_importer),
         acquire_fence_fd(-1),
         is_input(false),
         is_failed_request(false),
@@ -97,12 +98,12 @@ struct std::default_delete<android::SensorBuffer> {
   inline void operator()(android::SensorBuffer* buffer) const {
     if (buffer != nullptr) {
       if (buffer->stream_buffer.buffer != nullptr) {
-        buffer->importer.unlock(buffer->stream_buffer.buffer);
-        buffer->importer.freeBuffer(buffer->stream_buffer.buffer);
+        buffer->importer->unlock(buffer->stream_buffer.buffer);
+        buffer->importer->freeBuffer(buffer->stream_buffer.buffer);
       }
 
       if (buffer->acquire_fence_fd >= 0) {
-        buffer->importer.closeFence(buffer->acquire_fence_fd);
+        buffer->importer->closeFence(buffer->acquire_fence_fd);
       }
 
       if ((buffer->stream_buffer.status != BufferStatus::kOk) &&

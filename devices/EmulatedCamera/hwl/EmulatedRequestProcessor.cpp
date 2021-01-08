@@ -41,6 +41,7 @@ EmulatedRequestProcessor::EmulatedRequestProcessor(uint32_t camera_id,
       request_state_(std::make_unique<EmulatedLogicalRequestState>(camera_id)) {
   ATRACE_CALL();
   request_thread_ = std::thread([this] { this->RequestProcessorLoop(); });
+  importer_ = std::make_shared<HandleImporter>();
 }
 
 EmulatedRequestProcessor::~EmulatedRequestProcessor() {
@@ -196,8 +197,8 @@ status_t EmulatedRequestProcessor::GetBufferSizeAndStride(
 }
 
 status_t EmulatedRequestProcessor::LockSensorBuffer(
-    const EmulatedStream& stream, HandleImporter& importer /*in*/,
-    buffer_handle_t buffer, SensorBuffer* sensor_buffer /*out*/) {
+    const EmulatedStream& stream, buffer_handle_t buffer,
+    SensorBuffer* sensor_buffer /*out*/) {
   if (sensor_buffer == nullptr) {
     return BAD_VALUE;
   }
@@ -207,7 +208,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
   auto usage = GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN;
   if (stream.override_format == HAL_PIXEL_FORMAT_YCBCR_420_888) {
     IMapper::Rect map_rect = {0, 0, width, height};
-    auto yuv_layout = importer.lockYCbCr(buffer, usage, map_rect);
+    auto yuv_layout = importer_->lockYCbCr(buffer, usage, map_rect);
     if ((yuv_layout.y != nullptr) && (yuv_layout.cb != nullptr) &&
         (yuv_layout.cr != nullptr)) {
       sensor_buffer->plane.img_y_crcb.img_y =
@@ -243,11 +244,11 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
     }
     if (stream.override_format == HAL_PIXEL_FORMAT_BLOB) {
       sensor_buffer->plane.img.img =
-          static_cast<uint8_t*>(importer.lock(buffer, usage, buffer_size));
+          static_cast<uint8_t*>(importer_->lock(buffer, usage, buffer_size));
     } else {
       IMapper::Rect region{0, 0, width, height};
       sensor_buffer->plane.img.img =
-          static_cast<uint8_t*>(importer.lock(buffer, usage, region));
+          static_cast<uint8_t*>(importer_->lock(buffer, usage, region));
     }
     if (sensor_buffer->plane.img.img == nullptr) {
       ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
@@ -264,7 +265,7 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
     uint32_t frame_number, const EmulatedStream& emulated_stream,
     uint32_t pipeline_id, HwlPipelineCallback callback,
     StreamBuffer stream_buffer) {
-  auto buffer = std::make_unique<SensorBuffer>();
+  auto buffer = std::make_unique<SensorBuffer>(importer_);
 
   auto stream = emulated_stream;
   // Make sure input stream formats are correctly mapped here
@@ -287,15 +288,15 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
   // In case buffer processing is successful, flip this flag accordingly
   buffer->stream_buffer.status = BufferStatus::kError;
 
-  if (!buffer->importer.importBuffer(buffer->stream_buffer.buffer)) {
+  if (!buffer->importer->importBuffer(buffer->stream_buffer.buffer)) {
     ALOGE("%s: Failed importing stream buffer!", __FUNCTION__);
     buffer.release();
     buffer = nullptr;
   }
 
   if (buffer.get() != nullptr) {
-    auto ret = LockSensorBuffer(stream, buffer->importer,
-                                buffer->stream_buffer.buffer, buffer.get());
+    auto ret =
+        LockSensorBuffer(stream, buffer->stream_buffer.buffer, buffer.get());
     if (ret != OK) {
       buffer.release();
       buffer = nullptr;
@@ -303,8 +304,8 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
   }
 
   if ((buffer.get() != nullptr) && (stream_buffer.acquire_fence != nullptr)) {
-    auto fence_status = buffer->importer.importFence(
-        stream_buffer.acquire_fence, buffer->acquire_fence_fd);
+    auto fence_status = importer_->importFence(stream_buffer.acquire_fence,
+                                               buffer->acquire_fence_fd);
     if (!fence_status) {
       ALOGE("%s: Failed importing acquire fence!", __FUNCTION__);
       buffer.release();

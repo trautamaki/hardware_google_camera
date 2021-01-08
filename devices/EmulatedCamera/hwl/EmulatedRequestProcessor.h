@@ -90,7 +90,6 @@ class EmulatedRequestProcessor {
                                   uint32_t* size /*out*/,
                                   uint32_t* stride /*out*/);
   status_t LockSensorBuffer(const EmulatedStream& stream,
-                            HandleImporter& importer /*in*/,
                             buffer_handle_t buffer,
                             SensorBuffer* sensor_buffer /*out*/);
   std::unique_ptr<Buffers> CreateSensorBuffers(
@@ -113,6 +112,7 @@ class EmulatedRequestProcessor {
   std::unique_ptr<EmulatedLogicalRequestState>
       request_state_;  // Stores and handles 3A and related camera states.
   std::unique_ptr<HalCameraMetadata> last_settings_;
+  std::shared_ptr<HandleImporter> importer_;
 
   EmulatedRequestProcessor(const EmulatedRequestProcessor&) = delete;
   EmulatedRequestProcessor& operator=(const EmulatedRequestProcessor&) = delete;
