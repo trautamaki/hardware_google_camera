@@ -38,7 +38,7 @@ struct ExtendedSensorEvent {
   int64_t event_arrival_time_ns;
 };
 
-class GoogSensorWrapper : public virtual RefBase {
+class GoogSensorWrapper : public RefBase {
  public:
   virtual ~GoogSensorWrapper();
 
