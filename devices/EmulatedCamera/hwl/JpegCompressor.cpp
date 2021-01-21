@@ -65,7 +65,7 @@ status_t JpegCompressor::QueueYUV420(std::unique_ptr<JpegYUV420Job> job) {
   ATRACE_CALL();
 
   if ((job->input.get() == nullptr) || (job->output.get() == nullptr) ||
-      (job->output->format != HAL_PIXEL_FORMAT_BLOB) ||
+      (job->output->format != PixelFormat::BLOB) ||
       (job->output->dataSpace != HAL_DATASPACE_V0_JFIF)) {
     ALOGE("%s: Unable to find buffers for JPEG source/destination",
           __FUNCTION__);

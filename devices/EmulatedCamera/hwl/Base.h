@@ -27,6 +27,7 @@
 namespace android {
 
 using android::hardware::camera::common::V1_0::helper::HandleImporter;
+using android::hardware::graphics::common::V1_1::PixelFormat;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::StreamBuffer;
 
@@ -37,6 +38,7 @@ struct YCbCrPlanes {
   uint32_t y_stride = 0;
   uint32_t cbcr_stride = 0;
   uint32_t cbcr_step = 0;
+  size_t bytesPerPixel = 1;
 };
 
 struct SinglePlane {
@@ -50,7 +52,7 @@ struct SensorBuffer {
   uint32_t frame_number;
   uint32_t pipeline_id;
   uint32_t camera_id;
-  android_pixel_format_t format;
+  PixelFormat format;
   android_dataspace_t dataSpace;
   StreamBuffer stream_buffer;
   std::shared_ptr<HandleImporter> importer;
@@ -70,7 +72,7 @@ struct SensorBuffer {
         frame_number(0),
         pipeline_id(0),
         camera_id(0),
-        format(HAL_PIXEL_FORMAT_RGBA_8888),
+        format(PixelFormat::RGBA_8888),
         dataSpace(HAL_DATASPACE_UNKNOWN),
         importer(handle_importer),
         acquire_fence_fd(-1),

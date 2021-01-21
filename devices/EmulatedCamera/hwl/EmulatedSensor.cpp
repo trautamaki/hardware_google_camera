@@ -510,7 +510,7 @@ bool EmulatedSensor::threadLoop() {
     if (next_input_buffer->size() > 1) {
       ALOGW("%s: Reprocess supports only single input!", __FUNCTION__);
     }
-    if (next_input_buffer->at(0)->format != HAL_PIXEL_FORMAT_YCBCR_420_888) {
+    if (next_input_buffer->at(0)->format != PixelFormat::YCBCR_420_888) {
       ALOGE(
           "%s: Reprocess input format: 0x%x not supported! Skipping reprocess!",
           __FUNCTION__, next_input_buffer->at(0)->format);
@@ -583,7 +583,7 @@ bool EmulatedSensor::threadLoop() {
 
       (*b)->stream_buffer.status = BufferStatus::kOk;
       switch ((*b)->format) {
-        case HAL_PIXEL_FORMAT_RAW16:
+        case PixelFormat::RAW16:
           if (!reprocess_request) {
             CaptureRaw((*b)->plane.img.img, device_settings->second.gain,
                        (*b)->width, device_chars->second);
@@ -593,7 +593,7 @@ bool EmulatedSensor::threadLoop() {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
           break;
-        case HAL_PIXEL_FORMAT_RGB_888:
+        case PixelFormat::RGB_888:
           if (!reprocess_request) {
             CaptureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
                        (*b)->plane.img.stride, RGBLayout::RGB,
@@ -604,7 +604,7 @@ bool EmulatedSensor::threadLoop() {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
           break;
-        case HAL_PIXEL_FORMAT_RGBA_8888:
+        case PixelFormat::RGBA_8888:
           if (!reprocess_request) {
             CaptureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
                        (*b)->plane.img.stride, RGBLayout::RGBA,
@@ -615,7 +615,7 @@ bool EmulatedSensor::threadLoop() {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
           break;
-        case HAL_PIXEL_FORMAT_BLOB:
+        case PixelFormat::BLOB:
           if ((*b)->dataSpace == HAL_DATASPACE_V0_JFIF) {
             YUV420Frame yuv_input{
                 .width =
@@ -676,8 +676,8 @@ bool EmulatedSensor::threadLoop() {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
           break;
-        case HAL_PIXEL_FORMAT_YCrCb_420_SP:
-        case HAL_PIXEL_FORMAT_YCbCr_420_888: {
+        case PixelFormat::YCRCB_420_SP:
+        case PixelFormat::YCBCR_420_888: {
           YUV420Frame yuv_input{
               .width =
                   reprocess_request ? (*next_input_buffer->begin())->width : 0,
@@ -702,7 +702,7 @@ bool EmulatedSensor::threadLoop() {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
         } break;
-        case HAL_PIXEL_FORMAT_Y16:
+        case PixelFormat::Y16:
           if (!reprocess_request) {
             if ((*b)->dataSpace == HAL_DATASPACE_DEPTH) {
               CaptureDepth((*b)->plane.img.img, device_settings->second.gain,
@@ -719,6 +719,21 @@ bool EmulatedSensor::threadLoop() {
             (*b)->stream_buffer.status = BufferStatus::kError;
           }
           break;
+        case PixelFormat::YCBCR_P010:
+            if (!reprocess_request) {
+              bool rotate = device_settings->second.rotate_and_crop ==
+                            ANDROID_SCALER_ROTATE_AND_CROP_90;
+              CaptureYUV420((*b)->plane.img_y_crcb, (*b)->width, (*b)->height,
+                            device_settings->second.gain,
+                            device_settings->second.zoom_ratio, rotate,
+                            device_chars->second);
+            } else {
+              ALOGE(
+                  "%s: Reprocess requests with output format %x no supported!",
+                  __FUNCTION__, (*b)->format);
+              (*b)->stream_buffer.status = BufferStatus::kError;
+            }
+            break;
         default:
           ALOGE("%s: Unknown format %x, no output", __FUNCTION__, (*b)->format);
           (*b)->stream_buffer.status = BufferStatus::kError;
@@ -1061,16 +1076,38 @@ void EmulatedSensor::CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width,
       g_count = gamma_table_[g_count];
       b_count = gamma_table_[b_count];
 
-      *px_y++ = (rgb_to_y[0] * r_count + rgb_to_y[1] * g_count +
-                 rgb_to_y[2] * b_count) /
-                scale_out_sq;
+      uint8_t y8 = (rgb_to_y[0] * r_count + rgb_to_y[1] * g_count +
+                    rgb_to_y[2] * b_count) /
+                   scale_out_sq;
+      if (yuv_layout.bytesPerPixel == 1) {
+        *px_y = y8;
+      } else if (yuv_layout.bytesPerPixel == 2) {
+        *(reinterpret_cast<uint16_t*>(px_y)) = htole16(y8 << 8);
+      } else {
+        ALOGE("%s: Unsupported bytes per pixel value: %zu", __func__,
+              yuv_layout.bytesPerPixel);
+        return;
+      }
+      px_y += yuv_layout.bytesPerPixel;
+
       if (out_y % 2 == 0 && out_x % 2 == 0) {
-        *px_cb = (rgb_to_cb[0] * r_count + rgb_to_cb[1] * g_count +
-                  rgb_to_cb[2] * b_count + rgb_to_cb[3]) /
-                 scale_out_sq;
-        *px_cr = (rgb_to_cr[0] * r_count + rgb_to_cr[1] * g_count +
-                  rgb_to_cr[2] * b_count + rgb_to_cr[3]) /
-                 scale_out_sq;
+        uint8_t cb8 = (rgb_to_cb[0] * r_count + rgb_to_cb[1] * g_count +
+                       rgb_to_cb[2] * b_count + rgb_to_cb[3]) /
+                      scale_out_sq;
+        uint8_t cr8 = (rgb_to_cr[0] * r_count + rgb_to_cr[1] * g_count +
+                       rgb_to_cr[2] * b_count + rgb_to_cr[3]) /
+                      scale_out_sq;
+        if (yuv_layout.bytesPerPixel == 1) {
+          *px_cb = cb8;
+          *px_cr = cr8;
+        } else if (yuv_layout.bytesPerPixel == 2) {
+          *(reinterpret_cast<uint16_t*>(px_cb)) = htole16(cb8 << 8);
+          *(reinterpret_cast<uint16_t*>(px_cr)) = htole16(cr8 << 8);
+        } else {
+          ALOGE("%s: Unsupported bytes per pixel value: %zu", __func__,
+                yuv_layout.bytesPerPixel);
+          return;
+        }
         px_cr += yuv_layout.cbcr_step;
         px_cb += yuv_layout.cbcr_step;
       }
