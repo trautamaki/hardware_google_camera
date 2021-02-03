@@ -175,7 +175,13 @@ void CameraDeviceSession::ProcessCaptureResult(
   }
 
   for (auto& stream_buffer : result->output_buffers) {
-    ALOGV("%s: [sbc] <= Return result buf[%p], bid[%" PRIu64
+    ALOGV("%s: [sbc] <= Return result output buf[%p], bid[%" PRIu64
+          "], strm[%d], frm[%u]",
+          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
+          stream_buffer.stream_id, result->frame_number);
+  }
+  for (auto& stream_buffer : result->input_buffers) {
+    ALOGV("%s: [sbc] <= Return result input buf[%p], bid[%" PRIu64
           "], strm[%d], frm[%u]",
           __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
           stream_buffer.stream_id, result->frame_number);
@@ -790,9 +796,7 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
 
   AppendOutputIntentToSettingsLocked(request, updated_request);
 
-  // If buffer management API is supported, buffers will be requested via
-  // RequestStreamBuffersFunc.
-  if (!buffer_management_supported_) {
+  {
     std::lock_guard<std::mutex> lock(imported_buffer_handle_map_lock_);
 
     status_t res = UpdateBufferHandlesLocked(&updated_request->input_buffers);
@@ -801,12 +805,15 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
             strerror(-res), res);
       return res;
     }
-
-    res = UpdateBufferHandlesLocked(&updated_request->output_buffers);
-    if (res != OK) {
-      ALOGE("%s: Updating output buffer handles failed: %s(%d)", __FUNCTION__,
-            strerror(-res), res);
-      return res;
+    // If buffer management API is supported, buffers will be requested via
+    // RequestStreamBuffersFunc.
+    if (!buffer_management_supported_) {
+      res = UpdateBufferHandlesLocked(&updated_request->output_buffers);
+      if (res != OK) {
+        ALOGE("%s: Updating output buffer handles failed: %s(%d)", __FUNCTION__,
+              strerror(-res), res);
+        return res;
+      }
     }
   }
 
@@ -880,19 +887,19 @@ status_t CameraDeviceSession::ImportRequestBufferHandles(
     const CaptureRequest& request) {
   ATRACE_CALL();
 
+  status_t res = ImportBufferHandles(request.input_buffers);
+  if (res != OK) {
+    ALOGE("%s: Importing input buffer handles failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
   if (buffer_management_supported_) {
     ALOGV(
         "%s: Buffer management is enabled. Skip importing buffers in "
         "requests.",
         __FUNCTION__);
     return OK;
-  }
-
-  status_t res = ImportBufferHandles(request.input_buffers);
-  if (res != OK) {
-    ALOGE("%s: Importing input buffer handles failed: %s(%d)", __FUNCTION__,
-          strerror(-res), res);
-    return res;
   }
 
   res = ImportBufferHandles(request.output_buffers);
@@ -1095,6 +1102,12 @@ void CameraDeviceSession::CheckRequestForStreamBufferCacheManager(
   if (res != OK) {
     ALOGE("%s: Failed to check if streams are active.", __FUNCTION__);
     return;
+  }
+
+  // Note: This function should only be called if buffer_management_supported_
+  // is true.
+  if (pending_request_streams_.empty()) {
+    pending_requests_tracker_->OnBufferCacheFlushed();
   }
 
   // Add streams into pending_request_streams_
@@ -1537,6 +1550,11 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
       ALOGE("%s: Could not fine framework stream in hal configured stream list",
             __FUNCTION__);
       return UNKNOWN_ERROR;
+    }
+    // Input stream buffers are always allocated by the camera service, not by
+    // request_stream_buffers() callback from the HAL.
+    if (stream.stream_type != StreamType::kOutput) {
+      continue;
     }
 
     StreamBufferRequestFunc session_request_func = StreamBufferRequestFunc(
