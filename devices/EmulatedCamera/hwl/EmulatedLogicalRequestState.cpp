@@ -283,4 +283,66 @@ EmulatedLogicalRequestState::AdaptLogicalCharacteristics(
   return logical_chars;
 }
 
+status_t EmulatedLogicalRequestState::UpdateRequestForDynamicStreams(
+    HwlPipelineRequest* request, const std::vector<EmulatedPipeline>& pipelines,
+    const DynamicStreamIdMapType& dynamic_stream_id_map) {
+  if (request == nullptr) {
+    ALOGE("%s: Request must not be null!", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  uint32_t pipeline_id = request->pipeline_id;
+  if (pipeline_id >= pipelines.size()) {
+    ALOGE("%s: Invalid pipeline id %d", __FUNCTION__, pipeline_id);
+    return BAD_VALUE;
+  }
+
+  // Only logical camera support dynamic size streams.
+  if (!is_logical_device_) return OK;
+
+  if (request->settings != nullptr) {
+    camera_metadata_ro_entry entry;
+    auto stat = request->settings->Get(ANDROID_LENS_FOCAL_LENGTH, &entry);
+    if (stat != OK || entry.count != 1) {
+      ALOGW("%s: Focal length absent from request, re-using older value!",
+            __FUNCTION__);
+      return BAD_VALUE;
+    }
+    float focal_length = entry.data.f[0];
+    if (physical_focal_length_map_.find(focal_length) ==
+        physical_focal_length_map_.end()) {
+      ALOGW("%s: Invalid focal length %f", __FUNCTION__, focal_length);
+      return BAD_VALUE;
+    }
+    active_physical_device_id_ = physical_focal_length_map_[focal_length];
+  }
+
+  const auto& current_pipeline = pipelines[pipeline_id];
+  for (auto& output_buffer : request->output_buffers) {
+    auto& current_stream = current_pipeline.streams.at(output_buffer.stream_id);
+    if (current_stream.group_id == -1) continue;
+
+    const auto& stream_ids_for_camera =
+        dynamic_stream_id_map.find(active_physical_device_id_);
+    if (stream_ids_for_camera == dynamic_stream_id_map.end()) {
+      ALOGW(
+          "%s: Failed to find physical camera id %d in dynamic stream id map!",
+          __FUNCTION__, active_physical_device_id_);
+      continue;
+    }
+    const auto& stream_id =
+        stream_ids_for_camera->second.find(current_stream.group_id);
+    if (stream_id == stream_ids_for_camera->second.end()) {
+      ALOGW(
+          "%s: Failed to find group id %d in dynamic stream id map for camera "
+          "%d",
+          __FUNCTION__, current_stream.group_id, active_physical_device_id_);
+      continue;
+    }
+
+    output_buffer.stream_id = stream_id->second;
+  }
+  return OK;
+}
+
 }  // namespace android

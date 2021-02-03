@@ -17,9 +17,9 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_DEVICE_SESSION_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_DEVICE_SESSION_H_
 
-#include <android/hardware/camera/device/3.5/ICameraDevice.h>
 #include <android/hardware/camera/device/3.5/ICameraDeviceCallback.h>
-#include <android/hardware/camera/device/3.5/ICameraDeviceSession.h>
+#include <android/hardware/camera/device/3.7/ICameraDevice.h>
+#include <android/hardware/camera/device/3.7/ICameraDeviceSession.h>
 #include <android/hardware/thermal/2.0/IThermal.h>
 #include <fmq/MessageQueue.h>
 
@@ -33,16 +33,16 @@ namespace android {
 namespace hardware {
 namespace camera {
 namespace device {
-namespace V3_5 {
+namespace V3_7 {
 namespace implementation {
 
 using ::android::hardware::camera::common::V1_0::Status;
 using ::android::hardware::camera::device::V3_2::BufferCache;
 using ::android::hardware::camera::device::V3_2::RequestTemplate;
-using ::android::hardware::camera::device::V3_4::CaptureRequest;
 using ::android::hardware::camera::device::V3_5::ICameraDeviceCallback;
-using ::android::hardware::camera::device::V3_5::ICameraDeviceSession;
-using ::android::hardware::camera::device::V3_5::StreamConfiguration;
+using ::android::hardware::camera::device::V3_7::CaptureRequest;
+using ::android::hardware::camera::device::V3_7::ICameraDeviceSession;
+using ::android::hardware::camera::device::V3_7::StreamConfiguration;
 using ::android::hardware::camera::implementation::HidlProfiler;
 
 using MetadataQueue =
@@ -66,12 +66,28 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
   virtual ~HidlCameraDeviceSession();
 
   // Override functions in ICameraDeviceSession
+  Return<void> configureStreams_3_7(
+      const StreamConfiguration& requestedConfiguration,
+      configureStreams_3_7_cb _hidl_cb) override;
+
+  Return<void> processCaptureRequest_3_7(
+      const hidl_vec<CaptureRequest>& requests,
+      const hidl_vec<BufferCache>& cachesToRemove,
+      processCaptureRequest_3_7_cb _hidl_cb) override;
+
+  Return<void> configureStreams_3_6(
+      const V3_5::StreamConfiguration& requestedConfiguration,
+      ICameraDeviceSession::configureStreams_3_6_cb _hidl_cb) override;
+
+  Return<void> switchToOffline(const hidl_vec<int32_t>& streamsToKeep,
+                               switchToOffline_cb _hidl_cb) override;
+
   Return<void> constructDefaultRequestSettings(
       RequestTemplate type,
       ICameraDeviceSession::constructDefaultRequestSettings_cb _hidl_cb) override;
 
   Return<void> configureStreams_3_5(
-      const StreamConfiguration& requestedConfiguration,
+      const V3_5::StreamConfiguration& requestedConfiguration,
       ICameraDeviceSession::configureStreams_3_5_cb _hidl_cb) override;
 
   Return<void> getCaptureRequestMetadataQueue(
@@ -81,7 +97,7 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
       ICameraDeviceSession::getCaptureResultMetadataQueue_cb _hidl_cb) override;
 
   Return<void> processCaptureRequest_3_4(
-      const hidl_vec<CaptureRequest>& requests,
+      const hidl_vec<V3_4::CaptureRequest>& requests,
       const hidl_vec<BufferCache>& cachesToRemove,
       processCaptureRequest_3_4_cb _hidl_cb) override;
 
@@ -212,7 +228,7 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
 };
 
 }  // namespace implementation
-}  // namespace V3_5
+}  // namespace V3_7
 }  // namespace device
 }  // namespace camera
 }  // namespace hardware

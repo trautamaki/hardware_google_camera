@@ -106,7 +106,7 @@ enum class StreamRotation : uint32_t {
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_4::Stream;
+// ::android::hardware::camera::device::V3_7::Stream;
 struct Stream {
   int32_t id = -1;
   StreamType stream_type = StreamType::kOutput;
@@ -119,6 +119,7 @@ struct Stream {
   bool is_physical_camera_stream = false;
   uint32_t physical_camera_id = 0;
   uint32_t buffer_size = 0;
+  int32_t group_id = -1;
 };
 
 // See the definition of
@@ -207,6 +208,9 @@ struct CaptureRequest {
   // Maps from physical camera ID to physical camera settings.
   std::unordered_map<uint32_t, std::unique_ptr<HalCameraMetadata>>
       physical_camera_settings;
+
+  int32_t input_width;
+  int32_t input_height;
 };
 
 // See the definition of

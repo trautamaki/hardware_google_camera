@@ -32,7 +32,7 @@ namespace android {
 namespace hardware {
 namespace camera {
 namespace device {
-namespace V3_5 {
+namespace V3_7 {
 namespace implementation {
 
 namespace hidl_utils = ::android::hardware::camera::implementation::hidl_utils;
@@ -40,9 +40,11 @@ namespace hidl_utils = ::android::hardware::camera::implementation::hidl_utils;
 using ::android::hardware::camera::device::V3_2::NotifyMsg;
 using ::android::hardware::camera::device::V3_2::StreamBuffer;
 using ::android::hardware::camera::device::V3_4::CaptureResult;
-using ::android::hardware::camera::device::V3_4::HalStreamConfiguration;
+using ::android::hardware::camera::device::V3_5::BufferRequest;
 using ::android::hardware::camera::device::V3_5::BufferRequestStatus;
 using ::android::hardware::camera::device::V3_5::StreamBufferRet;
+using ::android::hardware::camera::device::V3_5::StreamBuffersVal;
+using ::android::hardware::camera::device::V3_6::HalStreamConfiguration;
 using ::android::hardware::thermal::V1_0::ThermalStatus;
 using ::android::hardware::thermal::V1_0::ThermalStatusCode;
 using ::android::hardware::thermal::V2_0::Temperature;
@@ -548,10 +550,10 @@ Return<void> HidlCameraDeviceSession::constructDefaultRequestSettings(
   return Void();
 }
 
-Return<void> HidlCameraDeviceSession::configureStreams_3_5(
+Return<void> HidlCameraDeviceSession::configureStreams_3_7(
     const StreamConfiguration& requestedConfiguration,
-    ICameraDeviceSession::configureStreams_3_5_cb _hidl_cb) {
-  ATRACE_NAME("HidlCameraDeviceSession::configureStreams_3_5");
+    ICameraDeviceSession::configureStreams_3_6_cb _hidl_cb) {
+  ATRACE_NAME("HidlCameraDeviceSession::configureStreams_3_7");
   HalStreamConfiguration hidl_hal_configs;
   if (device_session_ == nullptr) {
     _hidl_cb(Status::ILLEGAL_ARGUMENT, hidl_hal_configs);
@@ -601,10 +603,10 @@ Return<void> HidlCameraDeviceSession::getCaptureResultMetadataQueue(
   return Void();
 }
 
-Return<void> HidlCameraDeviceSession::processCaptureRequest_3_4(
+Return<void> HidlCameraDeviceSession::processCaptureRequest_3_7(
     const hidl_vec<CaptureRequest>& requests,
     const hidl_vec<BufferCache>& cachesToRemove,
-    processCaptureRequest_3_4_cb _hidl_cb) {
+    processCaptureRequest_3_7_cb _hidl_cb) {
   if (device_session_ == nullptr) {
     _hidl_cb(Status::ILLEGAL_ARGUMENT, 0);
     return Void();
@@ -615,7 +617,8 @@ Return<void> HidlCameraDeviceSession::processCaptureRequest_3_4(
     first_frame_requested_ = true;
     profile_first_request = true;
     ATRACE_BEGIN("HidlCameraDeviceSession::FirstRequest");
-    num_pending_first_frame_buffers_ = requests[0].v3_2.outputBuffers.size();
+    num_pending_first_frame_buffers_ =
+        requests[0].v3_4.v3_2.outputBuffers.size();
     hidl_profiler_->FirstFrameStart();
     ATRACE_ASYNC_BEGIN("first_frame", 0);
   }
@@ -762,11 +765,54 @@ Return<void> HidlCameraDeviceSession::configureStreams_3_4(
   _hidl_cb(Status::ILLEGAL_ARGUMENT, V3_4::HalStreamConfiguration());
   return Void();
 }
+Return<void> HidlCameraDeviceSession::configureStreams_3_5(
+    const V3_5::StreamConfiguration& requestedConfiguration,
+    configureStreams_3_5_cb _hidl_cb) {
+  configureStreams_3_6(
+      requestedConfiguration,
+      [_hidl_cb](Status s, device::V3_6::HalStreamConfiguration halConfig) {
+        V3_4::HalStreamConfiguration halConfig3_4;
+        halConfig3_4.streams.resize(halConfig.streams.size());
+        for (size_t i = 0; i < halConfig.streams.size(); i++) {
+          halConfig3_4.streams[i] = halConfig.streams[i].v3_4;
+        }
+        _hidl_cb(s, halConfig3_4);
+      });
+
+  return Void();
+}
+Return<void> HidlCameraDeviceSession::configureStreams_3_6(
+    const V3_5::StreamConfiguration& requestedConfiguration,
+    configureStreams_3_6_cb _hidl_cb) {
+  StreamConfiguration requestedConfiguration3_7;
+  requestedConfiguration3_7.streams.resize(
+      requestedConfiguration.v3_4.streams.size());
+  for (size_t i = 0; i < requestedConfiguration.v3_4.streams.size(); i++) {
+    requestedConfiguration3_7.streams[i].v3_4 =
+        requestedConfiguration.v3_4.streams[i];
+    requestedConfiguration3_7.streams[i].groupId = -1;
+  }
+  requestedConfiguration3_7.operationMode =
+      requestedConfiguration.v3_4.operationMode;
+  requestedConfiguration3_7.sessionParams =
+      requestedConfiguration.v3_4.sessionParams;
+  requestedConfiguration3_7.streamConfigCounter =
+      requestedConfiguration.streamConfigCounter;
+  requestedConfiguration3_7.multiResolutionInputImage = false;
+
+  configureStreams_3_7(requestedConfiguration3_7, _hidl_cb);
+  return Void();
+}
+Return<void> HidlCameraDeviceSession::switchToOffline(
+    const hidl_vec<int32_t>&, switchToOffline_cb _hidl_cb) {
+  _hidl_cb(Status::ILLEGAL_ARGUMENT, V3_6::CameraOfflineSessionInfo(), nullptr);
+  return Void();
+}
 Return<void> HidlCameraDeviceSession::processCaptureRequest(
     const hidl_vec<V3_2::CaptureRequest>& requests,
     const hidl_vec<BufferCache>& cachesToRemove,
     processCaptureRequest_cb _hidl_cb) {
-  hidl_vec<CaptureRequest> requests_3_4;
+  hidl_vec<V3_4::CaptureRequest> requests_3_4;
   requests_3_4.resize(requests.size());
   for (uint32_t i = 0; i < requests_3_4.size(); i++) {
     requests_3_4[i].v3_2 = requests[i];
@@ -775,8 +821,21 @@ Return<void> HidlCameraDeviceSession::processCaptureRequest(
   return processCaptureRequest_3_4(requests_3_4, cachesToRemove, _hidl_cb);
 }
 
+Return<void> HidlCameraDeviceSession::processCaptureRequest_3_4(
+    const hidl_vec<V3_4::CaptureRequest>& requests,
+    const hidl_vec<BufferCache>& cachesToRemove,
+    processCaptureRequest_cb _hidl_cb) {
+  hidl_vec<V3_7::CaptureRequest> requests_3_7;
+  requests_3_7.resize(requests.size());
+  for (uint32_t i = 0; i < requests_3_7.size(); i++) {
+    requests_3_7[i].v3_4 = requests[i];
+  }
+
+  return processCaptureRequest_3_7(requests_3_7, cachesToRemove, _hidl_cb);
+}
+
 }  // namespace implementation
-}  // namespace V3_5
+}  // namespace V3_7
 }  // namespace device
 }  // namespace camera
 }  // namespace hardware

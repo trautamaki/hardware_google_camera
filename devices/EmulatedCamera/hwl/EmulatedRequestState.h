@@ -30,7 +30,6 @@ using google_camera_hal::HalStream;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineRequest;
 using google_camera_hal::RequestTemplate;
-using google_camera_hal::StreamBuffer;
 
 struct PendingRequest;
 

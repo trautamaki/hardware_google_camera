@@ -29,24 +29,10 @@
 namespace android {
 
 using google_camera_hal::HalCameraMetadata;
-using google_camera_hal::HalStream;
-using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineRequest;
+using google_camera_hal::HwlSessionCallback;
 using google_camera_hal::RequestTemplate;
 using google_camera_hal::StreamBuffer;
-
-struct EmulatedStream : public HalStream {
-  uint32_t width, height;
-  size_t buffer_size;
-  bool is_input;
-};
-
-struct EmulatedPipeline {
-  HwlPipelineCallback cb;
-  // stream id -> stream map
-  std::unordered_map<uint32_t, EmulatedStream> streams;
-  uint32_t physical_camera_id, pipeline_id;
-};
 
 struct PendingRequest {
   std::unique_ptr<HalCameraMetadata> settings;
@@ -56,14 +42,16 @@ struct PendingRequest {
 
 class EmulatedRequestProcessor {
  public:
-  EmulatedRequestProcessor(uint32_t camera_id, sp<EmulatedSensor> sensor);
+  EmulatedRequestProcessor(uint32_t camera_id, sp<EmulatedSensor> sensor,
+                           const HwlSessionCallback& session_callback);
   virtual ~EmulatedRequestProcessor();
 
   // Process given pipeline requests and invoke the respective callback in a
   // separate thread
   status_t ProcessPipelineRequests(
-      uint32_t frame_number, const std::vector<HwlPipelineRequest>& requests,
-      const std::vector<EmulatedPipeline>& pipelines);
+      uint32_t frame_number, std::vector<HwlPipelineRequest>& requests,
+      const std::vector<EmulatedPipeline>& pipelines,
+      const DynamicStreamIdMapType& dynamic_stream_id_map);
 
   status_t GetDefaultRequest(
       RequestTemplate type,
@@ -73,6 +61,8 @@ class EmulatedRequestProcessor {
 
   status_t Initialize(std::unique_ptr<HalCameraMetadata> static_meta,
                       PhysicalDeviceMapPtr physical_devices);
+
+  void SetSessionCallback(const HwlSessionCallback& hwl_session_callback);
 
  private:
   void RequestProcessorLoop();
@@ -109,6 +99,7 @@ class EmulatedRequestProcessor {
   std::queue<PendingRequest> pending_requests_;
   uint32_t camera_id_;
   sp<EmulatedSensor> sensor_;
+  HwlSessionCallback session_callback_;
   std::unique_ptr<EmulatedLogicalRequestState>
       request_state_;  // Stores and handles 3A and related camera states.
   std::unique_ptr<HalCameraMetadata> last_settings_;

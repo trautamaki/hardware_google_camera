@@ -41,6 +41,7 @@ cc_library_shared {
         "android.hardware.camera.provider@2.4",
         "android.hardware.camera.provider@2.5",
         "android.hardware.camera.provider@2.6",
+        "android.hardware.camera.provider@2.7",
         "android.hardware.sensors@1.0",
         "android.hidl.allocator@1.0",
         "libbase",

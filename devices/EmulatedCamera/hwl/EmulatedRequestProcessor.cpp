@@ -34,10 +34,12 @@ using google_camera_hal::HwlPipelineResult;
 using google_camera_hal::MessageType;
 using google_camera_hal::NotifyMessage;
 
-EmulatedRequestProcessor::EmulatedRequestProcessor(uint32_t camera_id,
-                                                   sp<EmulatedSensor> sensor)
+EmulatedRequestProcessor::EmulatedRequestProcessor(
+    uint32_t camera_id, sp<EmulatedSensor> sensor,
+    const HwlSessionCallback& session_callback)
     : camera_id_(camera_id),
       sensor_(sensor),
+      session_callback_(session_callback),
       request_state_(std::make_unique<EmulatedLogicalRequestState>(camera_id)) {
   ATRACE_CALL();
   request_thread_ = std::thread([this] { this->RequestProcessorLoop(); });
@@ -57,13 +59,15 @@ EmulatedRequestProcessor::~EmulatedRequestProcessor() {
 }
 
 status_t EmulatedRequestProcessor::ProcessPipelineRequests(
-    uint32_t frame_number, const std::vector<HwlPipelineRequest>& requests,
-    const std::vector<EmulatedPipeline>& pipelines) {
+    uint32_t frame_number, std::vector<HwlPipelineRequest>& requests,
+    const std::vector<EmulatedPipeline>& pipelines,
+    const DynamicStreamIdMapType& dynamic_stream_id_map) {
   ATRACE_CALL();
+  status_t res = OK;
 
   std::unique_lock<std::mutex> lock(process_mutex_);
 
-  for (const auto& request : requests) {
+  for (auto& request : requests) {
     if (request.pipeline_id >= pipelines.size()) {
       ALOGE("%s: Pipeline request with invalid pipeline id: %u", __FUNCTION__,
             request.pipeline_id);
@@ -75,9 +79,17 @@ status_t EmulatedRequestProcessor::ProcessPipelineRequests(
           lock, std::chrono::nanoseconds(
                     EmulatedSensor::kSupportedFrameDurationRange[1]));
       if (result == std::cv_status::timeout) {
-        ALOGE("%s Timed out waiting for a pending request slot", __FUNCTION__);
+        ALOGE("%s: Timed out waiting for a pending request slot", __FUNCTION__);
         return TIMED_OUT;
       }
+    }
+
+    res = request_state_->UpdateRequestForDynamicStreams(&request, pipelines,
+                                                         dynamic_stream_id_map);
+    if (res != OK) {
+      ALOGE("%s: Failed to update request for dynamic streams: %s(%d)",
+            __FUNCTION__, strerror(-res), res);
+      return res;
     }
 
     auto output_buffers = CreateSensorBuffers(
@@ -106,9 +118,40 @@ std::unique_ptr<Buffers> EmulatedRequestProcessor::CreateSensorBuffers(
     return nullptr;
   }
 
+  std::vector<StreamBuffer> requested_buffers;
+  for (auto& buffer : buffers) {
+    if (buffer.buffer != nullptr) {
+      requested_buffers.push_back(buffer);
+      continue;
+    }
+
+    if (session_callback_.request_stream_buffers != nullptr) {
+      std::vector<StreamBuffer> one_requested_buffer;
+      status_t res = session_callback_.request_stream_buffers(
+          buffer.stream_id, 1, &one_requested_buffer, frame_number);
+      if (res != OK) {
+        ALOGE("%s: request_stream_buffers failed: %s(%d)", __FUNCTION__,
+              strerror(-res), res);
+        continue;
+      }
+      if (one_requested_buffer.size() != 1 ||
+          one_requested_buffer[0].buffer == nullptr) {
+        ALOGE("%s: request_stream_buffers failed to return a valid buffer",
+              __FUNCTION__);
+        continue;
+      }
+      requested_buffers.push_back(one_requested_buffer[0]);
+    }
+  }
+
+  if (requested_buffers.size() == 0) {
+    ALOGE("%s: Failed to acquire sensor buffers", __FUNCTION__);
+    return nullptr;
+  }
+
   auto sensor_buffers = std::make_unique<Buffers>();
-  sensor_buffers->reserve(buffers.size());
-  for (const auto& buffer : buffers) {
+  sensor_buffers->reserve(requested_buffers.size());
+  for (auto& buffer : requested_buffers) {
     auto sensor_buffer = CreateSensorBuffer(
         frame_number, streams.at(buffer.stream_id), pipeline_id, cb, buffer);
     if (sensor_buffer.get() != nullptr) {
@@ -292,13 +335,7 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
   // In case buffer processing is successful, flip this flag accordingly
   buffer->stream_buffer.status = BufferStatus::kError;
 
-  if (!buffer->importer->importBuffer(buffer->stream_buffer.buffer)) {
-    ALOGE("%s: Failed importing stream buffer!", __FUNCTION__);
-    buffer.release();
-    buffer = nullptr;
-  }
-
-  if (buffer.get() != nullptr) {
+  if (buffer->stream_buffer.buffer != nullptr) {
     auto ret =
         LockSensorBuffer(stream, buffer->stream_buffer.buffer, buffer.get());
     if (ret != OK) {
@@ -439,6 +476,12 @@ status_t EmulatedRequestProcessor::Initialize(
   std::lock_guard<std::mutex> lock(process_mutex_);
   return request_state_->Initialize(std::move(static_meta),
                                     std::move(physical_devices));
+}
+
+void EmulatedRequestProcessor::SetSessionCallback(
+    const HwlSessionCallback& hwl_session_callback) {
+  std::lock_guard<std::mutex> lock(process_mutex_);
+  session_callback_ = hwl_session_callback;
 }
 
 status_t EmulatedRequestProcessor::GetDefaultRequest(
