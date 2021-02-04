@@ -640,20 +640,20 @@ uint32_t EmulatedCameraProviderHwlImpl::ParseCharacteristics(
 
 status_t EmulatedCameraProviderHwlImpl::WaitForQemuSfFakeCameraPropertyAvailable() {
   // Camera service may start running before qemu-props sets
-  // qemu.sf.fake_camera to any of the follwing four values:
+  // vendor.qemu.sf.fake_camera to any of the following four values:
   // "none,front,back,both"; so we need to wait.
   int num_attempts = 100;
   char prop[PROPERTY_VALUE_MAX];
   bool timeout = true;
   for (int i = 0; i < num_attempts; ++i) {
-    if (property_get("qemu.sf.fake_camera", prop, nullptr) != 0) {
+    if (property_get("vendor.qemu.sf.fake_camera", prop, nullptr) != 0) {
       timeout = false;
       break;
     }
     usleep(5000);
   }
   if (timeout) {
-    ALOGE("timeout (%dms) waiting for property qemu.sf.fake_camera to be set\n",
+    ALOGE("timeout (%dms) waiting for property vendor.qemu.sf.fake_camera to be set\n",
           5 * num_attempts);
     return BAD_VALUE;
   }
@@ -676,7 +676,7 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
     // Android Studio Emulator
     if (!property_get_bool("ro.kernel.qemu.legacy_fake_camera", false)) {
       if (WaitForQemuSfFakeCameraPropertyAvailable() == OK) {
-        property_get("qemu.sf.fake_camera", prop, nullptr);
+        property_get("vendor.qemu.sf.fake_camera", prop, nullptr);
         if (strcmp(prop, "both") == 0) {
           configurationFileLocation.emplace_back(kConfigurationFileLocation[0]);
           configurationFileLocation.emplace_back(kConfigurationFileLocation[1]);
