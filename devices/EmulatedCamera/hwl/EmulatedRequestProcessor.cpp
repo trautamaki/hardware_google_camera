@@ -206,7 +206,10 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
   auto width = static_cast<int32_t>(stream.width);
   auto height = static_cast<int32_t>(stream.height);
   auto usage = GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN;
-  if (stream.override_format == HAL_PIXEL_FORMAT_YCBCR_420_888) {
+  bool isYUV_420_888 = stream.override_format == HAL_PIXEL_FORMAT_YCBCR_420_888;
+  bool isP010 = static_cast<android_pixel_format_v1_1_t>(
+                    stream.override_format) == HAL_PIXEL_FORMAT_YCBCR_P010;
+  if ((isYUV_420_888) || (isP010)) {
     IMapper::Rect map_rect = {0, 0, width, height};
     auto yuv_layout = importer_->lockYCbCr(buffer, usage, map_rect);
     if ((yuv_layout.y != nullptr) && (yuv_layout.cb != nullptr) &&
@@ -220,7 +223,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
       sensor_buffer->plane.img_y_crcb.y_stride = yuv_layout.yStride;
       sensor_buffer->plane.img_y_crcb.cbcr_stride = yuv_layout.cStride;
       sensor_buffer->plane.img_y_crcb.cbcr_step = yuv_layout.chromaStep;
-      if ((yuv_layout.chromaStep == 2) &&
+      if (isYUV_420_888 && (yuv_layout.chromaStep == 2) &&
           std::abs(sensor_buffer->plane.img_y_crcb.img_cb -
                    sensor_buffer->plane.img_y_crcb.img_cr) != 1) {
         ALOGE("%s: Unsupported YUV layout, chroma step: %u U/V plane delta: %u",
@@ -230,6 +233,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
                            sensor_buffer->plane.img_y_crcb.img_cr)));
         return BAD_VALUE;
       }
+      sensor_buffer->plane.img_y_crcb.bytesPerPixel = isP010 ? 2 : 1;
     } else {
       ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
       return BAD_VALUE;
@@ -275,7 +279,7 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
   }
   buffer->width = stream.width;
   buffer->height = stream.height;
-  buffer->format = stream.override_format;
+  buffer->format = static_cast<PixelFormat>(stream.override_format);
   buffer->dataSpace = stream.override_data_space;
   buffer->stream_buffer = stream_buffer;
   buffer->pipeline_id = pipeline_id;
