@@ -20,6 +20,40 @@
 #include <log/log.h>
 
 namespace android {
+const uint32_t kScalerStreamConfigurations =
+    ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS;
+const uint32_t kScalerStreamConfigurationsMaxRes =
+    ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_MAXIMUM_RESOLUTION;
+
+const uint32_t kDepthStreamConfigurations =
+    ANDROID_DEPTH_AVAILABLE_DEPTH_STREAM_CONFIGURATIONS;
+const uint32_t kDepthStreamConfigurationsMaxRes =
+    ANDROID_DEPTH_AVAILABLE_DEPTH_STREAM_CONFIGURATIONS_MAXIMUM_RESOLUTION;
+
+const uint32_t kScalerMinFrameDurations =
+    ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS;
+const uint32_t kScalerMinFrameDurationsMaxRes =
+    ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS_MAXIMUM_RESOLUTION;
+
+const uint32_t kDepthMinFrameDurations =
+    ANDROID_DEPTH_AVAILABLE_DEPTH_MIN_FRAME_DURATIONS;
+const uint32_t kDepthMinFrameDurationsMaxRes =
+    ANDROID_DEPTH_AVAILABLE_DEPTH_MIN_FRAME_DURATIONS_MAXIMUM_RESOLUTION;
+
+const uint32_t kScalerStallDurations = ANDROID_SCALER_AVAILABLE_STALL_DURATIONS;
+const uint32_t kScalerStallDurationsMaxRes =
+    ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_MAXIMUM_RESOLUTION;
+
+const uint32_t kScalerInputOutputFormatsMap =
+    ANDROID_SCALER_AVAILABLE_INPUT_OUTPUT_FORMATS_MAP;
+const uint32_t kScalerInputOutputFormatsMapMaxRes =
+    ANDROID_SCALER_AVAILABLE_INPUT_OUTPUT_FORMATS_MAP_MAXIMUM_RESOLUTION;
+
+const uint32_t kDepthStallDurations =
+    ANDROID_DEPTH_AVAILABLE_DEPTH_STALL_DURATIONS;
+const uint32_t kDepthStallDurationsMaxRes =
+    ANDROID_DEPTH_AVAILABLE_DEPTH_STALL_DURATIONS_MAXIMUM_RESOLUTION;
+
 void StreamConfigurationMap::AppendAvailableStreamConfigurations(
     const camera_metadata_ro_entry& entry) {
   for (size_t i = 0; i < entry.count; i += kStreamConfigurationSize) {
@@ -79,47 +113,70 @@ void StreamConfigurationMap::AppendAvailableStreamStallDurations(
   }
 }
 
-StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars) {
+StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars,
+                                               bool maxResolution) {
   camera_metadata_ro_entry_t entry;
-  auto ret = chars.Get(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS, &entry);
+  const char* maxResolutionStr = maxResolution ? "true" : "false";
+  auto ret = chars.Get(maxResolution ? kScalerStreamConfigurationsMaxRes
+                                     : kScalerStreamConfigurations,
+                       &entry);
   if (ret != OK) {
-    ALOGW("%s: ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS missing!",
-          __FUNCTION__);
+    ALOGW(
+        "%s: ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS missing, "
+        "maxResolution ? %s!",
+        __FUNCTION__, maxResolutionStr);
     entry.count = 0;
   }
   AppendAvailableStreamConfigurations(entry);
 
-  ret = chars.Get(ANDROID_DEPTH_AVAILABLE_DEPTH_STREAM_CONFIGURATIONS, &entry);
+  ret = chars.Get(maxResolution ? kDepthStreamConfigurationsMaxRes
+                                : kDepthStreamConfigurations,
+                  &entry);
+
   if (ret == OK) {
     AppendAvailableStreamConfigurations(entry);
   }
 
-  ret = chars.Get(ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS, &entry);
+  ret = chars.Get(
+      maxResolution ? kScalerMinFrameDurationsMaxRes : kScalerMinFrameDurations,
+      &entry);
   if (ret != OK) {
-    ALOGW("%s: ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS missing!",
-          __FUNCTION__);
+    ALOGW(
+        "%s: ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS missing!, max "
+        "resolution ? %s",
+        __FUNCTION__, maxResolutionStr);
     entry.count = 0;
   }
   AppendAvailableStreamMinDurations(entry);
 
-  ret = chars.Get(ANDROID_DEPTH_AVAILABLE_DEPTH_MIN_FRAME_DURATIONS, &entry);
+  ret = chars.Get(
+      maxResolution ? kDepthMinFrameDurationsMaxRes : kDepthMinFrameDurations,
+      &entry);
   if (ret == OK) {
     AppendAvailableStreamMinDurations(entry);
   }
 
-  ret = chars.Get(ANDROID_SCALER_AVAILABLE_STALL_DURATIONS, &entry);
+  ret = chars.Get(
+      maxResolution ? kScalerStallDurationsMaxRes : kScalerStallDurations,
+      &entry);
   if (ret != OK) {
-    ALOGW("%s: ANDROID_SCALER_AVAILABLE_STALL_DURATIONS missing!", __FUNCTION__);
+    ALOGW(
+        "%s: ANDROID_SCALER_AVAILABLE_STALL_DURATIONS missing! maxResolution ? "
+        "%s",
+        __FUNCTION__, maxResolutionStr);
     entry.count = 0;
   }
   AppendAvailableStreamStallDurations(entry);
 
-  ret = chars.Get(ANDROID_DEPTH_AVAILABLE_DEPTH_STALL_DURATIONS, &entry);
+  ret = chars.Get(
+      maxResolution ? kDepthStallDurationsMaxRes : kDepthStallDurations, &entry);
   if (ret == OK) {
     AppendAvailableStreamStallDurations(entry);
   }
 
-  ret = chars.Get(ANDROID_SCALER_AVAILABLE_INPUT_OUTPUT_FORMATS_MAP, &entry);
+  ret = chars.Get(maxResolution ? kScalerInputOutputFormatsMapMaxRes
+                                : kScalerInputOutputFormatsMap,
+                  &entry);
   if (ret == OK) {
     size_t i = 0;
     while (i < entry.count) {

@@ -54,7 +54,8 @@ struct StreamConfigurationHash {
 
 class StreamConfigurationMap {
  public:
-  StreamConfigurationMap(const HalCameraMetadata& chars);
+  StreamConfigurationMap(const HalCameraMetadata& chars,
+                         bool maxResolution = false);
 
   const std::set<android_pixel_format_t>& GetOutputFormats() const {
     return stream_output_formats_;

@@ -63,7 +63,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
   static_metadata_ = std::move(static_meta);
   stream_configuration_map_ =
       std::make_unique<StreamConfigurationMap>(*static_metadata_);
-
+  stream_configuration_map_max_resolution_ =
+      std::make_unique<StreamConfigurationMap>(*static_metadata_, true);
   camera_metadata_ro_entry_t entry;
   auto ret = static_metadata_->Get(ANDROID_REQUEST_PIPELINE_MAX_DEPTH, &entry);
   if (ret != OK) {
@@ -96,6 +97,9 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
     physical_stream_configuration_map_.emplace(
         it.first,
         std::make_unique<StreamConfigurationMap>(*it.second.second.get()));
+    physical_stream_configuration_map_max_resolution_.emplace(
+        it.first, std::make_unique<StreamConfigurationMap>(
+                      *it.second.second.get(), true));
   }
 
   return InitializeRequestProcessor();
@@ -152,9 +156,10 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
 
   if (!EmulatedSensor::IsStreamCombinationSupported(
           physical_camera_id, request_config, *stream_configuration_map_,
-          physical_stream_configuration_map_, logical_chars_)) {
-    ALOGE("%s: Stream combination not supported for camera %d!", __FUNCTION__,
-          physical_camera_id);
+          *stream_configuration_map_max_resolution_,
+          physical_stream_configuration_map_,
+          physical_stream_configuration_map_max_resolution_, logical_chars_)) {
+    ALOGE("%s: Stream combination not supported!", __FUNCTION__);
     return BAD_VALUE;
   }
 
@@ -275,6 +280,28 @@ void EmulatedCameraDeviceSessionHwlImpl::DestroyPipelines() {
   request_processor_ = nullptr;
 }
 
+status_t EmulatedCameraDeviceSessionHwlImpl::CheckOutputFormatsForInput(
+    const HwlPipelineRequest& request,
+    const std::unordered_map<uint32_t, EmulatedStream>& streams,
+    const std::unique_ptr<StreamConfigurationMap>& stream_configuration_map,
+    android_pixel_format_t input_format) {
+  auto output_formats =
+      stream_configuration_map->GetValidOutputFormatsForInput(input_format);
+  for (const auto& output_buffer : request.output_buffers) {
+    auto output_stream = streams.at(output_buffer.stream_id);
+    if (output_formats.find(output_stream.override_format) ==
+        output_formats.end()) {
+      ALOGE(
+          "%s: Reprocess request with input format: 0x%x to output "
+          "format: 0x%x"
+          " not supported!",
+          __FUNCTION__, input_format, output_stream.override_format);
+      return BAD_VALUE;
+    }
+  }
+  return OK;
+}
+
 status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(
     uint32_t frame_number, std::vector<HwlPipelineRequest>& requests) {
   ATRACE_CALL();
@@ -286,21 +313,13 @@ status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(
       for (const auto& input_buffer : request.input_buffers) {
         const auto& streams = pipelines_[request.pipeline_id].streams;
         auto input_stream = streams.at(input_buffer.stream_id);
-        auto output_formats =
-            stream_configuration_map_->GetValidOutputFormatsForInput(
-                input_stream.override_format);
-        for (const auto& output_buffer : request.output_buffers) {
-          auto output_stream = streams.at(output_buffer.stream_id);
-          if (output_formats.find(output_stream.override_format) ==
-              output_formats.end()) {
-            ALOGE(
-                "%s: Reprocess request with input format: 0x%x to output "
-                "format: 0x%x"
-                " not supported!",
-                __FUNCTION__, input_stream.override_format,
-                output_stream.override_format);
-            return BAD_VALUE;
-          }
+        if ((CheckOutputFormatsForInput(request, streams,
+                                        stream_configuration_map_,
+                                        input_stream.override_format) != OK) &&
+            (CheckOutputFormatsForInput(
+                 request, streams, stream_configuration_map_max_resolution_,
+                 input_stream.override_format) != OK)) {
+          return BAD_VALUE;
         }
       }
     }

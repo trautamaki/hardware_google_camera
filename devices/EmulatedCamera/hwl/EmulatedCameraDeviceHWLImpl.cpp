@@ -77,6 +77,9 @@ status_t EmulatedCameraDeviceHwlImpl::Initialize() {
 
   stream_configuration_map_ =
       std::make_unique<StreamConfigurationMap>(*static_metadata_);
+  stream_configuration_map_max_resolution_ =
+      std::make_unique<StreamConfigurationMap>(*static_metadata_,
+                                               /*maxResolution*/ true);
 
   for (const auto& it : *physical_device_map_) {
     uint32_t physical_id = it.first;
@@ -84,6 +87,9 @@ status_t EmulatedCameraDeviceHwlImpl::Initialize() {
     physical_stream_configuration_map_.emplace(
         physical_id,
         std::make_unique<StreamConfigurationMap>(*physical_hal_metadata));
+    physical_stream_configuration_map_max_resolution_.emplace(
+        physical_id, std::make_unique<StreamConfigurationMap>(
+                         *physical_hal_metadata, /*maxResolution*/ true));
 
     ret = GetSensorCharacteristics(physical_hal_metadata,
                                    &sensor_chars_[physical_id]);
@@ -181,7 +187,9 @@ bool EmulatedCameraDeviceHwlImpl::IsStreamCombinationSupported(
     const StreamConfiguration& stream_config) {
   return EmulatedSensor::IsStreamCombinationSupported(
       camera_id_, stream_config, *stream_configuration_map_,
-      physical_stream_configuration_map_, sensor_chars_);
+      *stream_configuration_map_max_resolution_,
+      physical_stream_configuration_map_,
+      physical_stream_configuration_map_max_resolution_, sensor_chars_);
 }
 
 }  // namespace android

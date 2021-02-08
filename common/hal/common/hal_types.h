@@ -120,6 +120,8 @@ struct Stream {
   uint32_t physical_camera_id = 0;
   uint32_t buffer_size = 0;
   int32_t group_id = -1;
+  bool used_in_max_resolution_mode = false;
+  bool used_in_default_resolution_mode = true;
 };
 
 // See the definition of

@@ -57,6 +57,16 @@ status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
   }
   sensor_chars->width = entry.data.i32[0];
   sensor_chars->height = entry.data.i32[1];
+  sensor_chars->full_res_width = sensor_chars->width;
+  sensor_chars->full_res_height = sensor_chars->height;
+
+  ret = metadata->Get(ANDROID_SENSOR_INFO_PIXEL_ARRAY_SIZE_MAXIMUM_RESOLUTION,
+                      &entry);
+  if ((ret == OK) && (entry.count == 2)) {
+    sensor_chars->full_res_width = entry.data.i32[0];
+    sensor_chars->full_res_height = entry.data.i32[1];
+    sensor_chars->quad_bayer_sensor = true;
+  }
 
   ret = metadata->Get(ANDROID_REQUEST_MAX_NUM_OUTPUT_STREAMS, &entry);
   if ((ret != OK) || (entry.count != 3)) {

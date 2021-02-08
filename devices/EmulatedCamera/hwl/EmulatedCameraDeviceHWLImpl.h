@@ -81,7 +81,9 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
 
   std::unique_ptr<HalCameraMetadata> static_metadata_;
   std::unique_ptr<StreamConfigurationMap> stream_configuration_map_;
+  std::unique_ptr<StreamConfigurationMap> stream_configuration_map_max_resolution_;
   PhysicalStreamConfigurationMap physical_stream_configuration_map_;
+  PhysicalStreamConfigurationMap physical_stream_configuration_map_max_resolution_;
   PhysicalDeviceMapPtr physical_device_map_;
   std::shared_ptr<EmulatedTorchState> torch_state_;
   LogicalCharacteristics sensor_chars_;

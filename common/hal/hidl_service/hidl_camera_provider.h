@@ -69,8 +69,7 @@ class HidlCameraProvider : public ICameraProvider {
       getConcurrentStreamingCameraIds_cb _hidl_cb) override;
 
   Return<void> isConcurrentStreamCombinationSupported(
-      const hidl_vec<::android::hardware::camera::provider::V2_6::
-                         CameraIdAndStreamCombination>& configs,
+      const hidl_vec<V2_6::CameraIdAndStreamCombination>& configs,
       isConcurrentStreamCombinationSupported_cb _hidl_cb) override;
 
   Return<void> isConcurrentStreamCombinationSupported_2_7(

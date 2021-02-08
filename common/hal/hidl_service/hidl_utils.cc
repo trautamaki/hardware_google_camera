@@ -34,6 +34,8 @@ using ::android::hardware::camera::device::V3_2::ErrorMsg;
 using ::android::hardware::camera::device::V3_2::MsgType;
 using ::android::hardware::camera::device::V3_2::ShutterMsg;
 using ::android::hardware::camera::device::V3_7::implementation::HidlCameraDevice;
+using android::hardware::camera::metadata::V3_6::
+    CameraMetadataEnumAndroidSensorPixelMode;
 using ::android::hardware::camera::provider::V2_7::implementation::HidlCameraProvider;
 
 status_t ConvertToHidlVendorTagType(
@@ -813,6 +815,16 @@ status_t ConvertToHalStreamConfigurationMode(
   return OK;
 }
 
+static bool sensorPixelModeContains(const device::V3_7::Stream& hidl_stream,
+                                    uint32_t key) {
+  for (auto& i : hidl_stream.sensorPixelModesUsed) {
+    if (i == static_cast<CameraMetadataEnumAndroidSensorPixelMode>(key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 status_t ConverToHalStreamConfig(
     const StreamConfiguration& hidl_stream_config,
     google_camera_hal::StreamConfiguration* hal_stream_config) {
@@ -833,6 +845,13 @@ status_t ConverToHalStreamConfig(
     }
     hal_stream.group_id = hidl_stream.groupId;
 
+    hal_stream.used_in_max_resolution_mode = sensorPixelModeContains(
+        hidl_stream, ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
+    hal_stream.used_in_default_resolution_mode =
+        hidl_stream.sensorPixelModesUsed.size() > 0
+            ? sensorPixelModeContains(hidl_stream,
+                                      ANDROID_SENSOR_PIXEL_MODE_DEFAULT)
+            : true;
     hal_stream_config->streams.push_back(hal_stream);
   }
 

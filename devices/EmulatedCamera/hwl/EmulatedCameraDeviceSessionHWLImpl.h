@@ -149,6 +149,12 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
                       std::unique_ptr<HalCameraMetadata> static_meta);
   status_t InitializeRequestProcessor();
 
+  status_t CheckOutputFormatsForInput(
+      const HwlPipelineRequest& request,
+      const std::unordered_map<uint32_t, EmulatedStream>& streams,
+      const std::unique_ptr<StreamConfigurationMap>& stream_configuration_map,
+      android_pixel_format_t input_format);
+
   EmulatedCameraDeviceSessionHwlImpl(
       PhysicalDeviceMapPtr physical_devices,
       std::shared_ptr<EmulatedTorchState> torch_state)
@@ -168,6 +174,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   std::unique_ptr<EmulatedRequestProcessor> request_processor_;
   std::unique_ptr<StreamConfigurationMap> stream_configuration_map_;
   PhysicalStreamConfigurationMap physical_stream_configuration_map_;
+  PhysicalStreamConfigurationMap physical_stream_configuration_map_max_resolution_;
+  std::unique_ptr<StreamConfigurationMap> stream_configuration_map_max_resolution_;
   SensorCharacteristics sensor_chars_;
   std::shared_ptr<EmulatedTorchState> torch_state_;
   PhysicalDeviceMapPtr physical_device_map_;
