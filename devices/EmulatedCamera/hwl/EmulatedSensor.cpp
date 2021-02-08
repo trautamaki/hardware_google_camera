@@ -251,11 +251,24 @@ bool EmulatedSensor::IsStreamCombinationSupported(
   uint32_t input_stream_count = 0;
   uint32_t processed_stream_count = 0;
   uint32_t stalling_stream_count = 0;
-
+  auto sensor_height = sensor_chars.height;
+  auto sensor_width = sensor_chars.width;
   for (const auto& stream : config.streams) {
     if (stream.rotation != google_camera_hal::StreamRotation::kRotation0) {
       ALOGE("%s: Stream rotation: 0x%x not supported!", __FUNCTION__,
             stream.rotation);
+      return false;
+    }
+    auto output_sizes = map.GetOutputSizes(stream.format);
+    if (output_sizes.empty()) {
+      ALOGE("%s: Unsupported format: 0x%x", __FUNCTION__, stream.format);
+      return false;
+    }
+
+    auto stream_size = std::make_pair(stream.width, stream.height);
+    if (output_sizes.find(stream_size) == output_sizes.end()) {
+      ALOGE("%s: Stream with size %dx%d and format 0x%x is not supported!",
+            __FUNCTION__, stream.width, stream.height, stream.format);
       return false;
     }
 
@@ -286,24 +299,20 @@ bool EmulatedSensor::IsStreamCombinationSupported(
           stalling_stream_count++;
           break;
         case HAL_PIXEL_FORMAT_RAW16:
+          if (stream.height != sensor_height || stream.width != sensor_width) {
+            ALOGE(
+                "%s, RAW16 buffer height %d and width %d must match sensor "
+                "height: %zu"
+                " and width: %zu",
+                __FUNCTION__, stream.height, stream.width, sensor_height,
+                sensor_width);
+            return false;
+          }
           raw_stream_count++;
           break;
         default:
           processed_stream_count++;
       }
-    }
-
-    auto output_sizes = map.GetOutputSizes(stream.format);
-    if (output_sizes.empty()) {
-      ALOGE("%s: Unsupported format: 0x%x", __FUNCTION__, stream.format);
-      return false;
-    }
-
-    auto stream_size = std::make_pair(stream.width, stream.height);
-    if (output_sizes.find(stream_size) == output_sizes.end()) {
-      ALOGE("%s: Stream with size %dx%d and format 0x%x is not supported!",
-            __FUNCTION__, stream.width, stream.height, stream.format);
-      return false;
     }
   }
 
@@ -586,7 +595,7 @@ bool EmulatedSensor::threadLoop() {
         case PixelFormat::RAW16:
           if (!reprocess_request) {
             CaptureRaw((*b)->plane.img.img, device_settings->second.gain,
-                       (*b)->width, device_chars->second);
+                       device_chars->second);
           } else {
             ALOGE("%s: Reprocess requests with output format %x no supported!",
                   __FUNCTION__, (*b)->format);
@@ -907,7 +916,7 @@ void EmulatedSensor::CalculateAndAppendNoiseProfile(
   }
 }
 
-void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width,
+void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain,
                                 const SensorCharacteristics& chars) {
   ATRACE_CALL();
   float total_gain = gain / 100.0 * GetBaseGainFactor(chars.max_raw_value);
@@ -921,7 +930,7 @@ void EmulatedSensor::CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width,
   scene_->SetReadoutPixel(0, 0);
   for (unsigned int y = 0; y < chars.height; y++) {
     int* bayer_row = bayer_select + (y & 0x1) * 2;
-    uint16_t* px = (uint16_t*)img + y * width;
+    uint16_t* px = (uint16_t*)img + y * chars.width;
     for (unsigned int x = 0; x < chars.width; x++) {
       uint32_t electron_count;
       electron_count = scene_->GetPixelElectrons()[bayer_row[x & 0x1]];
