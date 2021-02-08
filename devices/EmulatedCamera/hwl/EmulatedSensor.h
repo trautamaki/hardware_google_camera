@@ -295,7 +295,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   sp<EmulatedScene> scene_;
 
-  void CaptureRaw(uint8_t* img, uint32_t gain, uint32_t width,
+  void CaptureRaw(uint8_t* img, uint32_t gain,
                   const SensorCharacteristics& chars);
   enum RGBLayout { RGB, RGBA, ARGB };
   void CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,
