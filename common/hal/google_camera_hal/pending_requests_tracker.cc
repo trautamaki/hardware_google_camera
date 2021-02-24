@@ -140,6 +140,11 @@ status_t PendingRequestsTracker::TrackReturnedAcquiredBuffers(
   return OK;
 }
 
+void PendingRequestsTracker::OnBufferCacheFlushed() {
+  std::unique_lock<std::mutex> lock(pending_requests_mutex_);
+  requested_stream_ids_.clear();
+}
+
 bool PendingRequestsTracker::DoStreamsHaveEnoughBuffersLocked(
     const std::vector<StreamBuffer>& buffers) const {
   for (auto& buffer : buffers) {

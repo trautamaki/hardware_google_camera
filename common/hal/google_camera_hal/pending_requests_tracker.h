@@ -59,6 +59,9 @@ class PendingRequestsTracker {
   status_t TrackReturnedAcquiredBuffers(
       const std::vector<StreamBuffer>& returned_buffers);
 
+  // Notify the request tracker that the buffer cache manager has been flushed.
+  void OnBufferCacheFlushed();
+
   virtual ~PendingRequestsTracker() = default;
 
  protected:
