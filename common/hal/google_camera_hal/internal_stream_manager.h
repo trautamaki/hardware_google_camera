@@ -19,6 +19,7 @@
 
 #include <hardware/gralloc.h>
 #include <utils/Errors.h>
+
 #include <unordered_map>
 
 #include "camera_buffer_allocator_hwl.h"
