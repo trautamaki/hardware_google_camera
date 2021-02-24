@@ -31,7 +31,8 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   // device_session_hwl is owned by the caller and must be valid during the
   // lifetime of this RealtimeZslRequestProcessor.
   static std::unique_ptr<RealtimeZslRequestProcessor> Create(
-      CameraDeviceSessionHwl* device_session_hwl);
+      CameraDeviceSessionHwl* device_session_hwl,
+      android_pixel_format_t pixel_format);
 
   virtual ~RealtimeZslRequestProcessor() = default;
 
@@ -54,7 +55,9 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   // Override functions of RequestProcessor end.
 
  protected:
-  RealtimeZslRequestProcessor() = default;
+  explicit RealtimeZslRequestProcessor(android_pixel_format_t pixel_format)
+      : pixel_format_(pixel_format),
+        is_hdrplus_zsl_enabled_(pixel_format == HAL_PIXEL_FORMAT_RAW10){};
 
  private:
   status_t Initialize(CameraDeviceSessionHwl* device_session_hwl);
@@ -64,15 +67,16 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   std::unique_ptr<ProcessBlock> process_block_;
 
   InternalStreamManager* internal_stream_manager_;
+  android_pixel_format_t pixel_format_;
   bool preview_intent_seen_ = false;
-  int32_t raw_stream_id_ = -1;
+  int32_t stream_id_ = -1;
   uint32_t active_array_width_ = 0;
   uint32_t active_array_height_ = 0;
 
   HdrMode hdr_mode_ = HdrMode::kHdrplusMode;
 
   // If HDR+ ZSL is enabled.
-  bool is_hdrplus_zsl_enabled_ = true;
+  bool is_hdrplus_zsl_enabled_ = false;
 };
 
 }  // namespace google_camera_hal
