@@ -194,7 +194,7 @@ void ProfilerImpl::End(const std::string name, int request_id) {
 
   std::lock_guard<std::mutex> lk(lock_);
 
-  if (index < timing_map_[name].size()) {
+  if (static_cast<std::size_t>(index) < timing_map_[name].size()) {
     TimeSlot& slot = timing_map_[name][index];
     slot.end += CurrentTime();
     slot.count++;
