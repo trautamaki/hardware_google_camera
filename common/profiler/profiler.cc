@@ -241,7 +241,7 @@ void ProfilerImpl::ProfileFrameRate(const std::string& name) {
           realtime_frame_rate.count * kNsPerSec / static_cast<float>(elapsed);
       float avg_fps = frame_rate.count * kNsPerSec /
                       static_cast<float>(frame_rate.end - frame_rate.start);
-      ALOGE("%s: current FPS %3.2f, avg %3.2f", name.c_str(), fps, avg_fps);
+      ALOGI("%s: current FPS %3.2f, avg %3.2f", name.c_str(), fps, avg_fps);
       realtime_frame_rate.count = 0;
       realtime_frame_rate.start = current;
     }
@@ -290,7 +290,7 @@ void ProfilerImpl::End(const std::string name, int request_id) {
 }
 
 void ProfilerImpl::PrintResult() {
-  ALOGE("UseCase: %s. Profiled Frames: %d.", use_case_.c_str(),
+  ALOGI("UseCase: %s. Profiled Frames: %d.", use_case_.c_str(),
         static_cast<int>(timing_map_.begin()->second.size()));
 
   std::vector<TimeResult> time_results;
@@ -352,13 +352,13 @@ void ProfilerImpl::PrintResult() {
 
   for (const auto& result : time_results) {
     if (result.fps == 0) {
-      ALOGE(
+      ALOGI(
           "%51.51s Min: %8.3f ms,  Max: %8.3f ms,  Avg: %7.3f ms "
           "(Count = %3.1f),  mean_max_stddevs: %6.2f,  fps:    NA",
           result.node_name.c_str(), result.min_dt, result.max_dt, result.avg_dt,
           result.avg_count, result.mean_max_stddevs);
     } else {
-      ALOGE(
+      ALOGI(
           "%51.51s Min: %8.3f ms,  Max: %8.3f ms,  Avg: %7.3f ms "
           "(Count = %3.1f),  mean_max_stddevs: %6.2f,  fps: %8.2f",
           result.node_name.c_str(), result.min_dt, result.max_dt, result.avg_dt,
@@ -366,9 +366,9 @@ void ProfilerImpl::PrintResult() {
     }
   }
 
-  ALOGE("%43.43s     MIN SUM: %8.3f ms,  MAX SUM: %8.3f ms,  AVG SUM: %7.3f ms",
+  ALOGI("%43.43s     MIN SUM: %8.3f ms,  MAX SUM: %8.3f ms,  AVG SUM: %7.3f ms",
         "", sum_min, sum_max, sum_avg);
-  ALOGE("");
+  ALOGI("");
 }
 
 void ProfilerImpl::DumpResult(std::string filepath) {
@@ -423,7 +423,7 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
   // Print out the profiling result in the standard output (ANDROID_LOG_ERROR)
   // with stopwatch mode.
   void PrintResult() override {
-    ALOGE("Profiling Case: %s", use_case_.c_str());
+    ALOGI("Profiling Case: %s", use_case_.c_str());
 
     // Sort by end time.
     std::list<std::pair<std::string, TimeSlot>> time_results;
@@ -441,11 +441,11 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
     for (const auto& [node_name, slot] : time_results) {
       if (slot.count > 0) {
         float elapsed = (slot.end - slot.start) * kNanoToMilli;
-        ALOGE("%51.51s: %8.3f ms", node_name.c_str(), elapsed);
+        ALOGI("%51.51s: %8.3f ms", node_name.c_str(), elapsed);
       }
     }
 
-    ALOGE("");
+    ALOGI("");
   }
 
   void DumpResult(std::string filepath) override {
