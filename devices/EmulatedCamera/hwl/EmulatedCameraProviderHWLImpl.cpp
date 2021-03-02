@@ -699,11 +699,13 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
       continue;
     }
 
-    Json::Reader config_reader;
+    Json::CharReaderBuilder builder;
+    std::unique_ptr<Json::CharReader> config_reader(builder.newCharReader());
     Json::Value root;
-    if (!config_reader.parse(config, root)) {
+    std::string errorMessage;
+    if (!config_reader->parse(&*config.begin(), &*config.end(), &root, &errorMessage)) {
       ALOGE("Could not parse configuration file: %s",
-            config_reader.getFormattedErrorMessages().c_str());
+            errorMessage.c_str());
       return BAD_VALUE;
     }
 
