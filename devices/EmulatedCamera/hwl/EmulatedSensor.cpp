@@ -245,41 +245,36 @@ bool EmulatedSensor::AreCharacteristicsSupported(
 }
 
 bool EmulatedSensor::IsStreamCombinationSupported(
-    const StreamConfiguration& config, StreamConfigurationMap& map,
-    const SensorCharacteristics& sensor_chars) {
-  uint32_t raw_stream_count = 0;
+    uint32_t logical_id, const StreamConfiguration& config,
+    StreamConfigurationMap& map,
+    const PhysicalStreamConfigurationMap& physical_map,
+    const LogicalCharacteristics& sensor_chars) {
   uint32_t input_stream_count = 0;
-  uint32_t processed_stream_count = 0;
-  uint32_t stalling_stream_count = 0;
-  auto sensor_height = sensor_chars.height;
-  auto sensor_width = sensor_chars.width;
+  // Map from physical camera id to number of streams for that physical camera
+  std::map<uint32_t, uint32_t> raw_stream_count;
+  std::map<uint32_t, uint32_t> processed_stream_count;
+  std::map<uint32_t, uint32_t> stalling_stream_count;
+
+  // Only allow the stream configurations specified in
+  // dynamicSizeStreamConfigurations.
   for (const auto& stream : config.streams) {
+    bool is_dynamic_output =
+        (stream.is_physical_camera_stream && stream.group_id != -1);
     if (stream.rotation != google_camera_hal::StreamRotation::kRotation0) {
       ALOGE("%s: Stream rotation: 0x%x not supported!", __FUNCTION__,
             stream.rotation);
       return false;
     }
-    auto output_sizes = map.GetOutputSizes(stream.format);
-    if (output_sizes.empty()) {
-      ALOGE("%s: Unsupported format: 0x%x", __FUNCTION__, stream.format);
-      return false;
-    }
-
-    auto stream_size = std::make_pair(stream.width, stream.height);
-    if (output_sizes.find(stream_size) == output_sizes.end()) {
-      ALOGE("%s: Stream with size %dx%d and format 0x%x is not supported!",
-            __FUNCTION__, stream.width, stream.height, stream.format);
-      return false;
-    }
 
     if (stream.stream_type == google_camera_hal::StreamType::kInput) {
-      if (sensor_chars.max_input_streams == 0) {
+      if (sensor_chars.at(logical_id).max_input_streams == 0) {
         ALOGE("%s: Input streams are not supported on this device!",
               __FUNCTION__);
         return false;
       }
 
-      auto supported_outputs = map.GetValidOutputFormatsForInput(stream.format);
+      auto const& supported_outputs =
+          map.GetValidOutputFormatsForInput(stream.format);
       if (supported_outputs.empty()) {
         ALOGE("%s: Input stream with format: 0x%x no supported on this device!",
               __FUNCTION__, stream.format);
@@ -288,6 +283,25 @@ bool EmulatedSensor::IsStreamCombinationSupported(
 
       input_stream_count++;
     } else {
+      if (stream.is_physical_camera_stream &&
+          physical_map.find(stream.physical_camera_id) == physical_map.end()) {
+        ALOGE("%s: Invalid physical camera id %d", __FUNCTION__,
+              stream.physical_camera_id);
+        return false;
+      }
+
+      if (is_dynamic_output) {
+        auto dynamic_physical_output_formats =
+            physical_map.at(stream.physical_camera_id)
+                ->GetDynamicPhysicalStreamOutputFormats();
+        if (dynamic_physical_output_formats.find(stream.format) ==
+            dynamic_physical_output_formats.end()) {
+          ALOGE("%s: Unsupported physical stream format %d", __FUNCTION__,
+                stream.format);
+          return false;
+        }
+      }
+
       switch (stream.format) {
         case HAL_PIXEL_FORMAT_BLOB:
           if ((stream.data_space != HAL_DATASPACE_V0_JFIF) &&
@@ -296,9 +310,21 @@ bool EmulatedSensor::IsStreamCombinationSupported(
                   stream.data_space);
             return false;
           }
-          stalling_stream_count++;
+          if (stream.is_physical_camera_stream) {
+            stalling_stream_count[stream.physical_camera_id]++;
+          } else {
+            for (const auto& p : physical_map) {
+              stalling_stream_count[p.first]++;
+            }
+          }
           break;
-        case HAL_PIXEL_FORMAT_RAW16:
+        case HAL_PIXEL_FORMAT_RAW16: {
+          const SensorCharacteristics& sensor_char =
+              stream.is_physical_camera_stream
+                  ? sensor_chars.at(stream.physical_camera_id)
+                  : sensor_chars.at(logical_id);
+          auto sensor_height = sensor_char.height;
+          auto sensor_width = sensor_char.width;
           if (stream.height != sensor_height || stream.width != sensor_width) {
             ALOGE(
                 "%s, RAW16 buffer height %d and width %d must match sensor "
@@ -308,37 +334,75 @@ bool EmulatedSensor::IsStreamCombinationSupported(
                 sensor_width);
             return false;
           }
-          raw_stream_count++;
-          break;
+          if (stream.is_physical_camera_stream) {
+            raw_stream_count[stream.physical_camera_id]++;
+          } else {
+            for (const auto& p : physical_map) {
+              raw_stream_count[p.first]++;
+            }
+          }
+        } break;
         default:
-          processed_stream_count++;
+          if (stream.is_physical_camera_stream) {
+            processed_stream_count[stream.physical_camera_id]++;
+          } else {
+            for (const auto& p : physical_map) {
+              processed_stream_count[p.first]++;
+            }
+          }
+      }
+
+      auto output_sizes =
+          is_dynamic_output
+              ? physical_map.at(stream.physical_camera_id)
+                    ->GetDynamicPhysicalStreamOutputSizes(stream.format)
+              : stream.is_physical_camera_stream
+                    ? physical_map.at(stream.physical_camera_id)
+                          ->GetOutputSizes(stream.format)
+                    : map.GetOutputSizes(stream.format);
+
+      auto stream_size = std::make_pair(stream.width, stream.height);
+      if (output_sizes.find(stream_size) == output_sizes.end()) {
+        ALOGE("%s: Stream with size %dx%d and format 0x%x is not supported!",
+              __FUNCTION__, stream.width, stream.height, stream.format);
+        return false;
       }
     }
   }
 
-  if (raw_stream_count > sensor_chars.max_raw_streams) {
-    ALOGE("%s: RAW streams maximum %u exceeds supported maximum %u",
-          __FUNCTION__, raw_stream_count, sensor_chars.max_raw_streams);
-    return false;
+  for (const auto& raw_count : raw_stream_count) {
+    if (raw_count.second > sensor_chars.at(raw_count.first).max_raw_streams) {
+      ALOGE("%s: RAW streams maximum %u exceeds supported maximum %u",
+            __FUNCTION__, raw_count.second,
+            sensor_chars.at(raw_count.first).max_raw_streams);
+      return false;
+    }
   }
 
-  if (processed_stream_count > sensor_chars.max_processed_streams) {
-    ALOGE("%s: Processed streams maximum %u exceeds supported maximum %u",
-          __FUNCTION__, processed_stream_count,
-          sensor_chars.max_processed_streams);
-    return false;
+  for (const auto& stalling_count : stalling_stream_count) {
+    if (stalling_count.second >
+        sensor_chars.at(stalling_count.first).max_stalling_streams) {
+      ALOGE("%s: Stalling streams maximum %u exceeds supported maximum %u",
+            __FUNCTION__, stalling_count.second,
+            sensor_chars.at(stalling_count.first).max_stalling_streams);
+      return false;
+    }
   }
 
-  if (stalling_stream_count > sensor_chars.max_stalling_streams) {
-    ALOGE("%s: Stalling streams maximum %u exceeds supported maximum %u",
-          __FUNCTION__, stalling_stream_count,
-          sensor_chars.max_stalling_streams);
-    return false;
+  for (const auto& processed_count : processed_stream_count) {
+    if (processed_count.second >
+        sensor_chars.at(processed_count.first).max_processed_streams) {
+      ALOGE("%s: Processed streams maximum %u exceeds supported maximum %u",
+            __FUNCTION__, processed_count.second,
+            sensor_chars.at(processed_count.first).max_processed_streams);
+      return false;
+    }
   }
 
-  if (input_stream_count > sensor_chars.max_input_streams) {
+  if (input_stream_count > sensor_chars.at(logical_id).max_input_streams) {
     ALOGE("%s: Input stream maximum %u exceeds supported maximum %u",
-          __FUNCTION__, input_stream_count, sensor_chars.max_input_streams);
+          __FUNCTION__, input_stream_count,
+          sensor_chars.at(logical_id).max_input_streams);
     return false;
   }
 

@@ -35,6 +35,22 @@ void StreamConfigurationMap::AppendAvailableStreamConfigurations(
   }
 }
 
+void StreamConfigurationMap::AppendAvailableDynamicPhysicalStreamConfigurations(
+    const camera_metadata_ro_entry& entry) {
+  for (size_t i = 0; i < entry.count; i += kStreamConfigurationSize) {
+    int32_t width = entry.data.i32[i + kStreamWidthOffset];
+    int32_t height = entry.data.i32[i + kStreamHeightOffset];
+    auto format = static_cast<android_pixel_format_t>(
+        entry.data.i32[i + kStreamFormatOffset]);
+
+    // Both input and output dynamic stream sizes need to be supported as an
+    // output stream.
+    dynamic_physical_stream_output_formats_.insert(format);
+    dynamic_physical_stream_output_size_map_[format].insert(
+        std::make_pair(width, height));
+  }
+}
+
 void StreamConfigurationMap::AppendAvailableStreamMinDurations(
     const camera_metadata_ro_entry_t& entry) {
   for (size_t i = 0; i < entry.count; i += kStreamConfigurationSize) {
@@ -123,6 +139,13 @@ StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars) {
       }
       stream_input_formats_.insert(input_format);
     }
+  }
+
+  ret = chars.Get(
+      ANDROID_SCALER_PHYSICAL_CAMERA_MULTI_RESOLUTION_STREAM_CONFIGURATIONS,
+      &entry);
+  if (ret == OK) {
+    AppendAvailableDynamicPhysicalStreamConfigurations(entry);
   }
 }
 

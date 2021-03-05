@@ -107,9 +107,8 @@ class CameraDeviceSessionHwl {
   // more than one request from a certain pipeline, this method will return an
   // error. All requests captured from camera sensors must be captured
   // synchronously.
-  virtual status_t SubmitRequests(
-      uint32_t frame_number,
-      const std::vector<HwlPipelineRequest>& requests) = 0;
+  virtual status_t SubmitRequests(uint32_t frame_number,
+                                  std::vector<HwlPipelineRequest>& requests) = 0;
 
   // Flush all pending requests.
   virtual status_t Flush() = 0;

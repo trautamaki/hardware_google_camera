@@ -1,4 +1,4 @@
-service vendor.camera-provider-2-6-google /vendor/bin/hw/android.hardware.camera.provider@2.6-service-google
+service vendor.camera-provider-2-7-google /vendor/bin/hw/android.hardware.camera.provider@2.7-service-google
     class hal
     user system
     group system

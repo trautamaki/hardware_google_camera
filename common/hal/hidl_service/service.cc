@@ -15,19 +15,19 @@
  */
 
 #ifdef LAZY_SERVICE
-#define LOG_TAG "android.hardware.pixel.camera.provider@2.6-service-lazy"
+#define LOG_TAG "android.hardware.pixel.camera.provider@2.7-service-lazy"
 #else
-#define LOG_TAG "android.hardware.pixel.camera.provider@2.6-service"
+#define LOG_TAG "android.hardware.pixel.camera.provider@2.7-service"
 #endif
 
-#include <android/hardware/camera/provider/2.6/ICameraProvider.h>
+#include <android/hardware/camera/provider/2.7/ICameraProvider.h>
 #include <binder/ProcessState.h>
 #include <hidl/LegacySupport.h>
 #include <malloc.h>
 
 using android::hardware::defaultLazyPassthroughServiceImplementation;
 using android::hardware::defaultPassthroughServiceImplementation;
-using android::hardware::camera::provider::V2_6::ICameraProvider;
+using android::hardware::camera::provider::V2_7::ICameraProvider;
 
 #ifdef LAZY_SERVICE
 const bool kLazyService = true;
