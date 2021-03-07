@@ -27,14 +27,14 @@ namespace android {
 namespace hardware {
 namespace camera {
 namespace device {
-namespace V3_5 {
+namespace V3_7 {
 namespace implementation {
 
 namespace hidl_utils = ::android::hardware::camera::implementation::hidl_utils;
 
 using ::android::google_camera_hal::HalCameraMetadata;
 
-const std::string HidlCameraDevice::kDeviceVersion = "3.5";
+const std::string HidlCameraDevice::kDeviceVersion = "3.7";
 
 std::unique_ptr<HidlCameraDevice> HidlCameraDevice::Create(
     std::unique_ptr<CameraDevice> google_camera_device) {
@@ -216,6 +216,16 @@ Return<void> HidlCameraDevice::getPhysicalCameraCharacteristics(
 Return<void> HidlCameraDevice::isStreamCombinationSupported(
     const V3_4::StreamConfiguration& streams,
     ICameraDevice::isStreamCombinationSupported_cb _hidl_cb) {
+  StreamConfiguration streams3_7;
+
+  hidl_utils::ConvertStreamConfigurationV34ToV37(streams, &streams3_7);
+
+  return isStreamCombinationSupported_3_7(streams3_7, _hidl_cb);
+}
+
+Return<void> HidlCameraDevice::isStreamCombinationSupported_3_7(
+    const StreamConfiguration& streams,
+    ICameraDevice::isStreamCombinationSupported_cb _hidl_cb) {
   bool is_supported = false;
   google_camera_hal::StreamConfiguration stream_config;
   status_t res = hidl_utils::ConverToHalStreamConfig(streams, &stream_config);
@@ -232,7 +242,7 @@ Return<void> HidlCameraDevice::isStreamCombinationSupported(
 }
 
 }  // namespace implementation
-}  // namespace V3_5
+}  // namespace V3_7
 }  // namespace device
 }  // namespace camera
 }  // namespace hardware

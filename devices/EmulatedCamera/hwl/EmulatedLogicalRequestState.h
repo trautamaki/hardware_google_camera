@@ -24,6 +24,25 @@
 namespace android {
 
 using google_camera_hal::HalCameraMetadata;
+using google_camera_hal::HalStream;
+using google_camera_hal::HwlPipelineCallback;
+
+struct EmulatedStream : public HalStream {
+  uint32_t width, height;
+  size_t buffer_size;
+  bool is_input;
+  int32_t group_id;
+};
+
+struct EmulatedPipeline {
+  HwlPipelineCallback cb;
+  // stream id -> stream map
+  std::unordered_map<uint32_t, EmulatedStream> streams;
+  uint32_t physical_camera_id, pipeline_id;
+};
+
+// [physical_camera_id -> [group_id -> stream_id]]
+typedef std::map<uint32_t, std::map<uint32_t, int32_t>> DynamicStreamIdMapType;
 
 class EmulatedLogicalRequestState {
  public:
@@ -49,10 +68,16 @@ class EmulatedLogicalRequestState {
       std::unique_ptr<HalCameraMetadata> logical_chars,
       PhysicalDeviceMapPtr physical_devices);
 
+  status_t UpdateRequestForDynamicStreams(
+      HwlPipelineRequest* request,
+      const std::vector<EmulatedPipeline>& pipelines,
+      const DynamicStreamIdMapType& dynamic_stream_id_map_type);
+
  private:
   uint32_t logical_camera_id_ = 0;
   std::unique_ptr<EmulatedRequestState> logical_request_state_;
   bool is_logical_device_ = false;
+  uint32_t active_physical_device_id_ = 0;
   std::unique_ptr<std::set<uint32_t>> physical_camera_output_ids_;
   PhysicalDeviceMapPtr physical_device_map_;
   // Maps a physical device id to its respective request state

@@ -166,8 +166,10 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static bool AreCharacteristicsSupported(
       const SensorCharacteristics& characteristics);
   static bool IsStreamCombinationSupported(
-      const StreamConfiguration& config, StreamConfigurationMap& map,
-      const SensorCharacteristics& sensor_chars);
+      uint32_t logical_id, const StreamConfiguration& config,
+      StreamConfigurationMap& map,
+      const PhysicalStreamConfigurationMap& physical_map,
+      const LogicalCharacteristics& sensor_chars);
 
   /*
    * Power control

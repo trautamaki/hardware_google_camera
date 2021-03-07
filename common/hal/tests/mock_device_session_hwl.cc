@@ -168,7 +168,7 @@ void FakeCameraDeviceSessionHwl::DestroyPipelines() {
 }
 
 status_t FakeCameraDeviceSessionHwl::SubmitRequests(
-    uint32_t frame_number, const std::vector<HwlPipelineRequest>& requests) {
+    uint32_t frame_number, std::vector<HwlPipelineRequest>& requests) {
   std::lock_guard<std::mutex> lock(hwl_pipeline_lock_);
 
   for (auto& request : requests) {

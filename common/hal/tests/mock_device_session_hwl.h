@@ -66,9 +66,8 @@ class FakeCameraDeviceSessionHwl : public CameraDeviceSessionHwl {
 
   void DestroyPipelines() override;
 
-  status_t SubmitRequests(
-      uint32_t frame_number,
-      const std::vector<HwlPipelineRequest>& requests) override;
+  status_t SubmitRequests(uint32_t frame_number,
+                          std::vector<HwlPipelineRequest>& requests) override;
 
   status_t Flush() override;
 
@@ -155,7 +154,7 @@ class MockDeviceSessionHwl : public CameraDeviceSessionHwl {
 
   MOCK_METHOD2(SubmitRequests,
                status_t(uint32_t frame_number,
-                        const std::vector<HwlPipelineRequest>& requests));
+                        std::vector<HwlPipelineRequest>& requests));
 
   MOCK_METHOD0(Flush, status_t());
 

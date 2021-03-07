@@ -924,6 +924,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   }
   if (zoom_ratio_supported_) {
     result->result_metadata->Set(ANDROID_CONTROL_ZOOM_RATIO, &zoom_ratio_, 1);
+    result->result_metadata->Set(ANDROID_SCALER_CROP_REGION,
+                                 scaler_crop_region_default_,
+                                 ARRAY_SIZE(scaler_crop_region_default_));
   }
   if (report_extended_scene_mode_) {
     result->result_metadata->Set(ANDROID_CONTROL_EXTENDED_SCENE_MODE,

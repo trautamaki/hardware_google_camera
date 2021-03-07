@@ -61,8 +61,9 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
     uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta) {
   camera_id_ = camera_id;
   static_metadata_ = std::move(static_meta);
-  stream_coniguration_map_ =
+  stream_configuration_map_ =
       std::make_unique<StreamConfigurationMap>(*static_metadata_);
+
   camera_metadata_ro_entry_t entry;
   auto ret = static_metadata_->Get(ANDROID_REQUEST_PIPELINE_MAX_DEPTH, &entry);
   if (ret != OK) {
@@ -91,6 +92,10 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
             __FUNCTION__, it.first, strerror(-ret), ret);
       return ret;
     }
+
+    physical_stream_configuration_map_.emplace(
+        it.first,
+        std::make_unique<StreamConfigurationMap>(*it.second.second.get()));
   }
 
   return InitializeRequestProcessor();
@@ -106,8 +111,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::InitializeRequestProcessor() {
     return ret;
   }
 
-  request_processor_ =
-      std::make_unique<EmulatedRequestProcessor>(camera_id_, emulated_sensor);
+  request_processor_ = std::make_unique<EmulatedRequestProcessor>(
+      camera_id_, emulated_sensor, session_callback_);
 
   return request_processor_->Initialize(
       HalCameraMetadata::Clone(static_metadata_.get()),
@@ -146,8 +151,10 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
   }
 
   if (!EmulatedSensor::IsStreamCombinationSupported(
-          request_config, *stream_coniguration_map_, sensor_chars_)) {
-    ALOGE("%s: Stream combination not supported!", __FUNCTION__);
+          physical_camera_id, request_config, *stream_configuration_map_,
+          physical_stream_configuration_map_, logical_chars_)) {
+    ALOGE("%s: Stream combination not supported for camera %d!", __FUNCTION__,
+          physical_camera_id);
     return BAD_VALUE;
   }
 
@@ -187,7 +194,15 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
              .width = stream.width,
              .height = stream.height,
              .buffer_size = stream.buffer_size,
-             .is_input = is_input,}));
+             .is_input = is_input,
+             .group_id = stream.group_id}));
+
+    if (stream.group_id != -1 && stream.is_physical_camera_stream) {
+      // TODO: For quad bayer camera, the logical camera id should be used if
+      // this is not a physical camera.
+      dynamic_stream_id_map_[stream.physical_camera_id][stream.group_id] =
+          stream.id;
+    }
   }
 
   pipelines_.push_back(emulated_pipeline);
@@ -261,7 +276,7 @@ void EmulatedCameraDeviceSessionHwlImpl::DestroyPipelines() {
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(
-    uint32_t frame_number, const std::vector<HwlPipelineRequest>& requests) {
+    uint32_t frame_number, std::vector<HwlPipelineRequest>& requests) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(api_mutex_);
 
@@ -272,7 +287,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(
         const auto& streams = pipelines_[request.pipeline_id].streams;
         auto input_stream = streams.at(input_buffer.stream_id);
         auto output_formats =
-            stream_coniguration_map_->GetValidOutputFormatsForInput(
+            stream_configuration_map_->GetValidOutputFormatsForInput(
                 input_stream.override_format);
         for (const auto& output_buffer : request.output_buffers) {
           auto output_stream = streams.at(output_buffer.stream_id);
@@ -297,8 +312,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(
     return INVALID_OPERATION;
   }
 
-  return request_processor_->ProcessPipelineRequests(frame_number, requests,
-                                                     pipelines_);
+  return request_processor_->ProcessPipelineRequests(
+      frame_number, requests, pipelines_, dynamic_stream_id_map_);
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::Flush() {
@@ -369,6 +384,16 @@ status_t EmulatedCameraDeviceSessionHwlImpl::GetPhysicalCameraCharacteristics(
       physical_device_map_->at(physical_camera_id).second.get());
 
   return OK;
+}
+
+void EmulatedCameraDeviceSessionHwlImpl::SetSessionCallback(
+    const HwlSessionCallback& hwl_session_callback) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(api_mutex_);
+  session_callback_ = hwl_session_callback;
+  if (request_processor_ != nullptr) {
+    request_processor_->SetSessionCallback(hwl_session_callback);
+  }
 }
 
 }  // namespace android
