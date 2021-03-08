@@ -48,12 +48,33 @@ struct CaptureSessionEntryFuncs {
   CaptureSessionCreateFunc CreateSession;
 };
 
+// Session function invoked to create wrapper capture session instance
+using WrapperCaptureSessionCreateFunc =
+    std::function<std::unique_ptr<CaptureSession>(
+        const StreamConfiguration& stream_config,
+        const std::vector<ExternalCaptureSessionFactory*>&
+            external_capture_session_entries,
+        const std::vector<CaptureSessionEntryFuncs>& capture_session_entries,
+        HwlSessionCallback hwl_session_callback,
+        CameraBufferAllocatorHwl* camera_buffer_allocator_hwl,
+        CameraDeviceSessionHwl* camera_device_session_hwl,
+        std::vector<HalStream>* hal_configured_streams,
+        ProcessCaptureResultFunc process_capture_result, NotifyFunc notify)>;
+
+// define entry points to capture session
+struct WrapperCaptureSessionEntryFuncs {
+  StreamConfigSupportedFunc IsStreamConfigurationSupported;
+  WrapperCaptureSessionCreateFunc CreateSession;
+};
+
 // Select and create capture session.
 // When consider_zsl_capture_session is enabled, we will first consider using
 // ZslCaptureSession as a wrapper capture session when it supports the given
 // configurations.
 std::unique_ptr<CaptureSession> CreateCaptureSession(
     const StreamConfiguration& stream_config,
+    const std::vector<WrapperCaptureSessionEntryFuncs>&
+        wrapper_capture_session_entries,
     const std::vector<ExternalCaptureSessionFactory*>&
         external_capture_session_entries,
     const std::vector<CaptureSessionEntryFuncs>& capture_session_entries,
@@ -61,8 +82,7 @@ std::unique_ptr<CaptureSession> CreateCaptureSession(
     CameraBufferAllocatorHwl* camera_buffer_allocator_hwl,
     CameraDeviceSessionHwl* camera_device_session_hwl,
     std::vector<HalStream>* hal_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    bool consider_zsl_capture_session);
+    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify);
 
 }  // namespace google_camera_hal
 }  // namespace android

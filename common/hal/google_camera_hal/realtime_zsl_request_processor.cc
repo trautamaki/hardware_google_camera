@@ -37,14 +37,6 @@ std::unique_ptr<RealtimeZslRequestProcessor> RealtimeZslRequestProcessor::Create
     return nullptr;
   }
 
-  uint32_t num_physical_cameras =
-      device_session_hwl->GetPhysicalCameraIds().size();
-  if (num_physical_cameras > 1) {
-    ALOGE("%s: only support 1 physical camera but it has %u", __FUNCTION__,
-          num_physical_cameras);
-    return nullptr;
-  }
-
   auto request_processor = std::unique_ptr<RealtimeZslRequestProcessor>(
       new RealtimeZslRequestProcessor(pixel_format));
   if (request_processor == nullptr) {
@@ -251,7 +243,6 @@ status_t RealtimeZslRequestProcessor::ProcessRequest(
 
   std::vector<ProcessBlockRequest> block_requests(1);
   block_requests[0].request = std::move(block_request);
-
   return process_block_->ProcessRequests(block_requests, request);
 }
 

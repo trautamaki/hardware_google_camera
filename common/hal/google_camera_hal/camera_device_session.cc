@@ -32,6 +32,7 @@
 #include "vendor_tag_defs.h"
 #include "vendor_tag_types.h"
 #include "vendor_tags.h"
+#include "zsl_snapshot_capture_session.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -51,6 +52,12 @@ std::vector<CaptureSessionEntryFuncs>
         {.IsStreamConfigurationSupported =
              BasicCaptureSession::IsStreamConfigurationSupported,
          .CreateSession = BasicCaptureSession::Create}};
+
+std::vector<WrapperCaptureSessionEntryFuncs>
+    CameraDeviceSession::kWrapperCaptureSessionEntries = {
+        {.IsStreamConfigurationSupported =
+             ZslSnapshotCaptureSession::IsStreamConfigurationSupported,
+         .CreateSession = ZslSnapshotCaptureSession::Create}};
 
 std::unique_ptr<CameraDeviceSession> CameraDeviceSession::Create(
     std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl,
@@ -625,11 +632,11 @@ status_t CameraDeviceSession::ConfigureStreams(
   operation_mode_ = stream_config.operation_mode;
 
   capture_session_ = CreateCaptureSession(
-      stream_config, external_capture_session_entries_, kCaptureSessionEntries,
+      stream_config, kWrapperCaptureSessionEntries,
+      external_capture_session_entries_, kCaptureSessionEntries,
       hwl_session_callback_, camera_allocator_hwl_, device_session_hwl_.get(),
       hal_config, camera_device_session_callback_.process_capture_result,
-      camera_device_session_callback_.notify,
-      /*consider_zsl_capture_session=*/true);
+      camera_device_session_callback_.notify);
 
   if (capture_session_ == nullptr) {
     ALOGE("%s: Cannot find a capture session compatible with stream config",
