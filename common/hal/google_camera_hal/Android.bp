@@ -39,6 +39,8 @@ cc_library_shared {
         "camera_device.cc",
         "camera_device_session.cc",
         "camera_provider.cc",
+        "capture_session_utils.cc",
+        "capture_session_wrapper_process_block.cc",
         "depth_process_block.cc",
         "dual_ir_capture_session.cc",
         "dual_ir_depth_result_processor.cc",

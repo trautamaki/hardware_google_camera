@@ -20,6 +20,7 @@
 #include <android/hardware/graphics/mapper/2.0/IMapper.h>
 #include <android/hardware/graphics/mapper/3.0/IMapper.h>
 #include <android/hardware/graphics/mapper/4.0/IMapper.h>
+
 #include <memory>
 #include <set>
 #include <shared_mutex>
@@ -27,6 +28,7 @@
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_session_hwl.h"
 #include "capture_session.h"
+#include "capture_session_utils.h"
 #include "hal_camera_metadata.h"
 #include "hal_types.h"
 #include "hwl_types.h"
@@ -60,26 +62,6 @@ struct ThermalCallback {
 
   // Unregister the thermal changed callback.
   UnregisterThermalChangedCallbackFunc unregister_thermal_changed_callback;
-};
-
-// Session function invoked to query if particular stream config supported
-using StreamConfigSupportedFunc =
-    std::function<bool(CameraDeviceSessionHwl* device_session_hwl,
-                       const StreamConfiguration& stream_config)>;
-
-// Session function invoked to create session instance
-using CaptureSessionCreateFunc = std::function<std::unique_ptr<CaptureSession>(
-    CameraDeviceSessionHwl* device_session_hwl,
-    const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlSessionCallback session_callback,
-    std::vector<HalStream>* hal_configured_streams,
-    CameraBufferAllocatorHwl* camera_allocator_hwl)>;
-
-// define entry points to capture session
-struct CaptureSessionEntryFuncs {
-  StreamConfigSupportedFunc IsStreamConfigurationSupported;
-  CaptureSessionCreateFunc CreateSession;
 };
 
 // Entry point for getting an external capture session.
