@@ -1449,6 +1449,15 @@ void CameraDeviceSession::AppendOutputIntentToSettingsLocked(
     output_intent = static_cast<uint8_t>(OutputIntent::kZsl);
   }
 
+  // Used to indicate the possible start and end of video recording in traces
+  if (has_video && !prev_output_intent_has_video_) {
+    ATRACE_NAME("Start Video Streaming");
+  } else if (prev_output_intent_has_video_ && !has_video) {
+    ATRACE_NAME("Stop Video Streaming");
+  }
+
+  prev_output_intent_has_video_ = has_video;
+
   status_t res = updated_request->settings->Set(VendorTagIds::kOutputIntent,
                                                 &output_intent,
                                                 /*data_count=*/1);

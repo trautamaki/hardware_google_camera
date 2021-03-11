@@ -363,6 +363,9 @@ class CameraDeviceSession {
   // Protected by session_lock_.
   bool has_valid_settings_ = false;
 
+  // If the previous output intent had a stream with video encoder usage.
+  bool prev_output_intent_has_video_ = false;
+
   // request_record_lock_ protects the following variables as noted
   std::mutex request_record_lock_;
 
