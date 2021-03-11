@@ -24,6 +24,7 @@
 #include <utils/Trace.h>
 
 #include "basic_capture_session.h"
+#include "capture_session_utils.h"
 #include "dual_ir_capture_session.h"
 #include "hal_utils.h"
 #include "hdrplus_capture_session.h"
@@ -65,8 +66,7 @@ std::unique_ptr<CameraDeviceSession> CameraDeviceSession::Create(
   std::vector<uint32_t> physical_camera_ids =
       device_session_hwl->GetPhysicalCameraIds();
 
-  auto session =
-      std::unique_ptr<CameraDeviceSession>(new CameraDeviceSession());
+  auto session = std::unique_ptr<CameraDeviceSession>(new CameraDeviceSession());
   if (session == nullptr) {
     ALOGE("%s: Creating CameraDeviceSession failed.", __FUNCTION__);
     return nullptr;
@@ -566,8 +566,7 @@ void CameraDeviceSession::NotifyThrottling(const Temperature& temperature) {
 }
 
 status_t CameraDeviceSession::ConstructDefaultRequestSettings(
-    RequestTemplate type,
-    std::unique_ptr<HalCameraMetadata>* default_settings) {
+    RequestTemplate type, std::unique_ptr<HalCameraMetadata>* default_settings) {
   ATRACE_CALL();
   status_t res = device_session_hwl_->ConstructDefaultRequestSettings(
       type, default_settings);
@@ -625,33 +624,12 @@ status_t CameraDeviceSession::ConfigureStreams(
 
   operation_mode_ = stream_config.operation_mode;
 
-  // first pass: check loaded external capture sessions
-  for (auto externalSession : external_capture_session_entries_) {
-    if (externalSession->IsStreamConfigurationSupported(
-            device_session_hwl_.get(), stream_config)) {
-      capture_session_ = externalSession->CreateSession(
-          device_session_hwl_.get(), stream_config,
-          camera_device_session_callback_.process_capture_result,
-          camera_device_session_callback_.notify, hwl_session_callback_,
-          hal_config, camera_allocator_hwl_);
-      break;
-    }
-  }
-
-  // second pass: check predefined capture sessions
-  if (capture_session_ == nullptr) {
-    for (auto sessionEntry : kCaptureSessionEntries) {
-      if (sessionEntry.IsStreamConfigurationSupported(device_session_hwl_.get(),
-                                                      stream_config)) {
-        capture_session_ = sessionEntry.CreateSession(
-            device_session_hwl_.get(), stream_config,
-            camera_device_session_callback_.process_capture_result,
-            camera_device_session_callback_.notify, hwl_session_callback_,
-            hal_config, camera_allocator_hwl_);
-        break;
-      }
-    }
-  }
+  capture_session_ = CreateCaptureSession(
+      stream_config, external_capture_session_entries_, kCaptureSessionEntries,
+      hwl_session_callback_, camera_allocator_hwl_, device_session_hwl_.get(),
+      hal_config, camera_device_session_callback_.process_capture_result,
+      camera_device_session_callback_.notify,
+      /*consider_zsl_capture_session=*/true);
 
   if (capture_session_ == nullptr) {
     ALOGE("%s: Cannot find a capture session compatible with stream config",
