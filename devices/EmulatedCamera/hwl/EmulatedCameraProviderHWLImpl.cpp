@@ -690,7 +690,7 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
   size_t logical_id = 0;
   std::vector<const char*> configurationFileLocation;
   char prop[PROPERTY_VALUE_MAX];
-  if (!property_get_bool("ro.kernel.qemu", false)) {
+  if (!property_get_bool("ro.boot.qemu", false)) {
     for (const auto& iter : kConfigurationFileLocation) {
       configurationFileLocation.emplace_back(iter);
     }
