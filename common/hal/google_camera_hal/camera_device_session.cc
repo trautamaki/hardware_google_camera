@@ -233,9 +233,11 @@ void CameraDeviceSession::Notify(const NotifyMessage& result) {
       frame_number = result.message.shutter.frame_number;
     }
     std::lock_guard<std::mutex> lock(request_record_lock_);
-    // Strip out results for frame number that has been notified as ERROR_REQUEST
-    if (error_notified_requests_.find(frame_number) !=
-        error_notified_requests_.end()) {
+    // Strip out results for frame number that has been notified
+    // ErrorCode::kErrorResult and ErrorCode::kErrorBuffer
+    if ((error_notified_requests_.find(frame_number) !=
+         error_notified_requests_.end()) &&
+        (result.type != MessageType::kShutter)) {
       return;
     }
 
