@@ -749,6 +749,10 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
   updated_request->input_buffers = request.input_buffers;
   updated_request->input_buffer_metadata.clear();
   updated_request->output_buffers = request.output_buffers;
+  for (auto& [camid, physical_setting] : request.physical_camera_settings) {
+    updated_request->physical_camera_settings[camid] =
+        HalCameraMetadata::Clone(physical_setting.get());
+  }
 
   // Returns -1 if kThermalThrottling is not defined, skip following process.
   if (get_camera_metadata_tag_type(VendorTagIds::kThermalThrottling) != -1) {
