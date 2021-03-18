@@ -108,19 +108,31 @@ status_t CaptureSessionWrapperProcessBlock::ConfigureStreams(
     return ALREADY_EXISTS;
   }
 
+  if (result_processor_ == nullptr) {
+    ALOGE(
+        "%s: result processor is not set yet. Not able to set the callback "
+        "function.",
+        __FUNCTION__);
+    return BAD_VALUE;
+  }
+
   process_capture_result_ =
       ProcessCaptureResultFunc([this](std::unique_ptr<CaptureResult> result) {
         ProcessBlockResult process_block_result;
         process_block_result.result = std::move(result);
         result_processor_->ProcessResult(std::move(process_block_result));
       });
+  notify_ = NotifyFunc([this](const NotifyMessage& message) {
+    ProcessBlockNotifyMessage process_block_message{.message = message};
+    result_processor_->Notify(std::move(process_block_message));
+  });
 
   // TODO(mhtan): Add one more stream here
   embedded_capture_session_ = CreateCaptureSession(
-      stream_config, external_capture_session_entries_, capture_session_entries_,
+      stream_config, /*wrapper_capture_session_entries=*/{},
+      external_capture_session_entries_, capture_session_entries_,
       hwl_session_callback_, camera_buffer_allocator_hwl_,
-      camera_device_session_hwl_, hal_config_, process_capture_result_, notify_,
-      /*consider_zsl_capture_session=*/false);
+      camera_device_session_hwl_, hal_config_, process_capture_result_, notify_);
   if (embedded_capture_session_ == nullptr) {
     ALOGE("%s: Not able to create embedded capture session.", __FUNCTION__);
     return BAD_VALUE;
