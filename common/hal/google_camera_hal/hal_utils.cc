@@ -42,6 +42,8 @@ status_t CreateHwlPipelineRequest(HwlPipelineRequest* hwl_request,
   hwl_request->settings = HalCameraMetadata::Clone(request.settings.get());
   hwl_request->input_buffers = request.input_buffers;
   hwl_request->output_buffers = request.output_buffers;
+  hwl_request->input_width = request.input_width;
+  hwl_request->input_height = request.input_height;
 
   for (auto& metadata : request.input_buffer_metadata) {
     hwl_request->input_buffer_metadata.push_back(

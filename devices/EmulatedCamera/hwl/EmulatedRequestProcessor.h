@@ -80,17 +80,17 @@ class EmulatedRequestProcessor {
                                   uint32_t* size /*out*/,
                                   uint32_t* stride /*out*/);
   status_t LockSensorBuffer(const EmulatedStream& stream,
-                            buffer_handle_t buffer,
-                            SensorBuffer* sensor_buffer /*out*/);
+                            buffer_handle_t buffer, int32_t width,
+                            int32_t height, SensorBuffer* sensor_buffer /*out*/);
   std::unique_ptr<Buffers> CreateSensorBuffers(
       uint32_t frame_number, const std::vector<StreamBuffer>& buffers,
       const std::unordered_map<uint32_t, EmulatedStream>& streams,
-      uint32_t pipeline_id, HwlPipelineCallback cb);
-  std::unique_ptr<SensorBuffer> CreateSensorBuffer(uint32_t frame_number,
-                                                   const EmulatedStream& stream,
-                                                   uint32_t pipeline_id,
-                                                   HwlPipelineCallback callback,
-                                                   StreamBuffer stream_buffer);
+      uint32_t pipeline_id, HwlPipelineCallback cb, int32_t override_width,
+      int32_t override_height);
+  std::unique_ptr<SensorBuffer> CreateSensorBuffer(
+      uint32_t frame_number, const EmulatedStream& stream, uint32_t pipeline_id,
+      HwlPipelineCallback callback, StreamBuffer stream_buffer,
+      int32_t override_width, int32_t override_height);
   std::unique_ptr<Buffers> AcquireBuffers(Buffers* buffers);
   void NotifyFailedRequest(const PendingRequest& request);
 

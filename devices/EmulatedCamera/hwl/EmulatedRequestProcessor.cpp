@@ -95,11 +95,17 @@ status_t EmulatedRequestProcessor::ProcessPipelineRequests(
     auto output_buffers = CreateSensorBuffers(
         frame_number, request.output_buffers,
         pipelines[request.pipeline_id].streams, request.pipeline_id,
-        pipelines[request.pipeline_id].cb);
+        pipelines[request.pipeline_id].cb, /*override_width*/ 0,
+        /*override_height*/ 0);
+    if (output_buffers == nullptr) {
+      return NO_MEMORY;
+    }
+
     auto input_buffers = CreateSensorBuffers(
         frame_number, request.input_buffers,
         pipelines[request.pipeline_id].streams, request.pipeline_id,
-        pipelines[request.pipeline_id].cb);
+        pipelines[request.pipeline_id].cb, request.input_width,
+        request.input_height);
 
     pending_requests_.push(
         {.settings = HalCameraMetadata::Clone(request.settings.get()),
@@ -113,7 +119,8 @@ status_t EmulatedRequestProcessor::ProcessPipelineRequests(
 std::unique_ptr<Buffers> EmulatedRequestProcessor::CreateSensorBuffers(
     uint32_t frame_number, const std::vector<StreamBuffer>& buffers,
     const std::unordered_map<uint32_t, EmulatedStream>& streams,
-    uint32_t pipeline_id, HwlPipelineCallback cb) {
+    uint32_t pipeline_id, HwlPipelineCallback cb, int32_t override_width,
+    int32_t override_height) {
   if (buffers.empty()) {
     return nullptr;
   }
@@ -144,8 +151,14 @@ std::unique_ptr<Buffers> EmulatedRequestProcessor::CreateSensorBuffers(
     }
   }
 
-  if (requested_buffers.size() == 0) {
-    ALOGE("%s: Failed to acquire sensor buffers", __FUNCTION__);
+  if (requested_buffers.size() < buffers.size()) {
+    ALOGE(
+        "%s: Failed to acquire all sensor buffers: %zu acquired, %zu requested",
+        __FUNCTION__, requested_buffers.size(), buffers.size());
+    // This only happens for HAL buffer manager use case.
+    if (session_callback_.return_stream_buffers != nullptr) {
+      session_callback_.return_stream_buffers(requested_buffers);
+    }
     return nullptr;
   }
 
@@ -153,7 +166,8 @@ std::unique_ptr<Buffers> EmulatedRequestProcessor::CreateSensorBuffers(
   sensor_buffers->reserve(requested_buffers.size());
   for (auto& buffer : requested_buffers) {
     auto sensor_buffer = CreateSensorBuffer(
-        frame_number, streams.at(buffer.stream_id), pipeline_id, cb, buffer);
+        frame_number, streams.at(buffer.stream_id), pipeline_id, cb, buffer,
+        override_width, override_height);
     if (sensor_buffer.get() != nullptr) {
       sensor_buffers->push_back(std::move(sensor_buffer));
     }
@@ -240,14 +254,12 @@ status_t EmulatedRequestProcessor::GetBufferSizeAndStride(
 }
 
 status_t EmulatedRequestProcessor::LockSensorBuffer(
-    const EmulatedStream& stream, buffer_handle_t buffer,
-    SensorBuffer* sensor_buffer /*out*/) {
+    const EmulatedStream& stream, buffer_handle_t buffer, int32_t width,
+    int32_t height, SensorBuffer* sensor_buffer /*out*/) {
   if (sensor_buffer == nullptr) {
     return BAD_VALUE;
   }
 
-  auto width = static_cast<int32_t>(stream.width);
-  auto height = static_cast<int32_t>(stream.height);
   auto usage = GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN;
   bool isYUV_420_888 = stream.override_format == HAL_PIXEL_FORMAT_YCBCR_420_888;
   bool isP010 = static_cast<android_pixel_format_v1_1_t>(
@@ -311,7 +323,8 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
 std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
     uint32_t frame_number, const EmulatedStream& emulated_stream,
     uint32_t pipeline_id, HwlPipelineCallback callback,
-    StreamBuffer stream_buffer) {
+    StreamBuffer stream_buffer, int32_t override_width,
+    int32_t override_height) {
   auto buffer = std::make_unique<SensorBuffer>(importer_);
 
   auto stream = emulated_stream;
@@ -320,8 +333,13 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
     stream.override_format =
         EmulatedSensor::OverrideFormat(stream.override_format);
   }
-  buffer->width = stream.width;
-  buffer->height = stream.height;
+  if (override_width > 0 && override_height > 0) {
+    buffer->width = override_width;
+    buffer->height = override_height;
+  } else {
+    buffer->width = stream.width;
+    buffer->height = stream.height;
+  }
   buffer->format = static_cast<PixelFormat>(stream.override_format);
   buffer->dataSpace = stream.override_data_space;
   buffer->stream_buffer = stream_buffer;
@@ -336,8 +354,8 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
   buffer->stream_buffer.status = BufferStatus::kError;
 
   if (buffer->stream_buffer.buffer != nullptr) {
-    auto ret =
-        LockSensorBuffer(stream, buffer->stream_buffer.buffer, buffer.get());
+    auto ret = LockSensorBuffer(stream, buffer->stream_buffer.buffer,
+                                buffer->width, buffer->height, buffer.get());
     if (ret != OK) {
       buffer.release();
       buffer = nullptr;
