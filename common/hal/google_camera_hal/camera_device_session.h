@@ -279,6 +279,10 @@ class CameraDeviceSession {
 
   void InitializeZoomRatioMapper(HalCameraMetadata* characteristics);
 
+  // For all the stream ID groups, derive the mapping between all stream IDs
+  // within that group to one single stream ID for easier tracking.
+  void DeriveGroupedStreamIdMap();
+
   uint32_t camera_id_ = 0;
   std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl_;
 
@@ -323,6 +327,12 @@ class CameraDeviceSession {
   // Map from a stream ID to the configured stream received from frameworks.
   // Protected by session_lock_.
   std::unordered_map<int32_t, Stream> configured_streams_map_;
+
+  // Map from all stream IDs within a stream group to one single stream ID for
+  // easier request/buffer tracking. For example, if a stream group contains 3
+  // streams: {1, 2, 3}, The mapping could be {2->1, 3->1}. All requests and
+  // buffers for stream 2 and stream 3 will be mapped to stream 1 for tracking.
+  std::unordered_map<int32_t, int32_t> grouped_stream_id_map_;
 
   // Last valid settings in capture request. Must be protected by session_lock_.
   std::unique_ptr<HalCameraMetadata> last_request_settings_;
@@ -388,6 +398,9 @@ class CameraDeviceSession {
 
   // Operation mode of stream configuration
   StreamConfigurationMode operation_mode_ = StreamConfigurationMode::kNormal;
+
+  // Whether this stream configuration is a multi-res reprocessing configuration
+  bool multi_res_reprocess_ = false;
 
   // Flush is running or not
   std::atomic<bool> is_flushing_ = false;

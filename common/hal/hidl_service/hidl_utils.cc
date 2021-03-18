@@ -854,6 +854,8 @@ status_t ConverToHalStreamConfig(
 
   hal_stream_config->stream_config_counter =
       hidl_stream_config.streamConfigCounter;
+  hal_stream_config->multi_resolution_input_image =
+      hidl_stream_config.multiResolutionInputImage;
 
   return OK;
 }

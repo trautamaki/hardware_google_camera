@@ -125,10 +125,25 @@ status_t CameraDeviceSession::UpdatePendingRequest(CaptureResult* result) {
   for (auto& stream_buffer : result->output_buffers) {
     int32_t stream_id = stream_buffer.stream_id;
     if (streams.find(stream_id) == streams.end()) {
-      ALOGE(
-          "%s: Can't find stream %d in frame %u result holder. It may"
-          " have been returned or have not been requested.",
-          __FUNCTION__, stream_id, frame_number);
+      // If stream_id belongs to a stream group, the HWL may choose to output
+      // buffers to a different stream in the same group.
+      if (grouped_stream_id_map_.count(stream_id) == 1) {
+        int32_t stream_id_for_group = grouped_stream_id_map_.at(stream_id);
+        if (streams.find(stream_id_for_group) != streams.end()) {
+          streams.erase(stream_id_for_group);
+        } else {
+          ALOGE(
+              "%s: Can't find stream_id_for_group %d for stream %d in frame %u "
+              "result holder. It may have been returned or have not been "
+              "requested.",
+              __FUNCTION__, stream_id_for_group, stream_id, frame_number);
+        }
+      } else {
+        ALOGE(
+            "%s: Can't find stream %d in frame %u result holder. It may"
+            " have been returned or have not been requested.",
+            __FUNCTION__, stream_id, frame_number);
+      }
       // Ignore this buffer and continue handling other buffers in the
       // result.
     } else {
@@ -467,6 +482,23 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
   zoom_ratio_mapper_.Initialize(&params);
 }
 
+void CameraDeviceSession::DeriveGroupedStreamIdMap() {
+  // Group stream ids by stream group id
+  std::unordered_map<int32_t, std::vector<int32_t>> group_to_streams_map;
+  for (const auto& [stream_id, stream] : configured_streams_map_) {
+    if (stream.stream_type == StreamType::kOutput && stream.group_id != -1) {
+      group_to_streams_map[stream.group_id].push_back(stream_id);
+    }
+  }
+
+  // For each stream group, map all the streams' ids to one id
+  for (const auto& [group_id, stream_ids] : group_to_streams_map) {
+    for (size_t i = 1; i < stream_ids.size(); i++) {
+      grouped_stream_id_map_[stream_ids[i]] = stream_ids[0];
+    }
+  }
+}
+
 status_t CameraDeviceSession::LoadExternalCaptureSession(
     std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries) {
   ATRACE_CALL();
@@ -625,6 +657,7 @@ status_t CameraDeviceSession::ConfigureStreams(
   hal_utils::DumpStreamConfiguration(stream_config, "App stream configuration");
 
   operation_mode_ = stream_config.operation_mode;
+  multi_res_reprocess_ = stream_config.multi_resolution_input_image;
 
   capture_session_ = CreateCaptureSession(
       stream_config, external_capture_session_entries_, kCaptureSessionEntries,
@@ -676,10 +709,14 @@ status_t CameraDeviceSession::ConfigureStreams(
     configured_streams_map_[stream.id] = stream;
   }
 
+  // Derives all stream ids within a group to a representative stream id
+  DeriveGroupedStreamIdMap();
+
   // If buffer management is support, create a pending request tracker for
   // capture request throttling.
   if (buffer_management_supported_) {
-    pending_requests_tracker_ = PendingRequestsTracker::Create(*hal_config);
+    pending_requests_tracker_ =
+        PendingRequestsTracker::Create(*hal_config, grouped_stream_id_map_);
     if (pending_requests_tracker_ == nullptr) {
       ALOGE("%s: Cannot create a pending request tracker.", __FUNCTION__);
       if (set_realtime_thread) {
@@ -755,6 +792,8 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
     updated_request->physical_camera_settings[camid] =
         HalCameraMetadata::Clone(physical_setting.get());
   }
+  updated_request->input_width = request.input_width;
+  updated_request->input_height = request.input_height;
 
   // Returns -1 if kThermalThrottling is not defined, skip following process.
   if (get_camera_metadata_tag_type(VendorTagIds::kThermalThrottling) != -1) {
@@ -1100,7 +1139,12 @@ void CameraDeviceSession::CheckRequestForStreamBufferCacheManager(
     std::lock_guard<std::mutex> lock(request_record_lock_);
     pending_results_.insert(frame_number);
     for (auto& stream_buffer : request.output_buffers) {
-      pending_request_streams_[frame_number].insert(stream_buffer.stream_id);
+      if (grouped_stream_id_map_.count(stream_buffer.stream_id) == 1) {
+        pending_request_streams_[frame_number].insert(
+            grouped_stream_id_map_.at(stream_buffer.stream_id));
+      } else {
+        pending_request_streams_[frame_number].insert(stream_buffer.stream_id);
+      }
     }
   }
 }
@@ -1129,6 +1173,24 @@ status_t CameraDeviceSession::ValidateRequestLocked(
         configured_streams_map_.end()) {
       ALOGE("%s: input stream %d is not configured.", __FUNCTION__,
             buffer.stream_id);
+      return BAD_VALUE;
+    }
+    const Stream& input_stream = configured_streams_map_.at(buffer.stream_id);
+    if (!multi_res_reprocess_ && (request.input_width != input_stream.width ||
+                                  request.input_height != input_stream.height)) {
+      ALOGE("%s: Invalid input size [%d, %d], expected [%d, %d]", __FUNCTION__,
+            request.input_width, request.input_height, input_stream.width,
+            input_stream.height);
+      return BAD_VALUE;
+    }
+  }
+  if (request.input_buffers.size() > 0) {
+    if (multi_res_reprocess_ &&
+        (request.input_width == 0 || request.input_height == 0)) {
+      ALOGE(
+          "%s: Session is a multi-res input session, but has invalid input "
+          "size [%d, %d]",
+          __FUNCTION__, request.input_width, request.input_height);
       return BAD_VALUE;
     }
   }
