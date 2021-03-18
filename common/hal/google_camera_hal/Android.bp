@@ -63,6 +63,7 @@ cc_library_shared {
         "rgbird_result_request_processor.cc",
         "rgbird_rt_request_processor.cc",
         "vendor_tags.cc",
+        "zsl_snapshot_capture_session.cc",
     ],
     shared_libs: [
         "android.hardware.graphics.mapper@2.0",

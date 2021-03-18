@@ -24,6 +24,7 @@
 #include <memory>
 #include <set>
 #include <shared_mutex>
+#include <vector>
 
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_session_hwl.h"
@@ -345,6 +346,9 @@ class CameraDeviceSession {
   // If device session has notified capture session about thermal throttling.
   // Must be protected by session_lock_.
   bool thermal_throttling_notified_ = false;
+
+  // Predefined wrapper capture session entry points
+  static std::vector<WrapperCaptureSessionEntryFuncs> kWrapperCaptureSessionEntries;
 
   // Predefined capture session entry points
   static std::vector<CaptureSessionEntryFuncs> kCaptureSessionEntries;
