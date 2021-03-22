@@ -48,11 +48,16 @@
    "0", 
    "1", 
    "1856", 
+   "1392", 
+   "64", 
+   "1856", 
    "1392" 
  ], 
  "android.control.availableExtendedSceneModeZoomRatioRanges": [
     "1.0", 
-    "4.0"
+    "4.0", 
+    "1.0", 
+    "4.0" 
  ], 
  "android.control.availableEffects": [
   "0"
