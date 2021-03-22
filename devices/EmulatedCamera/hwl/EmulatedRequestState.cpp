@@ -1778,7 +1778,8 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
         float min_zoom_ratio, max_zoom_ratio;
 
         if (mode < ANDROID_CONTROL_EXTENDED_SCENE_MODE_DISABLED ||
-            mode > ANDROID_CONTROL_EXTENDED_SCENE_MODE_BOKEH_CONTINUOUS) {
+            (mode > ANDROID_CONTROL_EXTENDED_SCENE_MODE_BOKEH_CONTINUOUS &&
+             mode < ANDROID_CONTROL_EXTENDED_SCENE_MODE_VENDOR_START)) {
           ALOGE("%s: Invalid extended scene mode %d", __FUNCTION__, mode);
           return BAD_VALUE;
         }
