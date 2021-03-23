@@ -21,7 +21,10 @@
 #include "camera_device_session_hwl.h"
 #include "capture_session.h"
 #include "capture_session_utils.h"
+#include "capture_session_wrapper_process_block.h"
 #include "hwl_types.h"
+#include "realtime_zsl_request_processor.h"
+#include "realtime_zsl_result_processor.h"
 #include "request_processor.h"
 #include "result_dispatcher.h"
 #include "result_processor.h"
@@ -98,14 +101,14 @@ class ZslSnapshotCaptureSession : public CaptureSession {
 
   status_t SetupPreviewProcessChain(
       const StreamConfiguration& stream_config,
-      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-      int32_t& stream_id);
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify);
 
   // Configure streams for request processor and process block.
   status_t ConfigureStreams(const StreamConfiguration& stream_config,
                             RequestProcessor* request_processor,
                             ProcessBlock* process_block,
-                            int32_t& additiona_stream_id);
+                            ProcessCaptureResultFunc process_capture_result,
+                            NotifyFunc notify, int32_t& additiona_stream_id);
 
   // Build pipelines and return HAL configured streams.
   status_t BuildPipelines(ProcessBlock* process_block,
@@ -124,9 +127,9 @@ class ZslSnapshotCaptureSession : public CaptureSession {
 
   std::unique_ptr<InternalStreamManager> internal_stream_manager_;
 
-  std::unique_ptr<RequestProcessor> preview_request_processor_;
-  ProcessBlock* preview_process_block_ = nullptr;
-  ResultProcessor* preview_result_processor_ = nullptr;
+  std::unique_ptr<RealtimeZslRequestProcessor> preview_request_processor_;
+  CaptureSessionWrapperProcessBlock* preview_process_block_ = nullptr;
+  RealtimeZslResultProcessor* preview_result_processor_ = nullptr;
 
   // Use this stream id to check the request is ZSL compatible
   int32_t hal_preview_stream_id_ = -1;

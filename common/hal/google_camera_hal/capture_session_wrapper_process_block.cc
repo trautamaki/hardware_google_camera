@@ -15,6 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
+#include <cstddef>
 #include <memory>
 
 #define LOG_TAG "GCH_CaptureSessionWrapperProcessBlock"
@@ -161,10 +162,34 @@ status_t CaptureSessionWrapperProcessBlock::GetConfiguredHalStreams(
 }
 
 status_t CaptureSessionWrapperProcessBlock::ProcessRequests(
-    const std::vector<ProcessBlockRequest>& /*process_block_requests*/,
+    const std::vector<ProcessBlockRequest>& process_block_requests,
     const CaptureRequest& remaining_session_request) {
   ATRACE_CALL();
-  return embedded_capture_session_->ProcessRequest(remaining_session_request);
+  CaptureRequest request;
+  request.frame_number = remaining_session_request.frame_number;
+  for (auto& metadata : request.input_buffer_metadata) {
+    request.input_buffer_metadata.push_back(
+        HalCameraMetadata::Clone(metadata.get()));
+  }
+  request.input_buffers = remaining_session_request.input_buffers;
+  request.input_height = remaining_session_request.input_height;
+  request.input_width = remaining_session_request.input_width;
+  for (auto& [camera_id, physical_metadata] :
+       remaining_session_request.physical_camera_settings) {
+    request.physical_camera_settings[camera_id] =
+        HalCameraMetadata::Clone(physical_metadata.get());
+  }
+  request.settings =
+      HalCameraMetadata::Clone(remaining_session_request.settings.get());
+
+  request.output_buffers = process_block_requests[0].request.output_buffers;
+  for (auto& buffer : request.output_buffers) {
+    if (buffer.buffer != nullptr) {
+      buffer.buffer_id = buffer.stream_id;
+    }
+  }
+
+  return embedded_capture_session_->ProcessRequest(request);
 }
 
 status_t CaptureSessionWrapperProcessBlock::Flush() {
