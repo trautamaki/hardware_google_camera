@@ -416,6 +416,10 @@ class CameraDeviceSession {
   // Protected by request_record_lock_;
   std::set<uint32_t> pending_results_;
 
+  // Record the shutters need to ignore for error result case
+  // Protected by request_record_lock_;
+  std::set<uint32_t> ignore_shutters_;
+
   static constexpr int32_t kInvalidStreamId = -1;
 };
 
