@@ -40,7 +40,8 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA,
-};
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_REMOSAIC_REPROCESSING,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR};
 
 const std::set<uint8_t> EmulatedRequestState::kSupportedHWLevels = {
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED,
@@ -623,6 +624,17 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  ret = request_settings_->Get(ANDROID_SENSOR_PIXEL_MODE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (available_sensor_pixel_modes_.find(entry.data.u8[0]) !=
+        available_sensor_pixel_modes_.end()) {
+      sensor_pixel_mode_ = entry.data.u8[0];
+    } else {
+      ALOGE("%s: Unsupported control sensor pixel  mode!", __FUNCTION__);
+      return BAD_VALUE;
+    }
+  }
+
   ret = request_settings_->Get(ANDROID_CONTROL_SCENE_MODE, &entry);
   if ((ret == OK) && (entry.count == 1)) {
     // Disabled scene is not expected to be among the available scene list
@@ -790,6 +802,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->video_stab = vstab_mode;
   sensor_settings->report_edge_mode = report_edge_mode_;
   sensor_settings->edge_mode = edge_mode;
+  sensor_settings->sensor_pixel_mode = sensor_pixel_mode_;
 
   return OK;
 }
@@ -808,6 +821,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH,
                                &max_pipeline_depth_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_MODE, &control_mode_, 1);
+  result->result_metadata->Set(ANDROID_SENSOR_PIXEL_MODE, &sensor_pixel_mode_,
+                               1);
+
   result->result_metadata->Set(ANDROID_CONTROL_AF_MODE, &af_mode_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_AF_STATE, &af_state_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_AWB_MODE, &awb_mode_, 1);
@@ -1572,6 +1588,14 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
   } else {
     ALOGE("%s: No available control modes!", __FUNCTION__);
     return BAD_VALUE;
+  }
+
+  available_sensor_pixel_modes_.insert(ANDROID_SENSOR_PIXEL_MODE_DEFAULT);
+
+  if (SupportsCapability(
+          ANDROID_REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR)) {
+    available_sensor_pixel_modes_.insert(
+        ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
   }
 
   // Auto mode must always be present
@@ -2647,7 +2671,8 @@ status_t EmulatedRequestState::InitializeInfoDefaults() {
 }
 
 status_t EmulatedRequestState::InitializeReprocessDefaults() {
-  if (supports_private_reprocessing_ || supports_yuv_reprocessing_) {
+  if (supports_private_reprocessing_ || supports_yuv_reprocessing_ ||
+      supports_remosaic_reprocessing_) {
     StreamConfigurationMap config_map(*static_metadata_);
     if (!config_map.SupportsReprocessing()) {
       ALOGE(
@@ -2748,6 +2773,8 @@ status_t EmulatedRequestState::InitializeRequestDefaults() {
       ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING);
   supports_yuv_reprocessing_ = SupportsCapability(
       ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING);
+  supports_remosaic_reprocessing_ = SupportsCapability(
+      ANDROID_REQUEST_AVAILABLE_CAPABILITIES_REMOSAIC_REPROCESSING);
   is_backward_compatible_ = SupportsCapability(
       ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE);
   is_raw_capable_ =

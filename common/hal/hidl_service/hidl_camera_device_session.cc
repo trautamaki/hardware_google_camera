@@ -207,7 +207,7 @@ HidlCameraDeviceSession::RequestStreamBuffers(
     }
 
     if (stream_buffer_return.val.getDiscriminator() ==
-        StreamBuffersVal::hidl_discriminator::buffers) {
+        V3_5::StreamBuffersVal::hidl_discriminator::buffers) {
       const hidl_vec<StreamBuffer>& hidl_buffers =
           stream_buffer_return.val.buffers();
       for (auto& hidl_buffer : hidl_buffers) {
@@ -765,6 +765,7 @@ Return<void> HidlCameraDeviceSession::configureStreams_3_4(
   _hidl_cb(Status::ILLEGAL_ARGUMENT, V3_4::HalStreamConfiguration());
   return Void();
 }
+
 Return<void> HidlCameraDeviceSession::configureStreams_3_5(
     const V3_5::StreamConfiguration& requestedConfiguration,
     configureStreams_3_5_cb _hidl_cb) {
@@ -781,6 +782,7 @@ Return<void> HidlCameraDeviceSession::configureStreams_3_5(
 
   return Void();
 }
+
 Return<void> HidlCameraDeviceSession::configureStreams_3_6(
     const V3_5::StreamConfiguration& requestedConfiguration,
     configureStreams_3_6_cb _hidl_cb) {
@@ -803,11 +805,13 @@ Return<void> HidlCameraDeviceSession::configureStreams_3_6(
   configureStreams_3_7(requestedConfiguration3_7, _hidl_cb);
   return Void();
 }
+
 Return<void> HidlCameraDeviceSession::switchToOffline(
     const hidl_vec<int32_t>&, switchToOffline_cb _hidl_cb) {
   _hidl_cb(Status::ILLEGAL_ARGUMENT, V3_6::CameraOfflineSessionInfo(), nullptr);
   return Void();
 }
+
 Return<void> HidlCameraDeviceSession::processCaptureRequest(
     const hidl_vec<V3_2::CaptureRequest>& requests,
     const hidl_vec<BufferCache>& cachesToRemove,
