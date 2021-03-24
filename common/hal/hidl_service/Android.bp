@@ -18,6 +18,24 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+soong_config_module_type {
+    name: "gch_lazy_hal_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "gch",
+    bool_variables: ["disable_lazy_hal"],
+    properties: ["enabled"],
+}
+
+gch_lazy_hal_cc_defaults {
+    name: "camera_service_lazy_hal_defaults",
+    enabled: true,
+    soong_config_variables: {
+        disable_lazy_hal: {
+            enabled: false,
+        },
+    },
+}
+
 cc_library_shared {
     name: "android.hardware.camera.provider@2.7-impl-google",
     defaults: ["google_camera_hal_defaults"],
@@ -98,7 +116,10 @@ cc_binary {
 
 cc_binary {
     name: "android.hardware.camera.provider@2.7-service-google-lazy",
-    defaults: ["camera_service_defaults"],
+    defaults: [
+        "camera_service_defaults",
+        "camera_service_lazy_hal_defaults",
+    ],
     init_rc: ["android.hardware.camera.provider@2.7-service-google-lazy.rc"],
     cflags: ["-DLAZY_SERVICE"],
 }
