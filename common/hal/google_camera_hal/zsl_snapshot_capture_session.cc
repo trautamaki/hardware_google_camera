@@ -23,10 +23,7 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
-#include "capture_session_wrapper_process_block.h"
 #include "hal_utils.h"
-#include "realtime_zsl_request_processor.h"
-#include "realtime_zsl_result_processor.h"
 #include "system/graphics-base-v1.0.h"
 #include "utils.h"
 #include "utils/Errors.h"
@@ -165,6 +162,7 @@ status_t ZslSnapshotCaptureSession::BuildPipelines(
 status_t ZslSnapshotCaptureSession::ConfigureStreams(
     const StreamConfiguration& stream_config,
     RequestProcessor* request_processor, ProcessBlock* process_block,
+    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
     int32_t& additional_stream_id) {
   ATRACE_CALL();
   if (request_processor == nullptr || process_block == nullptr) {
@@ -225,9 +223,26 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
     return UNKNOWN_ERROR;
   }
 
+  // Create preview result processor. Stream ID is not set at this stage.
+  auto preview_result_processor = RealtimeZslResultProcessor::Create(
+      internal_stream_manager_.get(), additional_stream_id,
+      HAL_PIXEL_FORMAT_YCBCR_420_888);
+  if (preview_result_processor == nullptr) {
+    ALOGE("%s: Creating PreviewZslResultProcessor failed.", __FUNCTION__);
+    return UNKNOWN_ERROR;
+  }
+  preview_result_processor_ = preview_result_processor.get();
+  preview_result_processor->SetResultCallback(process_capture_result, notify);
+
+  res = process_block->SetResultProcessor(std::move(preview_result_processor));
+  if (res != OK) {
+    ALOGE("%s: Setting result process in process block failed.", __FUNCTION__);
+    return res;
+  }
+
   // Configure streams for process block.
-  // TODO(mhtan): use process_block_stream_config for the first parameter later.
-  res = process_block->ConfigureStreams(stream_config, stream_config);
+  res = process_block->ConfigureStreams(process_block_stream_config,
+                                        stream_config);
   if (res != OK) {
     ALOGE("%s: Configuring stream for process block failed.", __FUNCTION__);
     return res;
@@ -238,8 +253,7 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
 
 status_t ZslSnapshotCaptureSession::SetupPreviewProcessChain(
     const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    int32_t& stream_id) {
+    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify) {
   ATRACE_CALL();
   if (preview_process_block_ != nullptr ||
       preview_result_processor_ != nullptr ||
@@ -253,6 +267,7 @@ status_t ZslSnapshotCaptureSession::SetupPreviewProcessChain(
     return BAD_VALUE;
   }
 
+  // Create process block
   auto preview_process_block = CaptureSessionWrapperProcessBlock::Create(
       external_capture_session_entries_, capture_session_entries_,
       hwl_session_callback_, camera_buffer_allocator_hwl_,
@@ -271,24 +286,10 @@ status_t ZslSnapshotCaptureSession::SetupPreviewProcessChain(
     return UNKNOWN_ERROR;
   }
 
-  // Create preview result processor.
-  auto preview_result_processor = RealtimeZslResultProcessor::Create(
-      internal_stream_manager_.get(), stream_id, HAL_PIXEL_FORMAT_YCBCR_420_888);
-  if (preview_result_processor == nullptr) {
-    ALOGE("%s: Creating PreviewZslResultProcessor failed.", __FUNCTION__);
-    return UNKNOWN_ERROR;
-  }
-  preview_result_processor_ = preview_result_processor.get();
-  preview_result_processor->SetResultCallback(process_capture_result, notify);
+  // preview result processor will be created inside ConfigureStreams when the
+  // additional stream id is determined.
 
-  status_t res = preview_process_block->SetResultProcessor(
-      std::move(preview_result_processor));
-  if (res != OK) {
-    ALOGE("%s: Setting result process in process block failed.", __FUNCTION__);
-    return res;
-  }
-
-  res = preview_request_processor_->SetProcessBlock(
+  status_t res = preview_request_processor_->SetProcessBlock(
       std::move(preview_process_block));
   if (res != OK) {
     ALOGE("%s: Setting process block for RequestProcessor failed: %s(%d)",
@@ -297,7 +298,8 @@ status_t ZslSnapshotCaptureSession::SetupPreviewProcessChain(
   }
 
   res = ConfigureStreams(stream_config, preview_request_processor_.get(),
-                         preview_process_block_, stream_id);
+                         preview_process_block_, process_capture_result, notify,
+                         additional_stream_id_);
   if (res != OK) {
     ALOGE("%s: Configuring stream failed: %s(%d)", __FUNCTION__, strerror(-res),
           res);
@@ -394,8 +396,8 @@ status_t ZslSnapshotCaptureSession::Initialize(
       [this](const NotifyMessage& message) { NotifyHalMessage(message); });
 
   // Setup and connect realtime process chain
-  res = SetupPreviewProcessChain(stream_config, process_capture_result_,
-                                 notify_, additional_stream_id_);
+  res =
+      SetupPreviewProcessChain(stream_config, process_capture_result_, notify_);
   if (res != OK) {
     ALOGE("%s: SetupRealtimeProcessChain fail: %s(%d)", __FUNCTION__,
           strerror(-res), res);

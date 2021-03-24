@@ -143,9 +143,6 @@ class InternalStreamManager {
 
   std::mutex stream_mutex_;
 
-  // Next available stream ID. Protected by stream_mutex_.
-  int32_t next_available_stream_id_ = kStreamIdStart;
-
   // Map from stream ID to registered stream. Protected by stream_mutex_.
   std::unordered_map<int32_t, Stream> registered_streams_;
 
