@@ -77,10 +77,11 @@ status_t RealtimeZslRequestProcessor::Initialize(
           res);
     return res;
   }
-
-  res = characteristics->Get(VendorTagIds::kHdrUsageMode, &entry);
-  if (res == OK) {
-    hdr_mode_ = static_cast<HdrMode>(entry.data.u8[0]);
+  if (pixel_format_ == android_pixel_format_t::HAL_PIXEL_FORMAT_RAW10) {
+    res = characteristics->Get(VendorTagIds::kHdrUsageMode, &entry);
+    if (res == OK) {
+      hdr_mode_ = static_cast<HdrMode>(entry.data.u8[0]);
+    }
   }
 
   return OK;
@@ -202,7 +203,8 @@ status_t RealtimeZslRequestProcessor::ProcessRequest(
         HalCameraMetadata::Clone(physical_metadata.get());
   }
 
-  if (is_hdrplus_zsl_enabled_) {
+  if (is_hdrplus_zsl_enabled_ ||
+      pixel_format_ == android_pixel_format_t::HAL_PIXEL_FORMAT_YCBCR_420_888) {
     // Get one bffer from internal stream manager
     StreamBuffer buffer = {};
     status_t result;
@@ -220,7 +222,7 @@ status_t RealtimeZslRequestProcessor::ProcessRequest(
       block_request.output_buffers.push_back(buffer);
     }
 
-    if (block_request.settings != nullptr) {
+    if (block_request.settings != nullptr && is_hdrplus_zsl_enabled_) {
       bool enable_hybrid_ae =
           (hdr_mode_ == HdrMode::kNonHdrplusMode ? false : true);
       result = hal_utils::ModifyRealtimeRequestForHdrplus(

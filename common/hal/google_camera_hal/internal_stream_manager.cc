@@ -15,6 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
+#include <cstdint>
 #define LOG_TAG "GCH_InternalStreamManager"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include <log/log.h>
@@ -25,6 +26,19 @@
 
 namespace android {
 namespace google_camera_hal {
+
+namespace {
+int32_t GetNextAvailableStreamId() {
+  static int32_t next_available_stream_id = kHalInternalStreamStart;
+  static std::mutex next_available_stream_id_mutex;
+  int32_t result;
+  {
+    std::lock_guard<std::mutex> lock(next_available_stream_id_mutex);
+    result = next_available_stream_id++;
+  }
+  return result;
+}
+}  // namespace
 
 std::unique_ptr<InternalStreamManager> InternalStreamManager::Create(
     IHalBufferAllocator* buffer_allocator) {
@@ -87,7 +101,7 @@ status_t InternalStreamManager::RegisterNewInternalStream(const Stream& stream,
   // implementation defined internal stream format. other wise will use the next
   // available unique id.
   if (stream.id < kStreamIdReserve) {
-    id = next_available_stream_id_++;
+    id = GetNextAvailableStreamId();
     internal_stream.id = id;
   }
   registered_streams_[id] = std::move(internal_stream);
