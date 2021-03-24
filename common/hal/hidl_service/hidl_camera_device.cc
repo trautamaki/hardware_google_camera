@@ -224,7 +224,7 @@ Return<void> HidlCameraDevice::isStreamCombinationSupported(
 }
 
 Return<void> HidlCameraDevice::isStreamCombinationSupported_3_7(
-    const StreamConfiguration& streams,
+    const V3_7::StreamConfiguration& streams,
     ICameraDevice::isStreamCombinationSupported_cb _hidl_cb) {
   bool is_supported = false;
   google_camera_hal::StreamConfiguration stream_config;

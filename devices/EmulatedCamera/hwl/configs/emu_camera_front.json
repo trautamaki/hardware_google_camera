@@ -211,7 +211,7 @@
    "240"
   ], 
   "android.jpeg.maxSize": [
-   "300000"
+   "3000000"
   ], 
   "android.lens.distortion": [
    "0.08807813", 
@@ -292,9 +292,11 @@
    "BURST_CAPTURE", 
    "MANUAL_POST_PROCESSING", 
    "LOGICAL_MULTI_CAMERA", 
-   "PRIVATE_REPROCESSING", 
+   "PRIVATE_REPROCESSING",
+   "ULTRA_HIGH_RESOLUTION_SENSOR",
    "YUV_REPROCESSING", 
-   "RAW"
+   "RAW",
+   "REMOSAIC_REPROCESSING"
   ], 
   "android.request.maxNumInputStreams": [
    "1"
@@ -309,6 +311,11 @@
    "33", 
    "35"
   ], 
+  "android.scaler.availableInputOutputFormatsMapMaximumResolution" : [
+   "32",
+   "1",
+   "32"
+  ],
   "android.reprocess.maxCaptureStall": [
    "2"
   ], 
@@ -476,7 +483,8 @@
    "1245186", 
    "1245187", 
    "1441792", 
-   "851985"
+   "851985",
+   "917536"
   ], 
   "android.request.availableResultKeys": [
    "0", 
@@ -551,7 +559,8 @@
    "1114123",
    "1703938", 
    "917530", 
-   "851985"
+   "851985",
+   "917536"
   ], 
   "android.request.maxNumOutputStreams": [
    "1", 
@@ -756,6 +765,20 @@
    "144", 
    "33331760"
   ], 
+"android.scaler.availableMinFrameDurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "33331760",
+   "33",
+   "6048",
+   "4024",
+   "33331760",
+   "35",
+   "6048",
+   "4024",
+   "33331760"
+  ],
   "android.scaler.availableStallDurations": [
    "32",
    "1920",
@@ -822,6 +845,16 @@
    "144", 
    "164736"
   ], 
+  "android.scaler.availableStallDurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "287539200",
+   "33",
+   "6048",
+   "4024",
+   "287539200"
+   ],
   "android.scaler.availableStreamConfigurations": [
    "32",
    "1920",
@@ -1012,6 +1045,24 @@
    "240", 
    "OUTPUT"
   ], 
+  "android.scaler.availableStreamConfigurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "INPUT",
+   "32",
+   "6048",
+   "4024",
+   "OUTPUT",
+   "33", 
+   "6048", 
+   "4024", 
+   "OUTPUT",
+   "35", 
+   "6048", 
+   "4024", 
+   "OUTPUT"
+  ],
   "android.scaler.croppingType": [
    "CENTER_ONLY"
   ], 
@@ -1154,6 +1205,12 @@
    "1920", 
    "1440"
   ], 
+  "android.sensor.info.activeArraySizeMaximumResolution": [
+   "0", 
+   "0", 
+   "6048", 
+   "4024"
+  ], 
   "android.sensor.info.colorFilterArrangement": [
    "RGGB"
   ], 
@@ -1180,6 +1237,20 @@
    "0", 
    "1920", 
    "1440"
+  ], 
+  "android.sensor.info.pixelArraySizeMaximumResolution": [
+   "6048", 
+   "4024"
+  ], 
+  "android.sensor.info.binningFactor": [
+   "2",
+   "2"
+  ],
+  "android.sensor.info.preCorrectionActiveArraySizeMaximumResolution": [
+   "0", 
+   "0", 
+   "6048", 
+   "4024"
   ], 
   "android.sensor.info.sensitivityRange": [
    "100", 
@@ -1455,7 +1526,7 @@
    "240"
   ], 
   "android.jpeg.maxSize": [
-   "300000"
+   "3000000"
   ], 
   "android.lens.distortion": [
    "0.08807813", 
@@ -1527,9 +1598,11 @@
    "MANUAL_SENSOR", 
    "BURST_CAPTURE", 
    "MANUAL_POST_PROCESSING",
-   "PRIVATE_REPROCESSING", 
+   "PRIVATE_REPROCESSING",
+   "ULTRA_HIGH_RESOLUTION_SENSOR",
    "YUV_REPROCESSING", 
-   "RAW"
+   "RAW",
+   "REMOSAIC_REPROCESSING"
   ], 
   "android.request.maxNumInputStreams": [
    "1"
@@ -1544,6 +1617,11 @@
    "33", 
    "35"
   ], 
+  "android.scaler.availableInputOutputFormatsMapMaximumResolution" : [
+   "32",
+   "1",
+   "32"
+  ],
   "android.reprocess.maxCaptureStall": [
    "2"
   ], 
@@ -1712,7 +1790,8 @@
    "1245186", 
    "1245187", 
    "1441792", 
-   "851985"
+   "851985",
+   "917536"
   ], 
   "android.request.availableResultKeys": [
    "0", 
@@ -1786,7 +1865,8 @@
    "65552",
    "1114123",
    "917530", 
-   "851985"
+   "851985",
+   "917536"
   ], 
   "android.request.maxNumOutputStreams": [
    "1", 
@@ -1991,6 +2071,20 @@
    "144", 
    "33331760"
   ], 
+  "android.scaler.availableMinFrameDurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "33331760",
+   "33",
+   "6048",
+   "4024",
+   "33331760",
+   "35",
+   "6048",
+   "4024",
+   "33331760"
+  ],
   "android.scaler.availableStallDurations": [
    "32",
    "1920",
@@ -2057,6 +2151,16 @@
    "144", 
    "164736"
   ], 
+  "android.scaler.availableStallDurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "287539200",
+   "33",
+   "6048",
+   "4024",
+   "287539200"
+   ],
   "android.scaler.availableStreamConfigurations": [
    "32",
    "1920",
@@ -2251,6 +2355,24 @@
    "144", 
    "OUTPUT"
   ], 
+ "android.scaler.availableStreamConfigurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "INPUT",
+   "32",
+   "6048",
+   "4024",
+   "OUTPUT",
+   "33", 
+   "6048", 
+   "4024", 
+   "OUTPUT",
+   "35", 
+   "6048", 
+   "4024", 
+   "OUTPUT"
+  ],
   "android.scaler.croppingType": [
    "CENTER_ONLY"
   ], 
@@ -2415,6 +2537,12 @@
    "1920", 
    "1440"
   ], 
+  "android.sensor.info.activeArraySizeMaximumResolution": [
+   "0", 
+   "0", 
+   "6048", 
+   "4024"
+  ], 
   "android.sensor.info.colorFilterArrangement": [
    "RGGB"
   ], 
@@ -2442,6 +2570,20 @@
    "1920", 
    "1440"
   ], 
+  "android.sensor.info.pixelArraySizeMaximumResolution": [
+   "6048", 
+   "4024"
+  ], 
+  "android.sensor.info.preCorrectionActiveArraySizeMaximumResolution": [
+   "0", 
+   "0", 
+   "6048", 
+   "4024"
+  ], 
+ "android.sensor.info.binningFactor": [
+   "2",
+   "2"
+  ],
   "android.sensor.info.sensitivityRange": [
    "100", 
    "1000"
@@ -2716,7 +2858,7 @@
    "240"
   ], 
   "android.jpeg.maxSize": [
-   "300000"
+   "3000000"
   ], 
   "android.lens.distortion": [
    "0.27679554", 
@@ -2789,8 +2931,10 @@
    "BURST_CAPTURE", 
    "MANUAL_POST_PROCESSING",
    "PRIVATE_REPROCESSING", 
+   "ULTRA_HIGH_RESOLUTION_SENSOR",
    "YUV_REPROCESSING", 
-   "RAW"
+   "RAW",
+   "REMOSAIC_REPROCESSING"
   ], 
   "android.request.maxNumInputStreams": [
    "1"
@@ -2805,6 +2949,11 @@
    "33", 
    "35"
   ], 
+  "android.scaler.availableInputOutputFormatsMapMaximumResolution" : [
+   "32",
+   "1",
+   "32"
+  ],
   "android.reprocess.maxCaptureStall": [
    "2"
   ], 
@@ -2973,7 +3122,8 @@
    "1245186", 
    "1245187", 
    "1441792", 
-   "851985"
+   "851985",
+   "917536"
   ], 
   "android.request.availableResultKeys": [
    "0", 
@@ -3047,7 +3197,8 @@
    "65552",
    "1114123",
    "917530", 
-   "851985"
+   "851985",
+   "917536"
   ], 
   "android.request.maxNumOutputStreams": [
    "1", 
@@ -3268,6 +3419,20 @@
    "144", 
    "33331760"
   ], 
+  "android.scaler.availableMinFrameDurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "33331760",
+   "33",
+   "6048",
+   "4024",
+   "33331760",
+   "35",
+   "6048",
+   "4024",
+   "33331760"
+  ],
   "android.scaler.availableStallDurations": [
    "32",
    "2048",
@@ -3342,6 +3507,16 @@
    "144", 
    "164736"
   ], 
+  "android.scaler.availableStallDurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "287539200",
+   "33",
+   "6048",
+   "4024",
+   "287539200"
+   ],
   "android.scaler.availableStreamConfigurations": [
    "34", 
    "2048", 
@@ -3548,6 +3723,24 @@
    "144", 
    "OUTPUT"
   ], 
+  "android.scaler.availableStreamConfigurationsMaximumResolution": [
+   "32",
+   "6048",
+   "4024",
+   "INPUT",
+   "32",
+   "6048",
+   "4024",
+   "OUTPUT",
+   "33", 
+   "6048", 
+   "4024", 
+   "OUTPUT",
+   "35", 
+   "6048", 
+   "4024", 
+   "OUTPUT"
+  ],
   "android.scaler.croppingType": [
    "CENTER_ONLY"
   ], 
@@ -3712,6 +3905,12 @@
    "2048", 
    "1536"
   ], 
+  "android.sensor.info.activeArraySizeMaximumResolution": [
+   "0", 
+   "0", 
+   "6048", 
+   "4024"
+  ], 
   "android.sensor.info.colorFilterArrangement": [
    "RGGB"
   ], 
@@ -3739,6 +3938,20 @@
    "2048", 
    "1536"
   ], 
+  "android.sensor.info.pixelArraySizeMaximumResolution": [
+   "6048", 
+   "4024"
+  ], 
+  "android.sensor.info.preCorrectionActiveArraySizeMaximumResolution": [
+   "0", 
+   "0", 
+   "6048", 
+   "4024"
+  ], 
+ "android.sensor.info.binningFactor": [
+   "2",
+   "2"
+  ],
   "android.sensor.info.sensitivityRange": [
    "100", 
    "1000"
