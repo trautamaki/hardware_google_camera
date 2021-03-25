@@ -94,8 +94,8 @@ class CameraDeviceSessionHwl {
       HwlOfflinePipelineRole pipeline_role, std::vector<Stream>* streams) = 0;
 
   // Get the configured HAL streams for a pipeline. If no pipeline was built,
-  // this method will return NO_INIT. If pipeline_id was not built, this
-  // methodgit s will return NAME_NOT_FOUND.
+  // this method will return NO_INIT. If pipeline_id was not built, this method
+  // will return NAME_NOT_FOUND.
   virtual status_t GetConfiguredHalStream(
       uint32_t pipeline_id, std::vector<HalStream>* hal_streams) const = 0;
 
