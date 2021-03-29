@@ -62,6 +62,8 @@ cc_library_shared {
         "rgbird_depth_result_processor.cc",
         "rgbird_result_request_processor.cc",
         "rgbird_rt_request_processor.cc",
+        "snapshot_request_processor.cc",
+        "snapshot_result_processor.cc",
         "vendor_tags.cc",
         "zsl_snapshot_capture_session.cc",
     ],
