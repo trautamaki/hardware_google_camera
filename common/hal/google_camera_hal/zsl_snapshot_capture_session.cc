@@ -18,18 +18,88 @@
 
 #define LOG_TAG "GCH_ZslSnapshotCaptureSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+
 #include "zsl_snapshot_capture_session.h"
 
+#include <dlfcn.h>
 #include <log/log.h>
+#include <sys/stat.h>
 #include <utils/Trace.h>
 
 #include "hal_utils.h"
+#include "snapshot_request_processor.h"
+#include "snapshot_result_processor.h"
 #include "system/graphics-base-v1.0.h"
 #include "utils.h"
 #include "utils/Errors.h"
 
 namespace android {
 namespace google_camera_hal {
+namespace {
+// HAL external process block library path
+#if defined(_LP64)
+constexpr char kExternalProcessBlockDir[] =
+    "/vendor/lib64/camera/google_proprietary/";
+#else  // defined(_LP64)
+constexpr char kExternalProcessBlockDir[] =
+    "/vendor/lib/camera/google_proprietary/";
+#endif
+
+bool IsCaptureRequest(const CaptureRequest& request) {
+  if (request.settings == nullptr) {
+    return false;
+  }
+  camera_metadata_ro_entry entry;
+  if (request.settings->Get(ANDROID_CONTROL_CAPTURE_INTENT, &entry) != OK ||
+      *entry.data.u8 != ANDROID_CONTROL_CAPTURE_INTENT_STILL_CAPTURE) {
+    ALOGV("%s: ANDROID_CONTROL_CAPTURE_INTENT is not STILL_CAPTURE",
+          __FUNCTION__);
+    return false;
+  }
+  return true;
+}
+}  // namespace
+
+std::unique_ptr<ProcessBlock>
+ZslSnapshotCaptureSession::CreateSnapshotProcessBlock() {
+  ATRACE_CALL();
+  bool found_process_block = false;
+  for (const auto& lib_path :
+       utils::FindLibraryPaths(kExternalProcessBlockDir)) {
+    ALOGI("%s: Loading %s", __FUNCTION__, lib_path.c_str());
+    void* lib_handle = nullptr;
+    lib_handle = dlopen(lib_path.c_str(), RTLD_NOW);
+    if (lib_handle == nullptr) {
+      ALOGW("Failed loading %s.", lib_path.c_str());
+      continue;
+    }
+
+    GetProcessBlockFactoryFunc external_process_block_t =
+        reinterpret_cast<GetProcessBlockFactoryFunc>(
+            dlsym(lib_handle, "GetProcessBlockFactory"));
+    if (external_process_block_t == nullptr) {
+      ALOGE("%s: dlsym failed (%s) when loading %s.", __FUNCTION__,
+            "GetProcessBlockFactoryFunc", lib_path.c_str());
+      dlclose(lib_handle);
+      lib_handle = nullptr;
+      continue;
+    }
+
+    if (external_process_block_t()->GetBlockName() == "SnapshotProcessBlock") {
+      snapshot_process_block_factory_ = external_process_block_t;
+      snapshot_process_block_lib_handle_ = lib_handle;
+      found_process_block = true;
+      break;
+    }
+  }
+  if (!found_process_block) {
+    ALOGE("%s: snapshot process block does not exist", __FUNCTION__);
+    return nullptr;
+  }
+
+  return snapshot_process_block_factory_()->CreateProcessBlock(
+      camera_device_session_hwl_);
+}
 
 bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
     CameraDeviceSessionHwl* device_session_hwl,
@@ -123,19 +193,34 @@ ZslSnapshotCaptureSession::~ZslSnapshotCaptureSession() {
   if (camera_device_session_hwl_ != nullptr) {
     camera_device_session_hwl_->DestroyPipelines();
   }
+  dlclose(snapshot_process_block_lib_handle_);
 }
 
 status_t ZslSnapshotCaptureSession::BuildPipelines(
-    ProcessBlock* process_block, ProcessBlock* /*snapshot_process_block*/,
+    ProcessBlock* process_block, ProcessBlock* snapshot_process_block,
     std::vector<HalStream>* hal_configured_streams) {
   ATRACE_CALL();
-  if (process_block == nullptr || hal_configured_streams == nullptr) {
-    ALOGE("%s: process_block (%p) or hal_configured_streams (%p) is nullptr",
-          __FUNCTION__, process_block, hal_configured_streams);
+  if (process_block == nullptr || hal_configured_streams == nullptr ||
+      snapshot_process_block == nullptr) {
+    ALOGE(
+        "%s: process_block (%p) or hal_configured_streams (%p) or "
+        "snapshot_process_block (%p) is nullptr",
+        __FUNCTION__, process_block, hal_configured_streams,
+        snapshot_process_block);
     return BAD_VALUE;
   }
 
   status_t res;
+
+  std::vector<HalStream> snapshot_hal_configured_streams;
+  res = snapshot_process_block->GetConfiguredHalStreams(
+      &snapshot_hal_configured_streams);
+  if (res != OK) {
+    ALOGE("%s: Getting snapshot HAL streams failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
   for (uint32_t i = 0; i < hal_configured_streams->size(); i++) {
     if (hal_configured_streams->at(i).id == additional_stream_id_) {
       if (hal_configured_streams->at(i).max_buffers < kRawMinBufferCount) {
@@ -248,6 +333,100 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
     return res;
   }
 
+  return OK;
+}
+
+status_t ZslSnapshotCaptureSession::ConfigureSnapshotStreams(
+    const StreamConfiguration& stream_config) {
+  ATRACE_CALL();
+  if (snapshot_process_block_ == nullptr ||
+      snapshot_request_processor_ == nullptr) {
+    ALOGE(
+        "%s: snapshot_process_block_ or snapshot_request_processor_ is nullptr",
+        __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  StreamConfiguration process_block_stream_config;
+  // Configure streams for request processor
+  status_t res = snapshot_request_processor_->ConfigureStreams(
+      internal_stream_manager_.get(), stream_config,
+      &process_block_stream_config);
+  if (res != OK) {
+    ALOGE("%s: Configuring stream for request processor failed.", __FUNCTION__);
+    return res;
+  }
+
+  // Configure streams for snapshot process block.
+  res = snapshot_process_block_->ConfigureStreams(process_block_stream_config,
+                                                  stream_config);
+  if (res != OK) {
+    ALOGE("%s: Configuring snapshot stream for process block failed.",
+          __FUNCTION__);
+    return res;
+  }
+
+  return OK;
+}
+
+status_t ZslSnapshotCaptureSession::SetupSnapshotProcessChain(
+    const StreamConfiguration& stream_config,
+    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify) {
+  ATRACE_CALL();
+  if (snapshot_process_block_ != nullptr ||
+      snapshot_result_processor_ != nullptr ||
+      snapshot_request_processor_ != nullptr) {
+    ALOGE(
+        "%s: snapshot_process_block_(%p) or snapshot_result_processor_(%p) or "
+        "snapshot_request_processor_(%p) is/are "
+        "already set",
+        __FUNCTION__, snapshot_process_block_, snapshot_result_processor_,
+        snapshot_request_processor_.get());
+    return BAD_VALUE;
+  }
+
+  std::unique_ptr<ProcessBlock> snapshot_process_block =
+      CreateSnapshotProcessBlock();
+  if (snapshot_process_block == nullptr) {
+    ALOGE("%s: Creating SnapshotProcessBlock failed.", __FUNCTION__);
+    return UNKNOWN_ERROR;
+  }
+  snapshot_process_block_ = snapshot_process_block.get();
+
+  snapshot_request_processor_ = SnapshotRequestProcessor::Create(
+      camera_device_session_hwl_, additional_stream_id_);
+  if (snapshot_request_processor_ == nullptr) {
+    ALOGE("%s: Creating SnapshotRequestProcessor failed.", __FUNCTION__);
+    return UNKNOWN_ERROR;
+  }
+
+  std::unique_ptr<SnapshotResultProcessor> snapshot_result_processor =
+      SnapshotResultProcessor::Create(internal_stream_manager_.get(),
+                                      additional_stream_id_);
+  if (snapshot_result_processor == nullptr) {
+    ALOGE("%s: Creating SnapshotResultProcessor failed.", __FUNCTION__);
+    return UNKNOWN_ERROR;
+  }
+  snapshot_result_processor_ = snapshot_result_processor.get();
+
+  status_t res = snapshot_request_processor_->SetProcessBlock(
+      std::move(snapshot_process_block));
+  if (res != OK) {
+    ALOGE("%s: Setting process block for RequestProcessor failed: %s(%d)",
+          __FUNCTION__, strerror(-res), res);
+    return res;
+  }
+
+  res = snapshot_process_block_->SetResultProcessor(
+      std::move(snapshot_result_processor));
+
+  snapshot_result_processor_->SetResultCallback(process_capture_result, notify);
+  res = ConfigureSnapshotStreams(stream_config);
+  if (res != OK) {
+    ALOGE("%s: Configuring snapshot stream failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
   return OK;
 }
 
@@ -405,12 +584,17 @@ status_t ZslSnapshotCaptureSession::Initialize(
   }
 
   // Setup snapshot process chain
-  std::unique_ptr<ProcessBlock> snapshot_process_block;
-  std::unique_ptr<ResultProcessor> snapshot_result_processor;
+  res = SetupSnapshotProcessChain(stream_config, process_capture_result_,
+                                  notify_);
+  if (res != OK) {
+    ALOGE("%s: SetupSnapshotProcessChain fail: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
 
   // Realtime and snapshot streams are configured
   // Start to build pipleline
-  res = BuildPipelines(preview_process_block_, snapshot_process_block.get(),
+  res = BuildPipelines(preview_process_block_, snapshot_process_block_,
                        hal_configured_streams);
   if (res != OK) {
     ALOGE("%s: Building pipelines failed: %s(%d)", __FUNCTION__, strerror(-res),
@@ -442,7 +626,11 @@ status_t ZslSnapshotCaptureSession::ProcessRequest(const CaptureRequest& request
           request.frame_number);
     return BAD_VALUE;
   }
-  res = preview_request_processor_->ProcessRequest(request);
+  if (IsCaptureRequest(request)) {
+    res = snapshot_request_processor_->ProcessRequest(request);
+  } else {
+    res = preview_request_processor_->ProcessRequest(request);
+  }
 
   if (res != OK) {
     ALOGE("%s: ProcessRequest (%d) fail and remove pending request",

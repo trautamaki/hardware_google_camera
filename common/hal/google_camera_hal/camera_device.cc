@@ -17,12 +17,14 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "GCH_CameraDevice"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+#include "camera_device.h"
+
 #include <dlfcn.h>
 #include <log/log.h>
 #include <sys/stat.h>
 #include <utils/Trace.h>
 
-#include "camera_device.h"
+#include "utils.h"
 #include "vendor_tags.h"
 
 namespace android {
@@ -167,33 +169,6 @@ bool CameraDevice::IsStreamCombinationSupported(
   return supported;
 }
 
-// Returns an array of regular files under dir_path.
-static std::vector<std::string> FindLibraryPaths(const char* dir_path) {
-  std::vector<std::string> libs;
-
-  errno = 0;
-  DIR* dir = opendir(dir_path);
-  if (!dir) {
-    ALOGD("%s: Unable to open directory %s (%s)", __FUNCTION__, dir_path,
-          strerror(errno));
-    return libs;
-  }
-
-  struct dirent* entry = nullptr;
-  while ((entry = readdir(dir)) != nullptr) {
-    std::string lib_path(dir_path);
-    lib_path += entry->d_name;
-    struct stat st;
-    if (stat(lib_path.c_str(), &st) == 0) {
-      if (S_ISREG(st.st_mode)) {
-        libs.push_back(lib_path);
-      }
-    }
-  }
-
-  return libs;
-}
-
 status_t CameraDevice::LoadExternalCaptureSession() {
   ATRACE_CALL();
 
@@ -203,7 +178,8 @@ status_t CameraDevice::LoadExternalCaptureSession() {
     return OK;
   }
 
-  for (const auto& lib_path : FindLibraryPaths(kExternalCaptureSessionDir)) {
+  for (const auto& lib_path :
+       utils::FindLibraryPaths(kExternalCaptureSessionDir)) {
     ALOGI("%s: Loading %s", __FUNCTION__, lib_path.c_str());
     void* lib_handle = nullptr;
     lib_handle = dlopen(lib_path.c_str(), RTLD_NOW);

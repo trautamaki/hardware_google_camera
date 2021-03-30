@@ -23,11 +23,14 @@
 #include "capture_session_utils.h"
 #include "capture_session_wrapper_process_block.h"
 #include "hwl_types.h"
+#include "process_block.h"
 #include "realtime_zsl_request_processor.h"
 #include "realtime_zsl_result_processor.h"
 #include "request_processor.h"
 #include "result_dispatcher.h"
 #include "result_processor.h"
+#include "snapshot_request_processor.h"
+#include "snapshot_result_processor.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -99,9 +102,15 @@ class ZslSnapshotCaptureSession : public CaptureSession {
                       NotifyFunc notify,
                       std::vector<HalStream>* hal_configured_streams);
 
+  status_t SetupSnapshotProcessChain(
+      const StreamConfiguration& stream_config,
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify);
+
   status_t SetupPreviewProcessChain(
       const StreamConfiguration& stream_config,
       ProcessCaptureResultFunc process_capture_result, NotifyFunc notify);
+
+  status_t ConfigureSnapshotStreams(const StreamConfiguration& stream_config);
 
   // Configure streams for request processor and process block.
   status_t ConfigureStreams(const StreamConfiguration& stream_config,
@@ -119,6 +128,8 @@ class ZslSnapshotCaptureSession : public CaptureSession {
       const StreamConfiguration& stream_config,
       std::vector<HalStream>* hal_configured_streams);
 
+  std::unique_ptr<ProcessBlock> CreateSnapshotProcessBlock();
+
   // Invoked when receiving a result from result processor.
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
 
@@ -130,6 +141,10 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   std::unique_ptr<RealtimeZslRequestProcessor> preview_request_processor_;
   CaptureSessionWrapperProcessBlock* preview_process_block_ = nullptr;
   RealtimeZslResultProcessor* preview_result_processor_ = nullptr;
+
+  std::unique_ptr<SnapshotRequestProcessor> snapshot_request_processor_;
+  ProcessBlock* snapshot_process_block_ = nullptr;
+  SnapshotResultProcessor* snapshot_result_processor_ = nullptr;
 
   // Use this stream id to check the request is ZSL compatible
   int32_t hal_preview_stream_id_ = -1;
@@ -154,6 +169,11 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   CameraDeviceSessionHwl* camera_device_session_hwl_ = nullptr;
 
   std::vector<HalStream>* hal_config_ = nullptr;
+
+  using GetProcessBlockFactoryFunc = ExternalProcessBlockFactory* (*)();
+  GetProcessBlockFactoryFunc snapshot_process_block_factory_;
+  // Opened library handles that should be closed on destruction
+  void* snapshot_process_block_lib_handle_ = nullptr;
 };
 
 }  // namespace google_camera_hal

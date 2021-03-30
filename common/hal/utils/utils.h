@@ -18,7 +18,9 @@
 #define HARDWARE_GOOGLE_CAMERA_HAL_UTILS_UTILS_H_
 
 #include <log/log.h>
+
 #include <utility>
+
 #include "hal_types.h"
 
 namespace android {
@@ -130,6 +132,8 @@ void RevertZoomRatio(const float zoom_ratio,
   }
   ClampBoundary(active_array_dimension, x, y, width, height);
 }
+
+std::vector<std::string> FindLibraryPaths(const char* dir_path);
 
 }  // namespace utils
 }  // namespace google_camera_hal

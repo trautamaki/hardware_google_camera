@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 
 #include <gtest/gtest.h>
+#include "utils.h"
 
 #include <algorithm>
 
@@ -44,33 +45,6 @@ constexpr char kExternalCaptureSessionDir[] =
     "/vendor/lib/camera/capture_sessions/";
 #endif
 
-// Returns an array of regular files under dir_path.
-static std::vector<std::string> FindLibraryPaths(const char* dir_path) {
-  std::vector<std::string> libs;
-
-  errno = 0;
-  DIR* dir = opendir(dir_path);
-  if (!dir) {
-    ALOGD("%s: Unable to open directory %s (%s)", __FUNCTION__, dir_path,
-          strerror(errno));
-    return libs;
-  }
-
-  struct dirent* entry = nullptr;
-  while ((entry = readdir(dir)) != nullptr) {
-    std::string lib_path(dir_path);
-    lib_path += entry->d_name;
-    struct stat st;
-    if (stat(lib_path.c_str(), &st) == 0) {
-      if (S_ISREG(st.st_mode)) {
-        libs.push_back(lib_path);
-      }
-    }
-  }
-
-  return libs;
-}
-
 class CameraDeviceSessionTests : public ::testing::Test {
  protected:
   static constexpr uint32_t kCaptureTimeoutMs = 3000;
@@ -94,7 +68,8 @@ class CameraDeviceSessionTests : public ::testing::Test {
       return OK;
     }
 
-    for (const auto& lib_path : FindLibraryPaths(kExternalCaptureSessionDir)) {
+    for (const auto& lib_path :
+         utils::FindLibraryPaths(kExternalCaptureSessionDir)) {
       ALOGI("%s: Loading %s", __FUNCTION__, lib_path.c_str());
       void* lib_handle = nullptr;
       lib_handle = dlopen(lib_path.c_str(), RTLD_NOW);
