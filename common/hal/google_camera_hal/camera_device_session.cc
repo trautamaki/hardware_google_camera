@@ -266,6 +266,17 @@ void CameraDeviceSession::Notify(const NotifyMessage& result) {
     if (result.type == MessageType::kError &&
         result.message.error.error_code == ErrorCode::kErrorResult) {
       pending_results_.erase(frame_number);
+
+      if (ignore_shutters_.find(frame_number) == ignore_shutters_.end()) {
+        ignore_shutters_.insert(frame_number);
+      }
+    }
+
+    if (result.type == MessageType::kShutter) {
+      if (ignore_shutters_.find(frame_number) != ignore_shutters_.end()) {
+        ignore_shutters_.erase(frame_number);
+        return;
+      }
     }
   }
 
@@ -739,6 +750,7 @@ status_t CameraDeviceSession::ConfigureStreams(
       error_notified_requests_.clear();
       dummy_buffer_observed_.clear();
       pending_results_.clear();
+      ignore_shutters_.clear();
     }
   }
 
@@ -986,6 +998,9 @@ status_t CameraDeviceSession::TryHandleDummyResult(CaptureResult* result,
           if (pending_results_.find(frame_number) != pending_results_.end()) {
             need_to_notify_error_result = true;
             pending_results_.erase(frame_number);
+            if (ignore_shutters_.find(frame_number) == ignore_shutters_.end()) {
+              ignore_shutters_.insert(frame_number);
+            }
           }
           need_to_handle_result = true;
           break;
