@@ -17,16 +17,16 @@
 #include "android-base/thread_annotations.h"
 #define LOG_TAG "goog_sensor_wrapper"
 
-#include <algorithm>
-#include <cmath>
-
 #include <assert.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <sys/time.h>
-#include "utils/Log.h"
-#include "utils/String16.h"
-#include "utils/SystemClock.h"
+#include <utils/Log.h>
+#include <utils/String16.h>
+#include <utils/SystemClock.h>
+
+#include <algorithm>
+#include <cmath>
 
 #include "goog_sensor_wrapper.h"
 
