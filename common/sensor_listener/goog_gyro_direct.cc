@@ -30,14 +30,11 @@
 namespace android {
 namespace camera_sensor_listener {
 
-using ::android::frameworks::sensorservice::V1_0::IDirectReportChannel;
 using ::android::frameworks::sensorservice::V1_0::ISensorManager;
 using ::android::frameworks::sensorservice::V1_0::Result;
 using ::android::hardware::graphics::mapper::V3_0::IMapper;
 using ::android::hardware::sensors::V1_0::RateLevel;
 using ::android::hardware::sensors::V1_0::SensorFlagBits;
-using ::android::hardware::sensors::V1_0::SensorFlagShift;
-using ::android::hardware::sensors::V1_0::SensorInfo;
 using ::android::hardware::sensors::V1_0::SensorsEventFormatOffset;
 using ::android::hardware::sensors::V1_0::SensorType;
 

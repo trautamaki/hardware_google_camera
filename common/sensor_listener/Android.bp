@@ -1,16 +1,12 @@
 package {
-    // See: http://go/android-license-faq
-    // A large-scale-change added 'default_applicable_licenses' to import
-    // all of the 'license_kinds' from "hardware_google_camera_license"
-    // to get the below license kinds:
-    //   SPDX-license-identifier-Apache-2.0
-    default_applicable_licenses: ["hardware_google_camera_license"],
+    default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
 cc_library {
     name: "lib_sensor_listener",
     vendor: true,
     owner: "google",
+    host_supported: true,
 
     srcs: [
         "goog_gyro_direct.cc",
@@ -25,7 +21,6 @@ cc_library {
     export_include_dirs: ["."],
 
     cflags: [
-        "-D_ANDROID_",
         "-Werror",
         "-Wall",
         "-Wthread-safety",
@@ -33,7 +28,9 @@ cc_library {
         "-Wno-unused-function",
         "-Wno-unused-variable",
     ],
-
+    header_libs: [
+        "libhardware_headers",
+    ],
     shared_libs: [
         "android.frameworks.sensorservice@1.0",
         "android.hardware.graphics.allocator@3.0",
@@ -42,8 +39,6 @@ cc_library {
         "android.hidl.allocator@1.0",
         "libbase",
         "libcutils",
-        "libdl",
-        "libhardware",
         "libhidlbase",
         "liblog",
         "libutils",
