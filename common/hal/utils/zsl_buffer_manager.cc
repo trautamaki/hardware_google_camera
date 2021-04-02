@@ -30,7 +30,7 @@ namespace google_camera_hal {
 
 ZslBufferManager::ZslBufferManager(IHalBufferAllocator* allocator)
     : kMemoryProfilingEnabled(
-          property_get_bool("persist.camera.hal.memoryprofile", false)),
+          property_get_bool("persist.vendor.camera.hal.memoryprofile", false)),
       buffer_allocator_(allocator) {
 }
 
