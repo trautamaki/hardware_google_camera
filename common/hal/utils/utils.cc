@@ -28,7 +28,8 @@ namespace android {
 namespace google_camera_hal {
 namespace utils {
 
-const std::string kRealtimeThreadSetProp = "persist.camera.realtimethread";
+constexpr char kRealtimeThreadSetProp[] =
+    "persist.vendor.camera.realtimethread";
 
 bool IsDepthStream(const Stream& stream) {
   if (stream.stream_type == StreamType::kOutput &&
@@ -388,7 +389,7 @@ bool SupportRealtimeThread() {
   static bool first_time = false;
   if (first_time == false) {
     first_time = true;
-    support_real_time = property_get_bool(kRealtimeThreadSetProp.c_str(), false);
+    support_real_time = property_get_bool(kRealtimeThreadSetProp, false);
   }
 
   return support_real_time;
