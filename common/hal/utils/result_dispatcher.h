@@ -173,6 +173,7 @@ class ResultDispatcher {
   // Protected by result_lock_.
   std::map<uint32_t, PendingFinalResultMetadata> pending_final_metadata_;
 
+  std::mutex process_capture_result_lock_;
   ProcessCaptureResultFunc process_capture_result_;
   NotifyFunc notify_;
 
