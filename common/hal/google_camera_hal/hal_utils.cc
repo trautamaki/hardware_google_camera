@@ -450,7 +450,7 @@ bool IsStreamHdrplusCompatible(const StreamConfiguration& stream_config,
   }
 
   // TODO(b/128633958): remove this after depth block is in place
-  if (property_get_bool("persist.camera.rgbird.forceinternal", false)) {
+  if (property_get_bool("persist.vendor.camera.rgbird.forceinternal", false)) {
     return false;
   }
 
