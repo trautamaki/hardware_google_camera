@@ -74,8 +74,8 @@ std::unique_ptr<DepthProcessBlock> DepthProcessBlock::Create(
     ALOGI("%s: Force creating internal streams for IR pipelines", __FUNCTION__);
   }
 
-  block->pipelined_depth_engine_enabled_ =
-      property_get_bool("persist.camera.frontdepth.enablepipeline", true);
+  block->pipelined_depth_engine_enabled_ = property_get_bool(
+      "persist.vendor.camera.frontdepth.enablepipeline", true);
 
   // TODO(b/129910835): Change the controlling prop into some deterministic
   // logic that controls when the front depth autocal will be triggered.
