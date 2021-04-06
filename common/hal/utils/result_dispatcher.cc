@@ -294,6 +294,7 @@ void ResultDispatcher::NotifyResultMetadata(
   result->physical_metadata = std::move(physical_metadata);
   result->partial_result = partial_result;
 
+  std::lock_guard<std::mutex> lock(process_capture_result_lock_);
   process_capture_result_(std::move(result));
 }
 
@@ -543,6 +544,7 @@ void ResultDispatcher::NotifyBuffers() {
       ALOGE("%s: result is nullptr", __FUNCTION__);
       return;
     }
+    std::lock_guard<std::mutex> lock(process_capture_result_lock_);
     process_capture_result_(std::move(result));
   }
 }
