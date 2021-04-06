@@ -67,7 +67,8 @@ class SnapshotRequestProcessor : public RequestProcessor {
   uint32_t active_array_width_ = 0;
   uint32_t active_array_height_ = 0;
   // The number of snapshot input buffers
-  uint32_t payload_frames_ = 0;
+  // TODO(b/179378479): update the value with the frames we need.
+  uint32_t payload_frames_ = 5;
 };
 
 }  // namespace google_camera_hal

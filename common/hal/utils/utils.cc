@@ -20,7 +20,10 @@
 #include "utils.h"
 
 #include <cutils/properties.h>
+#include <dirent.h>
+#include <dlfcn.h>
 #include <hardware/gralloc.h>
+#include <sys/stat.h>
 
 #include "vendor_tag_defs.h"
 
@@ -422,6 +425,33 @@ status_t UpdateThreadSched(pthread_t thread, int32_t policy,
   }
 
   return OK;
+}
+
+// Returns an array of regular files under dir_path.
+std::vector<std::string> FindLibraryPaths(const char* dir_path) {
+  std::vector<std::string> libs;
+
+  errno = 0;
+  DIR* dir = opendir(dir_path);
+  if (!dir) {
+    ALOGD("%s: Unable to open directory %s (%s)", __FUNCTION__, dir_path,
+          strerror(errno));
+    return libs;
+  }
+
+  struct dirent* entry = nullptr;
+  while ((entry = readdir(dir)) != nullptr) {
+    std::string lib_path(dir_path);
+    lib_path += entry->d_name;
+    struct stat st;
+    if (stat(lib_path.c_str(), &st) == 0) {
+      if (S_ISREG(st.st_mode)) {
+        libs.push_back(lib_path);
+      }
+    }
+  }
+
+  return libs;
 }
 
 }  // namespace utils
