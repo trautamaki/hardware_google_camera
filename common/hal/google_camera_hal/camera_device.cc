@@ -20,14 +20,93 @@
 #include "camera_device.h"
 
 #include <dlfcn.h>
+#include <errno.h>
 #include <log/log.h>
+#include <meminfo/procmeminfo.h>
+#include <stdio.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <utils/Trace.h>
+#include <thread>
 
 #include "utils.h"
 #include "vendor_tags.h"
 
+using android::meminfo::ProcMemInfo;
+using namespace android::meminfo;
+
 namespace android {
+
+void MadviseFileForRange(size_t madvise_size_limit_bytes, size_t map_size_bytes,
+                         const uint8_t* map_begin, const uint8_t* map_end,
+                         const std::string& file_name) {
+  // Ideal blockTransferSize for madvising files (128KiB)
+  static const size_t kIdealIoTransferSizeBytes = 128 * 1024;
+  size_t target_size_bytes =
+      std::min<size_t>(map_size_bytes, madvise_size_limit_bytes);
+  if (target_size_bytes == 0) {
+    return;
+  }
+  std::string trace_tag =
+      "madvising " + file_name + " size=" + std::to_string(target_size_bytes);
+  ATRACE_NAME(trace_tag.c_str());
+  // Based on requested size (target_size_bytes)
+  const uint8_t* target_pos = map_begin + target_size_bytes;
+
+  // Clamp endOfFile if its past map_end
+  if (target_pos > map_end) {
+    target_pos = map_end;
+  }
+
+  // Madvise the whole file up to target_pos in chunks of
+  // kIdealIoTransferSizeBytes (to MADV_WILLNEED)
+  // Note:
+  // madvise(MADV_WILLNEED) will prefetch max(fd readahead size, optimal
+  // block size for device) per call, hence the need for chunks. (128KB is a
+  // good default.)
+  for (const uint8_t* madvise_start = map_begin; madvise_start < target_pos;
+       madvise_start += kIdealIoTransferSizeBytes) {
+    void* madvise_addr =
+        const_cast<void*>(reinterpret_cast<const void*>(madvise_start));
+    size_t madvise_length =
+        std::min(kIdealIoTransferSizeBytes,
+                 static_cast<size_t>(target_pos - madvise_start));
+    int status = madvise(madvise_addr, madvise_length, MADV_WILLNEED);
+    // In case of error we stop madvising rest of the file
+    if (status < 0) {
+      break;
+    }
+  }
+}
+
+static void ReadAheadVma(const Vma& vma, const size_t madvise_size_limit_bytes) {
+  const uint8_t* map_begin = reinterpret_cast<uint8_t*>(vma.start);
+  const uint8_t* map_end = reinterpret_cast<uint8_t*>(vma.end);
+  MadviseFileForRange(madvise_size_limit_bytes,
+                      static_cast<size_t>(map_end - map_begin), map_begin,
+                      map_end, vma.name);
+}
+
+static void LoadLibraries(const std::vector<std::string>* libs) {
+  auto vmaCollectorCb = [&libs](const Vma& vma) {
+    const static size_t kMadviseSizeLimitBytes =
+        std::numeric_limits<size_t>::max();
+    // Read ahead for anonymous VMAs and for specific files.
+    // vma.flags represents a VMAs rwx bits.
+    if (vma.inode == 0 && !vma.is_shared && vma.flags) {
+      ReadAheadVma(vma, kMadviseSizeLimitBytes);
+    } else if (vma.inode != 0 && libs != nullptr &&
+               std::any_of(libs->begin(), libs->end(),
+                           [&vma](std::string lib_name) {
+                             return lib_name.compare(vma.name) == 0;
+                           })) {
+      ReadAheadVma(vma, kMadviseSizeLimitBytes);
+    }
+  };
+  ProcMemInfo meminfo(getpid());
+  meminfo.ForEachVmaFromMaps(vmaCollectorCb);
+}
+
 namespace google_camera_hal {
 
 // HAL external capture session library path
@@ -41,7 +120,8 @@ constexpr char kExternalCaptureSessionDir[] =
 
 std::unique_ptr<CameraDevice> CameraDevice::Create(
     std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
-    CameraBufferAllocatorHwl* camera_allocator_hwl) {
+    CameraBufferAllocatorHwl* camera_allocator_hwl,
+    const std::vector<std::string>* configure_streams_libs) {
   ATRACE_CALL();
   auto device = std::unique_ptr<CameraDevice>(new CameraDevice());
 
@@ -60,6 +140,7 @@ std::unique_ptr<CameraDevice> CameraDevice::Create(
 
   ALOGI("%s: Created a camera device for public(%u)", __FUNCTION__,
         device->GetPublicCameraId());
+  device->configure_streams_libs_ = configure_streams_libs;
 
   return device;
 }
@@ -154,6 +235,9 @@ status_t CameraDevice::CreateCameraDeviceSession(
           strerror(-res), res);
     return UNKNOWN_ERROR;
   }
+
+  std::thread t(LoadLibraries, configure_streams_libs_);
+  t.detach();
 
   return OK;
 }

@@ -279,8 +279,11 @@ status_t CameraProvider::CreateCameraDevice(
     return res;
   }
 
-  *device = CameraDevice::Create(std::move(camera_device_hwl),
-                                 camera_allocator_hwl_.get());
+  auto configure_streams_libs = (const std::vector<std::string>*)(dlsym(
+      hwl_lib_handle_, "configure_streams_libraries"));
+  *device =
+      CameraDevice::Create(std::move(camera_device_hwl),
+                           camera_allocator_hwl_.get(), configure_streams_libs);
   if (*device == nullptr) {
     return NO_INIT;
   }

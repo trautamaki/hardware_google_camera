@@ -36,7 +36,8 @@ class CameraDevice {
   // lifetime of CameraDevice
   static std::unique_ptr<CameraDevice> Create(
       std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
-      CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
+      CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr,
+      const std::vector<std::string>* configure_streams_libs = nullptr);
 
   virtual ~CameraDevice();
 
@@ -98,6 +99,8 @@ class CameraDevice {
   std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries_;
   // Opened library handles that should be closed on destruction
   std::vector<void*> external_capture_session_lib_handles_;
+
+  const std::vector<std::string>* configure_streams_libs_ = nullptr;
 };
 
 }  // namespace google_camera_hal
