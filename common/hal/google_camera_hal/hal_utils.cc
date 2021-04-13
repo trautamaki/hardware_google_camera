@@ -338,7 +338,7 @@ bool IsStreamHdrplusCompatible(const StreamConfiguration& stream_config,
     return false;
   }
 
-  if (property_get_bool("persist.camera.hdrplus.disable", false)) {
+  if (property_get_bool("persist.vendor.camera.hdrplus.disable", false)) {
     ALOGI("%s: HDR+ is disabled by property", __FUNCTION__);
     return false;
   }
