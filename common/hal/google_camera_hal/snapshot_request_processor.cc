@@ -28,7 +28,8 @@ namespace android {
 namespace google_camera_hal {
 
 std::unique_ptr<SnapshotRequestProcessor> SnapshotRequestProcessor::Create(
-    CameraDeviceSessionHwl* device_session_hwl, int32_t yuv_stream_id) {
+    CameraDeviceSessionHwl* device_session_hwl,
+    HwlSessionCallback session_callback, int32_t yuv_stream_id) {
   ATRACE_CALL();
   if (device_session_hwl == nullptr) {
     ALOGE("%s: device_session_hwl (%p) is nullptr", __FUNCTION__,
@@ -36,8 +37,8 @@ std::unique_ptr<SnapshotRequestProcessor> SnapshotRequestProcessor::Create(
     return nullptr;
   }
 
-  auto request_processor =
-      std::unique_ptr<SnapshotRequestProcessor>(new SnapshotRequestProcessor());
+  auto request_processor = std::unique_ptr<SnapshotRequestProcessor>(
+      new SnapshotRequestProcessor(session_callback.request_stream_buffers));
   if (request_processor == nullptr) {
     ALOGE("%s: Creating SnapshotRequestProcessor failed.", __FUNCTION__);
     return nullptr;
@@ -167,7 +168,12 @@ status_t SnapshotRequestProcessor::ProcessRequest(const CaptureRequest& request)
   CaptureRequest block_request;
   block_request.frame_number = request.frame_number;
   block_request.settings = HalCameraMetadata::Clone(request.settings.get());
-  block_request.output_buffers = request.output_buffers;
+
+  for (const auto& output_buffer : request.output_buffers) {
+    request_stream_buffers_(output_buffer.stream_id, /*buffer_sizes=*/1,
+                            &block_request.output_buffers, request.frame_number);
+  }
+
   for (auto& [camera_id, physical_metadata] : request.physical_camera_settings) {
     block_request.physical_camera_settings[camera_id] =
         HalCameraMetadata::Clone(physical_metadata.get());

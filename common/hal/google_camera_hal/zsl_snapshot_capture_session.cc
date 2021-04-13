@@ -394,7 +394,7 @@ status_t ZslSnapshotCaptureSession::SetupSnapshotProcessChain(
   snapshot_process_block_ = snapshot_process_block.get();
 
   snapshot_request_processor_ = SnapshotRequestProcessor::Create(
-      camera_device_session_hwl_, additional_stream_id_);
+      camera_device_session_hwl_, hwl_session_callback_, additional_stream_id_);
   if (snapshot_request_processor_ == nullptr) {
     ALOGE("%s: Creating SnapshotRequestProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
