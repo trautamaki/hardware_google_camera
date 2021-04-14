@@ -674,7 +674,7 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
     }
   } else {
     // Android Studio Emulator
-    if (!property_get_bool("ro.kernel.qemu.legacy_fake_camera", false)) {
+    if (!property_get_bool("ro.boot.qemu.legacy_fake_camera", false)) {
       if (WaitForQemuSfFakeCameraPropertyAvailable() == OK) {
         property_get("vendor.qemu.sf.fake_camera", prop, nullptr);
         if (strcmp(prop, "both") == 0) {
