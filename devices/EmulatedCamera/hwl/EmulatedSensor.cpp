@@ -27,6 +27,7 @@
 
 #include "EmulatedSensor.h"
 
+#include <cutils/properties.h>
 #include <inttypes.h>
 #include <libyuv.h>
 #include <system/camera_metadata.h>
@@ -1116,6 +1117,13 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
   size_t input_width, input_height;
   YCbCrPlanes input_planes, output_planes;
   std::vector<uint8_t> temp_yuv, temp_output_uv, temp_input_uv;
+
+  // Overwrite HIGH_QUALITY to REGULAR for Emulator if property
+  // ro.kernel.qemu.camera_hq_edge_processing is false;
+  if (process_type == HIGH_QUALITY &&
+      !property_get_bool("ro.kernel.qemu.camera_hq_edge_processing", true)) {
+    process_type = REGULAR;
+  }
 
   switch (process_type) {
     case HIGH_QUALITY:
