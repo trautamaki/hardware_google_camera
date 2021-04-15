@@ -1480,9 +1480,9 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
   std::vector<uint8_t> temp_yuv, temp_output_uv, temp_input_uv;
 
   // Overwrite HIGH_QUALITY to REGULAR for Emulator if property
-  // ro.kernel.qemu.camera_hq_edge_processing is false;
+  // ro.boot.qemu.camera_hq_edge_processing is false;
   if (process_type == HIGH_QUALITY &&
-      !property_get_bool("ro.kernel.qemu.camera_hq_edge_processing", true)) {
+      !property_get_bool("ro.boot.qemu.camera_hq_edge_processing", true)) {
     process_type = REGULAR;
   }
 
