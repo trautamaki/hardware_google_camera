@@ -115,9 +115,13 @@ std::unique_ptr<CaptureResult> ConvertToCaptureResult(
 }
 
 bool ContainsOutputBuffer(const CaptureRequest& request,
-                          const buffer_handle_t& buffer) {
+                          const StreamBuffer& buffer) {
   for (auto& request_buffer : request.output_buffers) {
-    if (request_buffer.buffer == buffer) {
+    if (request_buffer.buffer == buffer.buffer) {
+      return true;
+    } else if (buffer.buffer == nullptr &&
+               request_buffer.stream_id == buffer.stream_id) {
+      // Framework passed in an empty buffer and HAL allocated the buffer.
       return true;
     }
   }
@@ -132,7 +136,7 @@ bool AreAllRemainingBuffersRequested(
     bool found = false;
 
     for (auto& block_request : process_block_requests) {
-      if (ContainsOutputBuffer(block_request.request, buffer.buffer)) {
+      if (ContainsOutputBuffer(block_request.request, buffer)) {
         found = true;
         break;
       }
