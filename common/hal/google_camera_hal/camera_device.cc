@@ -266,6 +266,9 @@ status_t CameraDevice::LoadExternalCaptureSession() {
        utils::FindLibraryPaths(kExternalCaptureSessionDir)) {
     ALOGI("%s: Loading %s", __FUNCTION__, lib_path.c_str());
     void* lib_handle = nullptr;
+    // load shared library and never unload
+    // TODO(b/...): Switch to using build-system based HWL
+    //   loading and remove dlopen here?
     lib_handle = dlopen(lib_path.c_str(), RTLD_NOW);
     if (lib_handle == nullptr) {
       ALOGW("Failed loading %s.", lib_path.c_str());
@@ -291,9 +294,6 @@ status_t CameraDevice::LoadExternalCaptureSession() {
 }
 
 CameraDevice::~CameraDevice() {
-  for (auto lib_handle : external_capture_session_lib_handles_) {
-    dlclose(lib_handle);
-  }
 }
 
 }  // namespace google_camera_hal
