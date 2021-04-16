@@ -551,6 +551,7 @@ CameraDeviceSession::~CameraDeviceSession() {
   for (auto external_session : external_capture_session_entries_) {
     delete external_session;
   }
+  external_capture_session_entries_.clear();
 
   if (buffer_mapper_v4_ != nullptr) {
     FreeImportedBufferHandles<android::hardware::graphics::mapper::V4_0::IMapper>(
