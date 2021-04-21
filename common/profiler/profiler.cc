@@ -372,7 +372,12 @@ void ProfilerImpl::PrintResult() {
 }
 
 void ProfilerImpl::DumpResult(std::string filepath) {
+  // The dump result data is organized as 3 sections:
+  //  1. detla time and fps of each frame.
+  //  2. start time of each frame.
+  //  3. end time of each frame.
   if (std::ofstream fout(filepath, std::ios::out); fout.is_open()) {
+    fout << "// PROFILER_DELTA_TIME_AND_FPS, UNIT:MILLISECOND //\n";
     for (const auto& [node_name, time_series] : timing_map_) {
       fout << node_name << " ";
       for (const auto& time_slot : time_series) {
@@ -391,6 +396,26 @@ void ProfilerImpl::DumpResult(std::string filepath) {
         fout << node_name << " fps:" << fps;
       } else {
         fout << node_name << " fps: NA";
+      }
+      fout << "\n";
+    }
+
+    fout << "\n// PROFILER_START_TIME, AVG TIMESTAMP, UNIT:NANOSECOND //\n";
+    for (const auto& [node_name, time_series] : timing_map_) {
+      fout << node_name << " ";
+      for (const auto& time_slot : time_series) {
+        int64_t avg_time_stamp = time_slot.start / std::max(1, time_slot.count);
+        fout << avg_time_stamp << " ";
+      }
+      fout << "\n";
+    }
+
+    fout << "\n// PROFILER_END_TIME, AVG TIMESTAMP,  UNIT:NANOSECOND //\n";
+    for (const auto& [node_name, time_series] : timing_map_) {
+      fout << node_name << " ";
+      for (const auto& time_slot : time_series) {
+        int64_t avg_time_stamp = time_slot.end / std::max(1, time_slot.count);
+        fout << avg_time_stamp << " ";
       }
       fout << "\n";
     }
