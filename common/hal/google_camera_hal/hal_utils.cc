@@ -362,7 +362,7 @@ bool IsStreamHdrplusCompatible(const StreamConfiguration& stream_config,
     return false;
   }
 
-  if (property_get_bool("persist.camera.fatp.enable", false)) {
+  if (property_get_bool("persist.vendor.camera.fatp.enable", false)) {
     ALOGI("%s: Do not use HDR+ for FATP mode", __FUNCTION__);
     return false;
   }
