@@ -3766,6 +3766,9 @@
    "1536", 
    "OUTPUT"
   ], 
+  "android.scaler.multiResolutionStreamSupported": [
+   "TRUE"
+  ],
   "android.sensor.availableTestPatternModes": [
    "0", 
    "1", 
