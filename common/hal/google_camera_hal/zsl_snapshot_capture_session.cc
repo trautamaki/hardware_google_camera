@@ -32,6 +32,7 @@
 #include "system/graphics-base-v1.0.h"
 #include "utils.h"
 #include "utils/Errors.h"
+#include "vendor_tag_defs.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -45,7 +46,7 @@ constexpr char kExternalProcessBlockDir[] =
     "/vendor/lib/camera/google_proprietary/";
 #endif
 
-bool IsCaptureRequest(const CaptureRequest& request) {
+bool IsSwDenoiseSnapshotCompatible(const CaptureRequest& request) {
   if (request.settings == nullptr) {
     return false;
   }
@@ -107,6 +108,20 @@ bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
   ATRACE_CALL();
   if (device_session_hwl == nullptr) {
     ALOGE("%s: device_session_hwl is nullptr", __FUNCTION__);
+    return false;
+  }
+
+  std::unique_ptr<HalCameraMetadata> characteristics;
+  status_t res = device_session_hwl->GetCameraCharacteristics(&characteristics);
+  if (res != OK) {
+    ALOGE("%s: GetCameraCharacteristics failed.", __FUNCTION__);
+    return false;
+  }
+
+  camera_metadata_ro_entry entry;
+  res = characteristics->Get(VendorTagIds::kSwDenoiseEnabled, &entry);
+  if (res != OK || entry.data.u8[0] != 1) {
+    ALOGE("%s: Software denoised not enabled", __FUNCTION__);
     return false;
   }
 
@@ -193,6 +208,9 @@ ZslSnapshotCaptureSession::~ZslSnapshotCaptureSession() {
   if (camera_device_session_hwl_ != nullptr) {
     camera_device_session_hwl_->DestroyPipelines();
   }
+  // Need to explicitly release SnapshotProcessBlock by releasing
+  // SnapshotRequestProcessor before the lib handle is released.
+  snapshot_request_processor_ = nullptr;
   dlclose(snapshot_process_block_lib_handle_);
 }
 
@@ -626,8 +644,10 @@ status_t ZslSnapshotCaptureSession::ProcessRequest(const CaptureRequest& request
           request.frame_number);
     return BAD_VALUE;
   }
-  if (IsCaptureRequest(request)) {
-    res = snapshot_request_processor_->ProcessRequest(request);
+  if (IsSwDenoiseSnapshotCompatible(request)) {
+    // TODO(mhtan): Enable snapshot request processor
+    // res = snapshot_request_processor_->ProcessRequest(request);
+    res = preview_request_processor_->ProcessRequest(request);
   } else {
     res = preview_request_processor_->ProcessRequest(request);
   }
