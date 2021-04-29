@@ -77,6 +77,22 @@ status_t EmulatedLogicalRequestState::GetDefaultRequest(
   return logical_request_state_->GetDefaultRequest(type, default_settings);
 };
 
+void EmulatedLogicalRequestState::UpdateActivePhysicalId(
+    HalCameraMetadata* result_metadata, uint32_t device_id) {
+  if (result_metadata == nullptr) {
+    return;
+  }
+
+  auto device_id_str = std::to_string(device_id);
+  std::vector<uint8_t> result;
+  result.reserve(device_id_str.size() + 1);
+  result.insert(result.end(), device_id_str.begin(), device_id_str.end());
+  result.push_back('\0');
+
+  result_metadata->Set(ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID,
+                       result.data(), result.size());
+}
+
 std::unique_ptr<HwlPipelineResult>
 EmulatedLogicalRequestState::InitializeLogicalResult(uint32_t pipeline_id,
                                                      uint32_t frame_number) {
@@ -90,17 +106,12 @@ EmulatedLogicalRequestState::InitializeLogicalResult(uint32_t pipeline_id,
             std::move(physical_request_states_[it]
                           ->InitializeResult(pipeline_id, frame_number)
                           ->result_metadata);
+
+        UpdateActivePhysicalId(ret->physical_camera_results[it].get(), it);
       }
     }
-    auto physical_device_id = std::to_string(current_physical_camera_);
-    std::vector<uint8_t> result;
-    result.reserve(physical_device_id.size() + 1);
-    result.insert(result.end(), physical_device_id.begin(),
-                  physical_device_id.end());
-    result.push_back('\0');
 
-    ret->result_metadata->Set(ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID,
-                              result.data(), result.size());
+    UpdateActivePhysicalId(ret->result_metadata.get(), current_physical_camera_);
   }
 
   return ret;
