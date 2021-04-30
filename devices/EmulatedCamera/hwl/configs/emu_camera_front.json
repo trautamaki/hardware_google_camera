@@ -1066,6 +1066,9 @@
   "android.scaler.croppingType": [
    "CENTER_ONLY"
   ], 
+  "android.scaler.multiResolutionStreamSupported": [
+   "TRUE"
+  ],
   "android.sensor.availableTestPatternModes": [
    "0", 
    "1", 
@@ -3766,9 +3769,6 @@
    "1536", 
    "OUTPUT"
   ], 
-  "android.scaler.multiResolutionStreamSupported": [
-   "TRUE"
-  ],
   "android.sensor.availableTestPatternModes": [
    "0", 
    "1", 
