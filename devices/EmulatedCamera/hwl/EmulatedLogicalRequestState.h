@@ -100,6 +100,8 @@ class EmulatedLogicalRequestState {
   static std::vector<ZoomRatioPhysicalCameraInfo> GetZoomRatioPhysicalCameraInfo(
       const HalCameraMetadata* logical_chars,
       const PhysicalDeviceMap* physical_devices);
+  static void UpdateActivePhysicalId(HalCameraMetadata* result_metadata,
+                                     uint32_t device_id);
 
   EmulatedLogicalRequestState(const EmulatedLogicalRequestState&) = delete;
   EmulatedLogicalRequestState& operator=(const EmulatedLogicalRequestState&) =
