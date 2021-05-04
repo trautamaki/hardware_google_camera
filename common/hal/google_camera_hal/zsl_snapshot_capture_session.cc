@@ -577,8 +577,15 @@ status_t ZslSnapshotCaptureSession::Initialize(
   }
 
   // Create result dispatcher
-  result_dispatcher_ =
-      ResultDispatcher::Create(kPartialResult, process_capture_result, notify);
+  uint32_t partial_result_count = kPartialResult;
+  camera_metadata_ro_entry partial_result_entry;
+  res = characteristics->Get(ANDROID_REQUEST_PARTIAL_RESULT_COUNT,
+                             &partial_result_entry);
+  if (res == OK) {
+    partial_result_count = partial_result_entry.data.i32[0];
+  }
+  result_dispatcher_ = ResultDispatcher::Create(partial_result_count,
+                                                process_capture_result, notify);
   if (result_dispatcher_ == nullptr) {
     ALOGE("%s: Cannot create result dispatcher.", __FUNCTION__);
     return UNKNOWN_ERROR;
