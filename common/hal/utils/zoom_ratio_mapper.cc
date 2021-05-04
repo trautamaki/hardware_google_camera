@@ -127,7 +127,7 @@ void ZoomRatioMapper::ApplyZoomRatio(const Dimension& active_array_dimension,
   camera_metadata_ro_entry entry = {};
   status_t res = metadata->Get(ANDROID_CONTROL_ZOOM_RATIO, &entry);
   if (res != OK) {
-    ALOGE("%s: Failed to get the zoom ratio", __FUNCTION__);
+    ALOGV("%s: zoom ratio doesn't exist, cancel the conversion", __FUNCTION__);
     return;
   }
   float zoom_ratio = entry.data.f[0];
