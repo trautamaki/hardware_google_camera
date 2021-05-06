@@ -22,7 +22,9 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
+#include "hal_types.h"
 #include "hal_utils.h"
+#include "system/graphics-base-v1.0.h"
 #include "vendor_tag_defs.h"
 
 namespace android {
@@ -110,6 +112,14 @@ status_t RealtimeZslRequestProcessor::ConfigureStreams(
   stream_to_add.usage = 0;
   stream_to_add.rotation = StreamRotation::kRotation0;
   stream_to_add.data_space = HAL_DATASPACE_ARBITRARY;
+  // For YUV ZSL buffer, if the stream configuration constains physical stream,
+  // we will add the new stream as physical stream. As we support physical
+  // streams only or logical streams only combination. We can check the stream
+  // type of the first stream in the list.
+  if (pixel_format_ == android_pixel_format_t::HAL_PIXEL_FORMAT_YCBCR_420_888 &&
+      stream_config.streams[0].is_physical_camera_stream) {
+    stream_to_add.is_physical_camera_stream = true;
+  }
 
   status_t result = internal_stream_manager->RegisterNewInternalStream(
       stream_to_add, &stream_id_);
