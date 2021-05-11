@@ -30,7 +30,7 @@ class RealtimeZslResultProcessor : public ResultProcessor {
  public:
   static std::unique_ptr<RealtimeZslResultProcessor> Create(
       InternalStreamManager* internal_stream_manager, int32_t stream_id,
-      android_pixel_format_t pixel_format);
+      android_pixel_format_t pixel_format, uint32_t partial_result_count = 1);
 
   virtual ~RealtimeZslResultProcessor() = default;
 
@@ -54,7 +54,8 @@ class RealtimeZslResultProcessor : public ResultProcessor {
  protected:
   RealtimeZslResultProcessor(InternalStreamManager* internal_stream_manager,
                              int32_t stream_id,
-                             android_pixel_format_t pixel_format);
+                             android_pixel_format_t pixel_format,
+                             uint32_t partial_result_count);
 
  private:
   // Save face detect mode for HDR+
@@ -95,6 +96,9 @@ class RealtimeZslResultProcessor : public ResultProcessor {
   // by framework. And requested_lens_shading_map_modes_ is protected by
   // lens_shading_lock_
   std::unordered_map<uint32_t, uint8_t> requested_lens_shading_map_modes_;
+
+  // Partial result count reported by HAL
+  uint32_t partial_result_count_;
 };
 
 }  // namespace google_camera_hal
