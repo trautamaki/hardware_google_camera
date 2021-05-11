@@ -181,6 +181,9 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   GetProcessBlockFactoryFunc snapshot_process_block_factory_;
   // Opened library handles that should be closed on destruction
   void* snapshot_process_block_lib_handle_ = nullptr;
+
+  // Partial result count reported by HAL
+  uint32_t partial_result_count_ = 1;
 };
 
 }  // namespace google_camera_hal

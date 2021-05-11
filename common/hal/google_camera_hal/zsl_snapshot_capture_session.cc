@@ -329,7 +329,7 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   // Create preview result processor. Stream ID is not set at this stage.
   auto preview_result_processor = RealtimeZslResultProcessor::Create(
       internal_stream_manager_.get(), additional_stream_id,
-      HAL_PIXEL_FORMAT_YCBCR_420_888);
+      HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
   if (preview_result_processor == nullptr) {
     ALOGE("%s: Creating PreviewZslResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
@@ -577,14 +577,14 @@ status_t ZslSnapshotCaptureSession::Initialize(
   }
 
   // Create result dispatcher
-  uint32_t partial_result_count = kPartialResult;
+  partial_result_count_ = kPartialResult;
   camera_metadata_ro_entry partial_result_entry;
   res = characteristics->Get(ANDROID_REQUEST_PARTIAL_RESULT_COUNT,
                              &partial_result_entry);
   if (res == OK) {
-    partial_result_count = partial_result_entry.data.i32[0];
+    partial_result_count_ = partial_result_entry.data.i32[0];
   }
-  result_dispatcher_ = ResultDispatcher::Create(partial_result_count,
+  result_dispatcher_ = ResultDispatcher::Create(partial_result_count_,
                                                 process_capture_result, notify);
   if (result_dispatcher_ == nullptr) {
     ALOGE("%s: Cannot create result dispatcher.", __FUNCTION__);
