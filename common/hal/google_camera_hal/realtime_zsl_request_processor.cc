@@ -119,6 +119,8 @@ status_t RealtimeZslRequestProcessor::ConfigureStreams(
   if (pixel_format_ == android_pixel_format_t::HAL_PIXEL_FORMAT_YCBCR_420_888 &&
       stream_config.streams[0].is_physical_camera_stream) {
     stream_to_add.is_physical_camera_stream = true;
+    stream_to_add.physical_camera_id =
+        stream_config.streams[0].physical_camera_id;
   }
 
   status_t result = internal_stream_manager->RegisterNewInternalStream(
