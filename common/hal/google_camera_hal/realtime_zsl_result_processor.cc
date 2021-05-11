@@ -31,16 +31,16 @@ namespace google_camera_hal {
 
 std::unique_ptr<RealtimeZslResultProcessor> RealtimeZslResultProcessor::Create(
     InternalStreamManager* internal_stream_manager, int32_t stream_id,
-    android_pixel_format_t pixel_format) {
+    android_pixel_format_t pixel_format, uint32_t partial_result_count) {
   ATRACE_CALL();
   if (internal_stream_manager == nullptr) {
     ALOGE("%s: internal_stream_manager is nullptr.", __FUNCTION__);
     return nullptr;
   }
 
-  auto result_processor =
-      std::unique_ptr<RealtimeZslResultProcessor>(new RealtimeZslResultProcessor(
-          internal_stream_manager, stream_id, pixel_format));
+  auto result_processor = std::unique_ptr<RealtimeZslResultProcessor>(
+      new RealtimeZslResultProcessor(internal_stream_manager, stream_id,
+                                     pixel_format, partial_result_count));
   if (result_processor == nullptr) {
     ALOGE("%s: Creating RealtimeZslResultProcessor failed.", __FUNCTION__);
     return nullptr;
@@ -51,10 +51,11 @@ std::unique_ptr<RealtimeZslResultProcessor> RealtimeZslResultProcessor::Create(
 
 RealtimeZslResultProcessor::RealtimeZslResultProcessor(
     InternalStreamManager* internal_stream_manager, int32_t stream_id,
-    android_pixel_format_t pixel_format) {
+    android_pixel_format_t pixel_format, uint32_t partial_result_count) {
   internal_stream_manager_ = internal_stream_manager;
   stream_id_ = stream_id;
   pixel_format_ = pixel_format;
+  partial_result_count_ = partial_result_count;
 }
 
 void RealtimeZslResultProcessor::SetResultCallback(
@@ -205,7 +206,8 @@ void RealtimeZslResultProcessor::ProcessResult(ProcessBlockResult block_result) 
     result->output_buffers = modified_output_buffers;
   }
 
-  if (result->result_metadata) {
+  if (result->result_metadata &&
+      result->partial_result == partial_result_count_) {
     res = internal_stream_manager_->ReturnMetadata(
         stream_id_, result->frame_number, result->result_metadata.get());
     if (res != OK) {
