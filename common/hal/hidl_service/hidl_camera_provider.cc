@@ -34,18 +34,18 @@ namespace implementation {
 namespace hidl_utils = ::android::hardware::camera::implementation::hidl_utils;
 
 using ::android::google_camera_hal::CameraDevice;
+using ::android::hardware::Void;
+using ::android::hardware::camera::common::V1_0::CameraDeviceStatus;
+using ::android::hardware::camera::common::V1_0::TorchModeStatus;
+using ::android::hardware::camera::common::V1_0::VendorTagSection;
 
 const std::string HidlCameraProvider::kProviderName = "internal";
 // "device@<version>/internal/<id>"
 const std::regex HidlCameraProvider::kDeviceNameRegex(
     "device@([0-9]+\\.[0-9]+)/internal/(.+)");
 
-std::unique_ptr<HidlCameraProvider> HidlCameraProvider::Create() {
-  auto provider = std::unique_ptr<HidlCameraProvider>(new HidlCameraProvider());
-  if (provider == nullptr) {
-    ALOGE("%s: Cannot create a HidlCameraProvider.", __FUNCTION__);
-    return nullptr;
-  }
+android::sp<HidlCameraProvider> HidlCameraProvider::Create() {
+  android::sp<HidlCameraProvider> provider = new HidlCameraProvider();
 
   status_t res = provider->Initialize();
   if (res != OK) {
@@ -375,22 +375,6 @@ Return<void> HidlCameraProvider::getCameraDeviceInterface_V3_x(
 Return<void> HidlCameraProvider::notifyDeviceStateChange(
     hardware::hidl_bitfield<DeviceState> /*newState*/) {
   return Void();
-}
-
-ICameraProvider* HIDL_FETCH_ICameraProvider(const char* name) {
-  std::string provider_name = HidlCameraProvider::kProviderName + "/0";
-  if (provider_name.compare(name) != 0) {
-    ALOGE("%s: Unknown provider name: %s", __FUNCTION__, name);
-    return nullptr;
-  }
-
-  auto provider = HidlCameraProvider::Create();
-  if (provider == nullptr) {
-    ALOGE("%s: Cannot create a HidlCameraProvider.", __FUNCTION__);
-    return nullptr;
-  }
-
-  return provider.release();
 }
 
 }  // namespace implementation
