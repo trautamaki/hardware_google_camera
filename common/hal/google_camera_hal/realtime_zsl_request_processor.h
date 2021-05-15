@@ -55,8 +55,10 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   // Override functions of RequestProcessor end.
 
  protected:
-  explicit RealtimeZslRequestProcessor(android_pixel_format_t pixel_format)
+  RealtimeZslRequestProcessor(android_pixel_format_t pixel_format,
+                              CameraDeviceSessionHwl* device_session_hwl)
       : pixel_format_(pixel_format),
+        device_session_hwl_(device_session_hwl),
         is_hdrplus_zsl_enabled_(pixel_format == HAL_PIXEL_FORMAT_RAW10){};
 
  private:
@@ -66,8 +68,9 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   // Protected by process_block_lock_.
   std::unique_ptr<ProcessBlock> process_block_;
 
-  InternalStreamManager* internal_stream_manager_;
+  InternalStreamManager* internal_stream_manager_ = nullptr;
   android_pixel_format_t pixel_format_;
+  CameraDeviceSessionHwl* device_session_hwl_ = nullptr;
   bool preview_intent_seen_ = false;
   int32_t stream_id_ = -1;
   uint32_t active_array_width_ = 0;
