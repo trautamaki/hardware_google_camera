@@ -58,6 +58,7 @@ cc_defaults {
         "hidl_profiler.cc",
         "hidl_thermal_utils.cc",
         "hidl_utils.cc",
+        "libc_wrappers.cc",
         "service.cc",
     ],
     compile_multilib: "first",
