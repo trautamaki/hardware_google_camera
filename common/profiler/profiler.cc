@@ -16,6 +16,7 @@
 #include "profiler.h"
 
 #include <cutils/properties.h>
+#include <hardware/google/camera/common/profiler/profiler.pb.h>
 #include <log/log.h>
 #include <sys/stat.h>
 
@@ -47,7 +48,8 @@ float StandardDeviation(std::vector<float> samples, float mean) {
 class ProfilerImpl : public Profiler {
  public:
   ProfilerImpl(SetPropFlag setting) : setting_(setting) {
-    object_init_time_ = CurrentTime();
+    object_init_real_time_ = GetRealTimeNs();
+    object_init_boot_time_ = GetBootTimeNs();
   };
   ~ProfilerImpl();
 
@@ -146,8 +148,8 @@ class ProfilerImpl : public Profiler {
   // Mutex lock.
   std::mutex lock_;
 
-  // Get boot time.
-  int64_t CurrentTime() const {
+  // Get clock boot time.
+  int64_t GetBootTimeNs() const {
     if (timespec now; clock_gettime(CLOCK_BOOTTIME, &now) == 0) {
       return now.tv_sec * kNsPerSec + now.tv_nsec;
     } else {
@@ -155,17 +157,38 @@ class ProfilerImpl : public Profiler {
       return -1;
     }
   }
+  // Get clock real time.
+  int64_t GetRealTimeNs() const {
+    if (timespec now; clock_gettime(CLOCK_REALTIME, &now) == 0) {
+      return now.tv_sec * kNsPerSec + now.tv_nsec;
+    } else {
+      ALOGE("clock_gettime failed");
+      return -1;
+    }
+  }
 
-  // Timestamp of the class object initialized.
-  int64_t object_init_time_;
+  // Timestamp of the class object initialized using CLOCK_BOOTTIME.
+  int64_t object_init_boot_time_;
+  // Timestamp of the class object initialized using CLOCK_REALTIME.
+  int64_t object_init_real_time_;
 
   // Create folder if not exist.
-  void CreateFolder(std::string folder_path);
+  void CreateFolder(const std::string& folder_path);
 
   // Dump the result to the disk.
   // Argument:
   //   filepath: file path to dump file.
   virtual void DumpResult(std::string filepath);
+
+  // Dump result in text format.
+  void DumpTxt(std::string_view filepath);
+
+  // Dump result in proto binary format.
+  void DumpPb(std::string_view filepath);
+
+  // Dump result format extension: proto or text.
+  constexpr static char kStrPb[] = ".pb";
+  constexpr static char kStrTxt[] = ".txt";
 
   int32_t fps_print_interval_seconds_ = 1;
 };
@@ -178,12 +201,20 @@ ProfilerImpl::~ProfilerImpl() {
     PrintResult();
   }
   if (setting_ & SetPropFlag::kDumpBit) {
-    DumpResult(dump_file_prefix_ + use_case_ + "-TS" +
-               std::to_string(object_init_time_) + ".txt");
+    std::string filename = std::to_string(object_init_real_time_);
+    DumpResult(dump_file_prefix_ + use_case_ + "-TS" + filename);
   }
 }
 
-void ProfilerImpl::CreateFolder(std::string folder_path) {
+void ProfilerImpl::DumpResult(std::string filepath) {
+  if (setting_ & SetPropFlag::kProto) {
+    DumpPb(filepath + kStrPb);
+  } else {
+    DumpTxt(filepath + kStrTxt);
+  }
+}
+
+void ProfilerImpl::CreateFolder(const std::string& folder_path) {
   struct stat folder_stat;
   memset(&folder_stat, 0, sizeof(folder_stat));
   if (stat(folder_path.c_str(), &folder_stat) != 0) {
@@ -216,12 +247,12 @@ void ProfilerImpl::ProfileFrameRate(const std::string& name) {
   // Save the timeing for each whole process
   TimeSlot& frame_rate = frame_rate_map_[name];
   if (frame_rate.start == 0) {
-    frame_rate.start = CurrentTime();
+    frame_rate.start = GetBootTimeNs();
     frame_rate.count = 0;
     frame_rate.end = 0;
   } else {
     ++frame_rate.count;
-    frame_rate.end = CurrentTime();
+    frame_rate.end = GetBootTimeNs();
   }
 
   if ((setting_ & SetPropFlag::kPrintFpsPerIntervalBit) == 0) {
@@ -230,11 +261,11 @@ void ProfilerImpl::ProfileFrameRate(const std::string& name) {
   // Print FPS every second
   TimeSlot& realtime_frame_rate = realtime_frame_rate_map_[name];
   if (realtime_frame_rate.start == 0) {
-    realtime_frame_rate.start = CurrentTime();
+    realtime_frame_rate.start = GetBootTimeNs();
     realtime_frame_rate.count = 0;
   } else {
     ++realtime_frame_rate.count;
-    int64_t current = CurrentTime();
+    int64_t current = GetBootTimeNs();
     int64_t elapsed = current - realtime_frame_rate.start;
     if (elapsed > kNsPerSec * fps_print_interval_seconds_) {
       float fps =
@@ -261,7 +292,7 @@ void ProfilerImpl::Start(const std::string name, int request_id) {
       time_series.push_back(TimeSlot());
     }
     TimeSlot& slot = time_series[index];
-    slot.start += CurrentTime();
+    slot.start += GetBootTimeNs();
   }
 
   if ((setting_ & SetPropFlag::kCalculateFpsOnEndBit) == 0) {
@@ -279,7 +310,7 @@ void ProfilerImpl::End(const std::string name, int request_id) {
     std::lock_guard<std::mutex> lk(lock_);
     if (static_cast<std::size_t>(index) < timing_map_[name].size()) {
       TimeSlot& slot = timing_map_[name][index];
-      slot.end += CurrentTime();
+      slot.end += GetBootTimeNs();
       ++slot.count;
     }
   }
@@ -371,7 +402,7 @@ void ProfilerImpl::PrintResult() {
   ALOGI("");
 }
 
-void ProfilerImpl::DumpResult(std::string filepath) {
+void ProfilerImpl::DumpTxt(std::string_view filepath) {
   // The dump result data is organized as 3 sections:
   //  1. detla time and fps of each frame.
   //  2. start time of each frame.
@@ -423,6 +454,33 @@ void ProfilerImpl::DumpResult(std::string filepath) {
   }
 }
 
+void ProfilerImpl::DumpPb(std::string_view filepath) {
+  if (std::ofstream fout(filepath, std::ios::out); fout.is_open()) {
+    profiler::ProfilingResult profiling_result;
+    profiling_result.set_profile_start_time_nanos(object_init_real_time_);
+    profiling_result.set_profile_start_boottime_nanos(object_init_boot_time_);
+    profiling_result.set_profile_end_time_nanos(GetRealTimeNs());
+
+    for (const auto& [node_name, time_series] : timing_map_) {
+      profiler::TimeSeries& target = *profiling_result.add_target();
+      target.set_name(node_name);
+      for (const auto& time_slot : time_series) {
+        profiler::TimeStamp& time_stamp = *target.add_runtime();
+        // A single node can be called multiple times in a frame. Every time the
+        // node is called in the same frame, the profiler accumulates the
+        // timestamp value in time_slot.start/end, and increments the count.
+        // Therefore the result timestamp we stored is the `average` timestamp.
+        // Note: consider using minimum-start, and maximum-end.
+        time_stamp.set_start(time_slot.start / std::max(1, time_slot.count));
+        time_stamp.set_end(time_slot.end / std::max(1, time_slot.count));
+        time_stamp.set_count(time_slot.count);
+      }
+    }
+    profiling_result.SerializeToOstream(&fout);
+    fout.close();
+  }
+}
+
 class ProfilerStopwatchImpl : public ProfilerImpl {
  public:
   ProfilerStopwatchImpl(SetPropFlag setting) : ProfilerImpl(setting){};
@@ -440,7 +498,7 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
     }
     if (setting_ & SetPropFlag::kDumpBit) {
       DumpResult(dump_file_prefix_ + use_case_ + "-TS" +
-                 std::to_string(object_init_time_) + ".txt");
+                 std::to_string(object_init_real_time_) + ".txt");
       setting_ = static_cast<SetPropFlag>(setting_ & (~SetPropFlag::kDumpBit));
     }
   }
