@@ -158,7 +158,11 @@ class Profiler {
     // Print FPS per interval time based on the value of SetFpsPrintInterval()
     kPrintFpsPerIntervalBit = 1 << 3,
     // Calculate FPS on process end function instead of process start function
-    kCalculateFpsOnEndBit = 1 << 4
+    kCalculateFpsOnEndBit = 1 << 4,
+    // Dynamic start profiling.
+    kDynamicStartBit = 1 << 5,
+    // Dumps result using proto format.
+    kProto = 1 << 6,
   };
 
   // Setup the name of use case the profiler is running.
