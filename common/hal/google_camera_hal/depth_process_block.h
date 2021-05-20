@@ -203,10 +203,6 @@ class DepthProcessBlock : public ProcessBlock {
   std::mutex depth_generator_api_lock_;
 };
 
-#if !GCH_HWL_USE_DLOPEN
-extern "C" __attribute__((weak)) DepthGenerator* CreateDepthGenerator();
-#endif
-
 }  // namespace google_camera_hal
 }  // namespace android
 
