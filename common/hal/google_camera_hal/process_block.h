@@ -110,10 +110,9 @@ class ExternalProcessBlockFactory {
   virtual std::string GetBlockName() const = 0;
 };
 
-#if !GCH_HWL_USE_DLOPEN
-extern "C" __attribute__((weak)) ExternalProcessBlockFactory*
-GetSnapshotProcessBlockFactory();
-#endif
+// ExternalProcessBlockFactory should be called by the client to discover an
+// external process block via dlsym.
+extern "C" ExternalProcessBlockFactory* GetProcessBlockFactory();
 
 }  // namespace google_camera_hal
 }  // namespace android
