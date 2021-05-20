@@ -25,7 +25,7 @@ package {
 
 cc_library_headers {
     name: "libgoogle_camera_hal_tests_headers",
-    vendor: true,
+    vendor_available: true,
     export_include_dirs: [
         ".",
     ],
@@ -34,9 +34,8 @@ cc_library_headers {
 cc_library_shared {
     name: "libgoogle_camera_hal_tests",
     defaults: ["google_camera_hal_defaults"],
-    compile_multilib: "first",
     owner: "google",
-    vendor: true,
+    vendor_available: true,
     srcs: [
         "camera_device_session_tests.cc",
         "camera_device_tests.cc",
@@ -83,7 +82,6 @@ cc_library_shared {
 
 cc_test {
     name: "google_camera_hal_tests",
-    compile_multilib: "first",
     owner: "google",
     vendor: true,
     gtest: true,
