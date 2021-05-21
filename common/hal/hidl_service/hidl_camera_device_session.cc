@@ -96,6 +96,7 @@ void HidlCameraDeviceSession::ProcessCaptureResult(
       if (num_pending_first_frame_buffers_ == 0) {
         hidl_profiler_->FirstFrameEnd();
         ATRACE_ASYNC_END("first_frame", 0);
+        ATRACE_ASYNC_END("switch_mode", 0);
       }
     }
   }
@@ -682,6 +683,7 @@ Return<void> HidlCameraDeviceSession::signalStreamFlush(
 
 Return<Status> HidlCameraDeviceSession::flush() {
   ATRACE_NAME("HidlCameraDeviceSession::flush");
+  ATRACE_ASYNC_BEGIN("switch_mode", 0);
   if (device_session_ == nullptr) {
     return Status::INTERNAL_ERROR;
   }
