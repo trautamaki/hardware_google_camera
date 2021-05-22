@@ -53,6 +53,6 @@ cc_library_shared {
     export_include_dirs: ["."],
 
     owner: "google",
-    vendor: true,
+    vendor_available: true,
     host_supported: true,
 }
