@@ -736,12 +736,13 @@ bool EmulatedSensor::threadLoop() {
         case PixelFormat::RAW16:
           if (!reprocess_request) {
             if (device_chars->second.quad_bayer_sensor && !max_res_mode) {
-              CaptureRawBinned((*b)->plane.img.img, device_settings->second.gain,
-                               device_chars->second);
+              CaptureRawBinned(
+                  (*b)->plane.img.img, (*b)->plane.img.stride_in_bytes,
+                  device_settings->second.gain, device_chars->second);
             } else {
-              CaptureRawFullRes((*b)->plane.img.img,
-                                device_settings->second.gain,
-                                device_chars->second);
+              CaptureRawFullRes(
+                  (*b)->plane.img.img, (*b)->plane.img.stride_in_bytes,
+                  device_settings->second.gain, device_chars->second);
             }
           } else {
             if (!device_chars->second.quad_bayer_sensor) {
@@ -766,13 +767,14 @@ bool EmulatedSensor::threadLoop() {
             ALOGV("%s remosaic Raw16 Image", __FUNCTION__);
             RemosaicRAW16Image(
                 (uint16_t*)(*next_input_buffer->begin())->plane.img.img,
-                (uint16_t*)(*b)->plane.img.img, device_chars->second);
+                (uint16_t*)(*b)->plane.img.img, (*b)->plane.img.stride_in_bytes,
+                device_chars->second);
           }
           break;
         case PixelFormat::RGB_888:
           if (!reprocess_request) {
             CaptureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
-                       (*b)->plane.img.stride, RGBLayout::RGB,
+                       (*b)->plane.img.stride_in_bytes, RGBLayout::RGB,
                        device_settings->second.gain, device_chars->second);
           } else {
             ALOGE("%s: Reprocess requests with output format %x no supported!",
@@ -783,7 +785,7 @@ bool EmulatedSensor::threadLoop() {
         case PixelFormat::RGBA_8888:
           if (!reprocess_request) {
             CaptureRGB((*b)->plane.img.img, (*b)->width, (*b)->height,
-                       (*b)->plane.img.stride, RGBLayout::RGBA,
+                       (*b)->plane.img.stride_in_bytes, RGBLayout::RGBA,
                        device_settings->second.gain, device_chars->second);
           } else {
             ALOGE("%s: Reprocess requests with output format %x no supported!",
@@ -882,7 +884,8 @@ bool EmulatedSensor::threadLoop() {
           if (!reprocess_request) {
             if ((*b)->dataSpace == HAL_DATASPACE_DEPTH) {
               CaptureDepth((*b)->plane.img.img, device_settings->second.gain,
-                           (*b)->width, (*b)->height, (*b)->plane.img.stride,
+                           (*b)->width, (*b)->height,
+                           (*b)->plane.img.stride_in_bytes,
                            device_chars->second);
             } else {
               ALOGE("%s: Format %x with dataspace %x is TODO", __FUNCTION__,
@@ -1130,20 +1133,23 @@ EmulatedScene::ColorChannels EmulatedSensor::GetQuadBayerColor(uint32_t x,
 }
 
 void EmulatedSensor::RemosaicQuadBayerBlock(uint16_t* img_in, uint16_t* img_out,
-                                            int xstart, int ystart, int stride) {
+                                            int xstart, int ystart,
+                                            int row_stride_in_bytes) {
   uint32_t quad_block_copy_idx_map[16] = {0, 2, 1, 3, 8,  10, 6,  11,
                                           4, 9, 5, 7, 12, 14, 13, 15};
   uint16_t quad_block_copy[16];
   uint32_t i = 0;
   for (uint32_t row = 0; row < 4; row++) {
-    uint16_t* quad_bayer_row = img_in + (ystart + row) * stride + xstart;
+    uint16_t* quad_bayer_row =
+        img_in + (ystart + row) * (row_stride_in_bytes / 2) + xstart;
     for (uint32_t j = 0; j < 4; j++, i++) {
       quad_block_copy[i] = quad_bayer_row[j];
     }
   }
 
   for (uint32_t row = 0; row < 4; row++) {
-    uint16_t* regular_bayer_row = img_out + (ystart + row) * stride + xstart;
+    uint16_t* regular_bayer_row =
+        img_out + (ystart + row) * (row_stride_in_bytes / 2) + xstart;
     for (uint32_t j = 0; j < 4; j++, i++) {
       uint32_t idx = quad_block_copy_idx_map[row + 4 * j];
       regular_bayer_row[j] = quad_block_copy[idx];
@@ -1152,6 +1158,7 @@ void EmulatedSensor::RemosaicQuadBayerBlock(uint16_t* img_in, uint16_t* img_out,
 }
 
 status_t EmulatedSensor::RemosaicRAW16Image(uint16_t* img_in, uint16_t* img_out,
+                                            size_t row_stride_in_bytes,
                                             const SensorCharacteristics& chars) {
   if (chars.full_res_width % 2 != 0 || chars.full_res_height % 2 != 0) {
     ALOGE(
@@ -1162,13 +1169,14 @@ status_t EmulatedSensor::RemosaicRAW16Image(uint16_t* img_in, uint16_t* img_out,
   }
   for (uint32_t i = 0; i < chars.full_res_width; i += 4) {
     for (uint32_t j = 0; j < chars.full_res_height; j += 4) {
-      RemosaicQuadBayerBlock(img_in, img_out, i, j, chars.full_res_width);
+      RemosaicQuadBayerBlock(img_in, img_out, i, j, row_stride_in_bytes);
     }
   }
   return OK;
 }
 
-void EmulatedSensor::CaptureRawBinned(uint8_t* img, uint32_t gain,
+void EmulatedSensor::CaptureRawBinned(uint8_t* img, size_t row_stride_in_bytes,
+                                      uint32_t gain,
                                       const SensorCharacteristics& chars) {
   ATRACE_CALL();
   // inc = how many pixels to skip while reading every next pixel
@@ -1182,7 +1190,7 @@ void EmulatedSensor::CaptureRawBinned(uint8_t* img, uint32_t gain,
   for (unsigned int out_y = 0; out_y < chars.height; out_y++) {
     // Stride still stays width since the buffer is binned size.
     int* bayer_row = bayer_select + (out_y & 0x1) * 2;
-    uint16_t* px = (uint16_t*)img + out_y * chars.width;
+    uint16_t* px = (uint16_t*)img + out_y * (row_stride_in_bytes / 2);
     for (unsigned int out_x = 0; out_x < chars.width; out_x++) {
       int color_idx = bayer_row[out_x & 0x1];
       uint16_t raw_count = 0;
@@ -1226,7 +1234,8 @@ void EmulatedSensor::CaptureRawBinned(uint8_t* img, uint32_t gain,
   ALOGVV("Binned RAW sensor image captured");
 }
 
-void EmulatedSensor::CaptureRawFullRes(uint8_t* img, uint32_t gain,
+void EmulatedSensor::CaptureRawFullRes(uint8_t* img, size_t row_stride_in_bytes,
+                                       uint32_t gain,
                                        const SensorCharacteristics& chars) {
   ATRACE_CALL();
   float total_gain = gain / 100.0 * GetBaseGainFactor(chars.max_raw_value);
@@ -1241,7 +1250,7 @@ void EmulatedSensor::CaptureRawFullRes(uint8_t* img, uint32_t gain,
 
   for (unsigned int y = 0; y < chars.full_res_height; y++) {
     int* bayer_row = bayer_select + (y & 0x1) * 2;
-    uint16_t* px = (uint16_t*)img + y * chars.full_res_width;
+    uint16_t* px = (uint16_t*)img + y * (row_stride_in_bytes / 2);
     for (unsigned int x = 0; x < chars.full_res_width; x++) {
       int color_idx = chars.quad_bayer_sensor ? GetQuadBayerColor(x, y)
                                               : bayer_row[x & 0x1];
