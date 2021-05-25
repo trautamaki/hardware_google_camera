@@ -283,8 +283,7 @@ bool MultiCameraRtProcessBlock::AreRequestsValidLocked(
     }
 
     if (block_request.request.frame_number != frame_number) {
-      ALOGE("%s: Not all frame numbers in requests are the same.",
-            __FUNCTION__);
+      ALOGE("%s: Not all frame numbers in requests are the same.", __FUNCTION__);
       return false;
     }
 
@@ -310,8 +309,7 @@ bool MultiCameraRtProcessBlock::AreRequestsValidLocked(
     }
 
     // Check no two requests will be captured from the same physical camera.
-    if (request_camera_ids.find(physical_camera_id) !=
-        request_camera_ids.end()) {
+    if (request_camera_ids.find(physical_camera_id) != request_camera_ids.end()) {
       ALOGE("%s: No two requests can be captured from the same camera ID (%u).",
             __FUNCTION__, physical_camera_id);
       return false;
@@ -447,8 +445,7 @@ void MultiCameraRtProcessBlock::NotifyHwlPipelineResult(
           pipeline_id, frame_number);
     return;
   }
-  auto capture_result =
-      hal_utils::ConvertToCaptureResult(std::move(hwl_result));
+  auto capture_result = hal_utils::ConvertToCaptureResult(std::move(hwl_result));
   if (capture_result == nullptr) {
     ALOGE("%s: Converting to capture result failed.", __FUNCTION__);
     return;

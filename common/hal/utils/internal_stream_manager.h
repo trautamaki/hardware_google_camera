@@ -25,7 +25,6 @@
 #include "camera_buffer_allocator_hwl.h"
 #include "hal_buffer_allocator.h"
 #include "hal_types.h"
-#include "hwl_buffer_allocator.h"
 #include "zsl_buffer_manager.h"
 
 namespace android {
