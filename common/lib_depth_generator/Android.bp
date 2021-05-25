@@ -25,7 +25,7 @@ package {
 
 cc_library_headers {
     name: "lib_depth_generator_headers",
-    vendor_available: true,
+    vendor: true,
     export_include_dirs: [
         ".",
     ],
