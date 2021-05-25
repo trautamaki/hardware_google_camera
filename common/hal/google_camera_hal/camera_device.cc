@@ -110,12 +110,14 @@ static void LoadLibraries(const std::vector<std::string>* libs) {
 namespace google_camera_hal {
 
 // HAL external capture session library path
+#if GCH_HWL_USE_DLOPEN
 #if defined(_LP64)
 constexpr char kExternalCaptureSessionDir[] =
     "/vendor/lib64/camera/capture_sessions/";
 #else  // defined(_LP64)
 constexpr char kExternalCaptureSessionDir[] =
     "/vendor/lib/camera/capture_sessions/";
+#endif
 #endif
 
 std::unique_ptr<CameraDevice> CameraDevice::Create(
@@ -262,6 +264,7 @@ status_t CameraDevice::LoadExternalCaptureSession() {
     return OK;
   }
 
+#if GCH_HWL_USE_DLOPEN
   for (const auto& lib_path :
        utils::FindLibraryPaths(kExternalCaptureSessionDir)) {
     ALOGI("%s: Loading %s", __FUNCTION__, lib_path.c_str());
@@ -289,6 +292,11 @@ status_t CameraDevice::LoadExternalCaptureSession() {
     external_session_factory_entries_.push_back(external_session_factory_t);
     external_capture_session_lib_handles_.push_back(lib_handle);
   }
+#else
+  if (GetCaptureSessionFactory) {
+    external_session_factory_entries_.push_back(GetCaptureSessionFactory);
+  }
+#endif
 
   return OK;
 }
