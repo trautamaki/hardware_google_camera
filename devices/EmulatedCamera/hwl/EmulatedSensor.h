@@ -326,16 +326,18 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static EmulatedScene::ColorChannels GetQuadBayerColor(uint32_t x, uint32_t y);
 
   static void RemosaicQuadBayerBlock(uint16_t* img_in, uint16_t* img_out,
-                                     int xstart, int ystart, int stride);
+                                     int xstart, int ystart,
+                                     int row_stride_in_bytes);
 
   static status_t RemosaicRAW16Image(uint16_t* img_in, uint16_t* img_out,
+                                     size_t row_stride_in_bytes,
                                      const SensorCharacteristics& chars);
 
-  void CaptureRawBinned(uint8_t* img, uint32_t gain,
+  void CaptureRawBinned(uint8_t* img, size_t row_stride_in_bytes, uint32_t gain,
                         const SensorCharacteristics& chars);
 
-  void CaptureRawFullRes(uint8_t* img, uint32_t gain,
-                         const SensorCharacteristics& chars);
+  void CaptureRawFullRes(uint8_t* img, size_t row_stride_in_bytes,
+                         uint32_t gain, const SensorCharacteristics& chars);
 
   enum RGBLayout { RGB, RGBA, ARGB };
   void CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,

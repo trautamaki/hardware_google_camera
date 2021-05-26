@@ -76,8 +76,9 @@ class EmulatedRequestProcessor {
     return (delta == 0) ? value : (value + (alignment - delta));
   }
 
+  // Return buffer size and row stride in bytes
   status_t GetBufferSizeAndStride(const EmulatedStream& stream,
-                                  uint32_t* size /*out*/,
+                                  buffer_handle_t buffer, uint32_t* size /*out*/,
                                   uint32_t* stride /*out*/);
   status_t LockSensorBuffer(const EmulatedStream& stream,
                             buffer_handle_t buffer, int32_t width,
