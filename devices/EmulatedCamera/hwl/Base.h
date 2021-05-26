@@ -43,7 +43,7 @@ struct YCbCrPlanes {
 
 struct SinglePlane {
   uint8_t* img = nullptr;
-  uint32_t stride = 0;
+  uint32_t stride_in_bytes = 0;
   uint32_t buffer_size = 0;
 };
 
