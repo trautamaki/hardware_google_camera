@@ -37,6 +37,8 @@
 namespace android {
 namespace google_camera_hal {
 namespace {
+
+#if GCH_HWL_USE_DLOPEN
 // HAL external process block library path
 #if defined(_LP64)
 constexpr char kExternalProcessBlockDir[] =
@@ -45,6 +47,7 @@ constexpr char kExternalProcessBlockDir[] =
 constexpr char kExternalProcessBlockDir[] =
     "/vendor/lib/camera/google_proprietary/";
 #endif
+#endif  // GCH_HWL_USE_DLOPEN
 
 bool IsSwDenoiseSnapshotCompatible(const CaptureRequest& request) {
   if (request.settings == nullptr) {
@@ -64,6 +67,7 @@ bool IsSwDenoiseSnapshotCompatible(const CaptureRequest& request) {
 std::unique_ptr<ProcessBlock>
 ZslSnapshotCaptureSession::CreateSnapshotProcessBlock() {
   ATRACE_CALL();
+#if GCH_HWL_USE_DLOPEN
   bool found_process_block = false;
   for (const auto& lib_path :
        utils::FindLibraryPaths(kExternalProcessBlockDir)) {
@@ -100,6 +104,15 @@ ZslSnapshotCaptureSession::CreateSnapshotProcessBlock() {
 
   return snapshot_process_block_factory_()->CreateProcessBlock(
       camera_device_session_hwl_);
+#else
+  if (GetSnapshotProcessBlockFactory == nullptr) {
+    ALOGE("%s: snapshot process block does not exist", __FUNCTION__);
+    return nullptr;
+  }
+  snapshot_process_block_factory_ = GetSnapshotProcessBlockFactory;
+  return GetSnapshotProcessBlockFactory()->CreateProcessBlock(
+      camera_device_session_hwl_);
+#endif
 }
 
 bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
@@ -349,6 +362,13 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   if (res != OK) {
     ALOGE("%s: Configuring stream for process block failed.", __FUNCTION__);
     return res;
+  }
+
+  for (auto& hal_stream : *hal_config_) {
+    if (hal_stream.id == additional_stream_id) {
+      // Set the producer usage so that the buffer will be 64 byte aligned.
+      hal_stream.producer_usage |= GRALLOC_USAGE_HW_TEXTURE;
+    }
   }
 
   return OK;
