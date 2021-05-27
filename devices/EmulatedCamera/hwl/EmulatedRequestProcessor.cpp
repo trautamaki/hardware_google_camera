@@ -210,8 +210,8 @@ status_t EmulatedRequestProcessor::Flush() {
 }
 
 status_t EmulatedRequestProcessor::GetBufferSizeAndStride(
-    const EmulatedStream& stream, uint32_t* size /*out*/,
-    uint32_t* stride /*out*/) {
+    const EmulatedStream& stream, buffer_handle_t buffer,
+    uint32_t* size /*out*/, uint32_t* stride /*out*/) {
   if (size == nullptr) {
     return BAD_VALUE;
   }
@@ -223,7 +223,6 @@ status_t EmulatedRequestProcessor::GetBufferSizeAndStride(
       break;
     case HAL_PIXEL_FORMAT_RGBA_8888:
       *stride = stream.width * 4;
-      ;
       *size = (*stride) * stream.height;
       break;
     case HAL_PIXEL_FORMAT_Y16:
@@ -243,7 +242,9 @@ status_t EmulatedRequestProcessor::GetBufferSizeAndStride(
       }
       break;
     case HAL_PIXEL_FORMAT_RAW16:
-      *stride = stream.width * 2;
+      if (importer_->getMonoPlanarStrideBytes(buffer, stride) != NO_ERROR) {
+        *stride = stream.width * 2;
+      }
       *size = (*stride) * stream.height;
       break;
     default:
@@ -295,7 +296,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
     }
   } else {
     uint32_t buffer_size = 0, stride = 0;
-    auto ret = GetBufferSizeAndStride(stream, &buffer_size, &stride);
+    auto ret = GetBufferSizeAndStride(stream, buffer, &buffer_size, &stride);
     if (ret != OK) {
       ALOGE("%s: Unsupported pixel format: 0x%x", __FUNCTION__,
             stream.override_format);
@@ -313,7 +314,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
       ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
       return BAD_VALUE;
     }
-    sensor_buffer->plane.img.stride = stride;
+    sensor_buffer->plane.img.stride_in_bytes = stride;
     sensor_buffer->plane.img.buffer_size = buffer_size;
   }
 
