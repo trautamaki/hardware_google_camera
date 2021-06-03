@@ -72,9 +72,7 @@ GoogSensorWrapper::GoogSensorWrapper(size_t event_buffer_size,
   ALOGV("%s %d", __func__, __LINE__);
 }
 
-GoogSensorWrapper::~GoogSensorWrapper() {
-  ALOGV("%s %d", __func__, __LINE__);
-}
+GoogSensorWrapper::~GoogSensorWrapper() { ALOGV("%s %d", __func__, __LINE__); }
 
 status_t GoogSensorWrapper::SetEventProcessor(
     std::function<void(const ExtendedSensorEvent& event)> event_processor) {
@@ -184,8 +182,8 @@ int GoogSensorWrapper::EventCallback(const Event& e) {
       event_buffer_.push_back(event);
     }
 
+    std::lock_guard<std::mutex> el(event_processor_lock_);
     if (event_processor_ != nullptr) {
-      std::lock_guard<std::mutex> el(event_processor_lock_);
       event_processor_(event);
     }
   }
