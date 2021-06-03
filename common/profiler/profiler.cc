@@ -98,11 +98,10 @@ class ProfilerImpl : public Profiler {
   // A structure to hold start time, end time, and count of profiling code
   // snippet.
   struct TimeSlot {
-    int64_t start;
-    int64_t end;
-    int32_t count;
-    TimeSlot() : start(0), end(0), count(0) {
-    }
+    int64_t start = 0;
+    int64_t end = 0;
+    int32_t count = 0;
+    int32_t request_id = 0;
   };
 
   // A structure to store node's profiling result.
@@ -283,15 +282,20 @@ void ProfilerImpl::Start(const std::string name, int request_id) {
   if (setting_ == SetPropFlag::kDisable) {
     return;
   }
-  int index = (request_id == kInvalidRequestId ? 0 : request_id);
+
+  // When the request_id == kInvalidRequestId, it is served as a different
+  // purpose, eg. profiling first frame latency, or HAL total runtime. The valid
+  // request id is shifted by 1 to avoid the conflict.
+  int valid_request_id = (request_id == kInvalidRequestId) ? 0 : request_id + 1;
 
   {
     std::lock_guard<std::mutex> lk(lock_);
     TimeSeries& time_series = timing_map_[name];
-    for (int i = time_series.size(); i <= index; ++i) {
+    for (int i = time_series.size(); i <= valid_request_id; ++i) {
       time_series.push_back(TimeSlot());
     }
-    TimeSlot& slot = time_series[index];
+    TimeSlot& slot = time_series[valid_request_id];
+    slot.request_id = valid_request_id;
     slot.start += GetBootTimeNs();
   }
 
@@ -304,12 +308,16 @@ void ProfilerImpl::End(const std::string name, int request_id) {
   if (setting_ == SetPropFlag::kDisable) {
     return;
   }
-  int index = (request_id == kInvalidRequestId ? 0 : request_id);
+
+  // When the request_id == kInvalidRequestId, it is served as a different
+  // purpose, eg. profiling first frame latency, or HAL total runtime. The valid
+  // request id is shifted by 1 to avoid the conflict.
+  int valid_request_id = (request_id == kInvalidRequestId) ? 0 : request_id + 1;
 
   {
     std::lock_guard<std::mutex> lk(lock_);
-    if (static_cast<std::size_t>(index) < timing_map_[name].size()) {
-      TimeSlot& slot = timing_map_[name][index];
+    if (static_cast<std::size_t>(valid_request_id) < timing_map_[name].size()) {
+      TimeSlot& slot = timing_map_[name][valid_request_id];
       slot.end += GetBootTimeNs();
       ++slot.count;
     }
@@ -457,6 +465,7 @@ void ProfilerImpl::DumpTxt(std::string_view filepath) {
 void ProfilerImpl::DumpPb(std::string_view filepath) {
   if (std::ofstream fout(filepath, std::ios::out); fout.is_open()) {
     profiler::ProfilingResult profiling_result;
+    profiling_result.set_usecase(use_case_);
     profiling_result.set_profile_start_time_nanos(object_init_real_time_);
     profiling_result.set_profile_start_boottime_nanos(object_init_boot_time_);
     profiling_result.set_profile_end_time_nanos(GetRealTimeNs());
@@ -474,6 +483,7 @@ void ProfilerImpl::DumpPb(std::string_view filepath) {
         time_stamp.set_start(time_slot.start / std::max(1, time_slot.count));
         time_stamp.set_end(time_slot.end / std::max(1, time_slot.count));
         time_stamp.set_count(time_slot.count);
+        time_stamp.set_request_id(time_slot.request_id);
       }
     }
     profiling_result.SerializeToOstream(&fout);
