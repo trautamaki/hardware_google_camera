@@ -8,6 +8,7 @@ message TimeStamp {
   optional uint64 start = 1;
   optional uint64 end = 2;
   optional uint32 count = 3;
+  optional int32 request_id = 4;
 }
 
 // TimeSeries stores the target name and a series of time stamps and fps.
