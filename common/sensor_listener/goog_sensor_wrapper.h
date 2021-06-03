@@ -58,9 +58,7 @@ class GoogSensorWrapper : public virtual RefBase {
   status_t Disable();
 
   // True if the sensor is currently enabled.
-  bool IsEnabled() const {
-    return enabled_;
-  }
+  bool IsEnabled() const { return enabled_; }
 
  protected:
   // Input:
@@ -95,7 +93,8 @@ class GoogSensorWrapper : public virtual RefBase {
       GUARDED_BY(event_queue_lock_);
 
   // User-defined callback functor invoked when sensor event arrives.
-  std::function<void(const ExtendedSensorEvent& event)> event_processor_;
+  std::function<void(const ExtendedSensorEvent& event)> event_processor_
+      GUARDED_BY(event_processor_lock_);
 
   // Lock protecting event_queue_.
   mutable std::mutex event_queue_lock_;
