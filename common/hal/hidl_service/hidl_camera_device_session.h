@@ -219,6 +219,9 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
   // Flag for profiling first frame processing time.
   bool first_frame_requested_ = false;
 
+  // The frame number of first capture request after configure stream
+  uint32_t first_request_frame_number_ = 0;
+
   std::mutex pending_first_frame_buffers_mutex_;
   // Profiling first frame process time. Stop timer when it become 0.
   // Must be protected by pending_first_frame_buffers_mutex_
