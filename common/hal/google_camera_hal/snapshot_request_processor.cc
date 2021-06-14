@@ -182,7 +182,7 @@ status_t SnapshotRequestProcessor::ProcessRequest(const CaptureRequest& request)
   // Get multiple yuv buffer and metadata from internal stream as input
   status_t result = internal_stream_manager_->GetMostRecentStreamBuffer(
       yuv_stream_id_, &(block_request.input_buffers),
-      &(block_request.input_buffer_metadata), /*payload_frames=*/1);
+      &(block_request.input_buffer_metadata), payload_frames_);
   if (result != OK) {
     ALOGE("%s: frame:%d GetStreamBuffer failed.", __FUNCTION__,
           request.frame_number);
