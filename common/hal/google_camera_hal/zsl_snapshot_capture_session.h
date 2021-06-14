@@ -92,8 +92,9 @@ class ZslSnapshotCaptureSession : public CaptureSession {
       CameraDeviceSessionHwl* camera_device_session_hwl);
 
  private:
+  static const uint32_t kRawBufferCount = 16;
+  static const uint32_t kRawMinBufferCount = 12;
   static constexpr uint32_t kPartialResult = 1;
-  static constexpr int kAdditionalBufferNumber = 1;
 
   status_t Initialize(CameraDeviceSessionHwl* device_session_hwl,
                       const StreamConfiguration& stream_config,

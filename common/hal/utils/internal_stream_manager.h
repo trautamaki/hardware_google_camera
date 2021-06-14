@@ -95,7 +95,7 @@ class InternalStreamManager {
   bool IsPendingBufferEmpty(int32_t stream_id);
 
  private:
-  static constexpr int32_t kMinFilledBuffers = 1;
+  static constexpr int32_t kMinFilledBuffers = 3;
   static constexpr int32_t kStreamIdStart = kHalInternalStreamStart;
   static constexpr int32_t kStreamIdReserve =
       kImplementationDefinedInternalStreamStart;
