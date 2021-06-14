@@ -69,9 +69,6 @@ class SnapshotRequestProcessor : public RequestProcessor {
   int32_t yuv_stream_id_ = -1;
   uint32_t active_array_width_ = 0;
   uint32_t active_array_height_ = 0;
-  // The number of snapshot input buffers
-  // TODO(b/179378479): update the value with the frames we need.
-  uint32_t payload_frames_ = 5;
 
   HwlRequestBuffersFunc request_stream_buffers_;
 };
