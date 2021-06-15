@@ -17,6 +17,7 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "GCH_HidlProfiler"
 #include <log/log.h>
+#include <mutex>
 #include <utility>
 
 #include "hidl_profiler.h"
@@ -57,6 +58,8 @@ struct HidlProfiler {
 };
 
 std::unique_ptr<HidlProfiler> gHidlProfiler = nullptr;
+// Mutex to make all API functions mutually exclusive.
+std::mutex api_mutex;
 
 void StartNewConnector() {
   if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
@@ -80,6 +83,7 @@ void EndProfiler() {
 }  // anonymous namespace
 
 std::unique_ptr<HidlProfilerItem> OnCameraOpen() {
+  std::lock_guard lock(api_mutex);
   gHidlProfiler = std::make_unique<HidlProfiler>();
   if (gHidlProfiler == nullptr || gHidlProfiler->profiler == nullptr) {
     ALOGE("%s: gHidlProfiler or profiler is nullptr.", __FUNCTION__);
@@ -94,6 +98,7 @@ std::unique_ptr<HidlProfilerItem> OnCameraOpen() {
 }
 
 std::unique_ptr<HidlProfilerItem> OnCameraFlush() {
+  std::lock_guard lock(api_mutex);
   EndConnector();
   if (gHidlProfiler == nullptr) {
     gHidlProfiler = std::make_unique<HidlProfiler>();
@@ -110,6 +115,7 @@ std::unique_ptr<HidlProfilerItem> OnCameraFlush() {
 }
 
 std::unique_ptr<HidlProfilerItem> OnCameraClose() {
+  std::lock_guard lock(api_mutex);
   EndConnector();
   if (gHidlProfiler == nullptr) {
     gHidlProfiler = std::make_unique<HidlProfiler>();
@@ -126,6 +132,7 @@ std::unique_ptr<HidlProfilerItem> OnCameraClose() {
 }
 
 std::unique_ptr<HidlProfilerItem> OnCameraStreamConfigure() {
+  std::lock_guard lock(api_mutex);
   EndConnector();
   if (gHidlProfiler == nullptr) {
     gHidlProfiler = std::make_unique<HidlProfiler>();
@@ -146,6 +153,7 @@ std::unique_ptr<HidlProfilerItem> OnCameraStreamConfigure() {
 }
 
 void OnFirstFrameRequest() {
+  std::lock_guard lock(api_mutex);
   EndConnector();
   if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
     gHidlProfiler->profiler->Start(
@@ -156,6 +164,7 @@ void OnFirstFrameRequest() {
 }
 
 void OnFirstFrameResult() {
+  std::lock_guard lock(api_mutex);
   if (gHidlProfiler != nullptr && gHidlProfiler->profiler != nullptr) {
     gHidlProfiler->profiler->End(
         "First frame", google::camera_common::Profiler::kInvalidRequestId);
