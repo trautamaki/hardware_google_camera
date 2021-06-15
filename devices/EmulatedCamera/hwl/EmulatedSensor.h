@@ -214,6 +214,8 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     bool report_edge_mode = false;
     uint8_t edge_mode = ANDROID_EDGE_MODE_OFF;
     uint8_t sensor_pixel_mode = ANDROID_SENSOR_PIXEL_MODE_DEFAULT;
+    uint8_t test_pattern_mode = ANDROID_SENSOR_TEST_PATTERN_MODE_OFF;
+    uint32_t test_pattern_data[4] = {0, 0, 0, 0};
   };
 
   // Maps physical and logical camera ids to individual device settings
