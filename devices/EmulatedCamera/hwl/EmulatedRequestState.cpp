@@ -714,6 +714,32 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  // Check test pattern parameter
+  uint8_t test_pattern_mode = ANDROID_SENSOR_TEST_PATTERN_MODE_OFF;
+  ret = request_settings_->Get(ANDROID_SENSOR_TEST_PATTERN_MODE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (available_test_pattern_modes_.find(entry.data.u8[0]) !=
+        available_test_pattern_modes_.end()) {
+      test_pattern_mode = entry.data.u8[0];
+    } else {
+      ALOGE("%s: Unsupported test pattern mode: %u", __FUNCTION__,
+            entry.data.u8[0]);
+      return BAD_VALUE;
+    }
+  }
+  uint32_t test_pattern_data[4] = {0, 0, 0, 0};
+  if (test_pattern_mode == ANDROID_SENSOR_TEST_PATTERN_MODE_SOLID_COLOR) {
+    ret = request_settings_->Get(ANDROID_SENSOR_TEST_PATTERN_DATA, &entry);
+    if ((ret == OK) && (entry.count == 4)) {
+      // 'Convert' from i32 to u32 here
+      memcpy(test_pattern_data, entry.data.i32, sizeof(test_pattern_data));
+    }
+  }
+  // BLACK is just SOLID_COLOR with all-zero data
+  if (test_pattern_mode == ANDROID_SENSOR_TEST_PATTERN_MODE_BLACK) {
+    test_pattern_mode = ANDROID_SENSOR_TEST_PATTERN_MODE_SOLID_COLOR;
+  }
+
   // 3A modes are active in case the scene is disabled or set to face priority
   // or the control mode is not using scenes
   if ((scene_mode_ == ANDROID_CONTROL_SCENE_MODE_DISABLED) ||
@@ -803,6 +829,9 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->report_edge_mode = report_edge_mode_;
   sensor_settings->edge_mode = edge_mode;
   sensor_settings->sensor_pixel_mode = sensor_pixel_mode_;
+  sensor_settings->test_pattern_mode = test_pattern_mode;
+  memcpy(sensor_settings->test_pattern_data, test_pattern_data,
+         sizeof(sensor_settings->test_pattern_data));
 
   return OK;
 }
@@ -1100,6 +1129,8 @@ status_t EmulatedRequestState::InitializeSensorDefaults() {
   int32_t test_pattern_mode = (off_test_pattern_mode_supported)
                                   ? ANDROID_SENSOR_TEST_PATTERN_MODE_OFF
                                   : *available_test_pattern_modes_.begin();
+  int32_t test_pattern_data[4] = {0, 0, 0, 0};
+
   for (size_t idx = 0; idx < kTemplateCount; idx++) {
     if (default_requests_[idx].get() == nullptr) {
       continue;
@@ -1113,6 +1144,8 @@ status_t EmulatedRequestState::InitializeSensorDefaults() {
                                 &sensor_sensitivity_, 1);
     default_requests_[idx]->Set(ANDROID_SENSOR_TEST_PATTERN_MODE,
                                 &test_pattern_mode, 1);
+    default_requests_[idx]->Set(ANDROID_SENSOR_TEST_PATTERN_DATA,
+                                test_pattern_data, 4);
   }
 
   return OK;
