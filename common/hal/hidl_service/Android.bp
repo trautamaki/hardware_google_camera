@@ -48,7 +48,10 @@ gch_lazy_hal_cc_defaults {
 
 cc_defaults {
     name: "camera_service_defaults",
-    defaults: ["google_camera_hal_defaults"],
+    defaults: [
+        "google_camera_hal_defaults",
+        "apex_update_listener_cc_defaults_static",
+    ],
     vendor: true,
     relative_install_path: "hw",
     srcs: [
@@ -91,7 +94,7 @@ cc_defaults {
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
     ],
-    vintf_fragments: ["android.hardware.camera.provider@2.7-service-google.xml"]
+    vintf_fragments: ["android.hardware.camera.provider@2.7-service-google.xml"],
 }
 
 cc_binary {
