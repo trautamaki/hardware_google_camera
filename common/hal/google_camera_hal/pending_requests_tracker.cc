@@ -121,7 +121,7 @@ status_t PendingRequestsTracker::TrackReturnedResultBuffers(
 
       stream_pending_buffers_[stream_id]--;
       if (stream_pending_buffers_[stream_id] == 0) {
-        ALOGI("%s: stream %d all pending buffers have been returned.",
+        ALOGV("%s: stream %d all pending buffers have been returned.",
               __FUNCTION__, stream_id);
       }
     }
