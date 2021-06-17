@@ -206,35 +206,39 @@ void RealtimeZslResultProcessor::ProcessResult(ProcessBlockResult block_result) 
     result->output_buffers = modified_output_buffers;
   }
 
-  if (result->result_metadata &&
-      result->partial_result == partial_result_count_) {
+  if (result->result_metadata) {
+    result->result_metadata->Erase(ANDROID_CONTROL_ENABLE_ZSL);
+
     res = internal_stream_manager_->ReturnMetadata(
         stream_id_, result->frame_number, result->result_metadata.get());
     if (res != OK) {
       ALOGW("%s: (%d)ReturnMetadata fail", __FUNCTION__, result->frame_number);
     }
 
-    res = hal_utils::SetEnableZslMetadata(result->result_metadata.get(), false);
-    if (res != OK) {
-      ALOGW("%s: SetEnableZslMetadata (%d) fail", __FUNCTION__,
-            result->frame_number);
-    }
-
-    if (pixel_format_ == HAL_PIXEL_FORMAT_RAW10) {
-      res = HandleFdResultForHdrplus(result->frame_number,
-                                     result->result_metadata.get());
+    if (result->partial_result == partial_result_count_) {
+      res =
+          hal_utils::SetEnableZslMetadata(result->result_metadata.get(), false);
       if (res != OK) {
-        ALOGE("%s: HandleFdResultForHdrplus(%d) fail", __FUNCTION__,
+        ALOGW("%s: SetEnableZslMetadata (%d) fail", __FUNCTION__,
               result->frame_number);
-        return;
       }
 
-      res = HandleLsResultForHdrplus(result->frame_number,
-                                     result->result_metadata.get());
-      if (res != OK) {
-        ALOGE("%s: HandleLsResultForHdrplus(%d) fail", __FUNCTION__,
-              result->frame_number);
-        return;
+      if (pixel_format_ == HAL_PIXEL_FORMAT_RAW10) {
+        res = HandleFdResultForHdrplus(result->frame_number,
+                                       result->result_metadata.get());
+        if (res != OK) {
+          ALOGE("%s: HandleFdResultForHdrplus(%d) fail", __FUNCTION__,
+                result->frame_number);
+          return;
+        }
+
+        res = HandleLsResultForHdrplus(result->frame_number,
+                                       result->result_metadata.get());
+        if (res != OK) {
+          ALOGE("%s: HandleLsResultForHdrplus(%d) fail", __FUNCTION__,
+                result->frame_number);
+          return;
+        }
       }
     }
   }
