@@ -635,11 +635,6 @@ status_t ZslSnapshotCaptureSession::Initialize(
   }
   camera_device_session_hwl_ = camera_device_session_hwl;
   hal_config_ = hal_configured_streams;
-  internal_stream_manager_ = InternalStreamManager::Create();
-  if (internal_stream_manager_ == nullptr) {
-    ALOGE("%s: Cannot create internal stream manager.", __FUNCTION__);
-    return UNKNOWN_ERROR;
-  }
 
   // Create result dispatcher
   partial_result_count_ = kPartialResult;
@@ -653,6 +648,13 @@ status_t ZslSnapshotCaptureSession::Initialize(
                                                 process_capture_result, notify);
   if (result_dispatcher_ == nullptr) {
     ALOGE("%s: Cannot create result dispatcher.", __FUNCTION__);
+    return UNKNOWN_ERROR;
+  }
+
+  internal_stream_manager_ = InternalStreamManager::Create(
+      /*buffer_allocator=*/nullptr, partial_result_count_);
+  if (internal_stream_manager_ == nullptr) {
+    ALOGE("%s: Cannot create internal stream manager.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
 
