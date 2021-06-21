@@ -28,10 +28,12 @@
 namespace android {
 namespace google_camera_hal {
 
-ZslBufferManager::ZslBufferManager(IHalBufferAllocator* allocator)
+ZslBufferManager::ZslBufferManager(IHalBufferAllocator* allocator,
+                                   int partial_result_count)
     : kMemoryProfilingEnabled(
           property_get_bool("persist.vendor.camera.hal.memoryprofile", false)),
-      buffer_allocator_(allocator) {
+      buffer_allocator_(allocator),
+      partial_result_count_(partial_result_count) {
 }
 
 ZslBufferManager::~ZslBufferManager() {
@@ -310,21 +312,17 @@ status_t ZslBufferManager::ReturnFilledBuffer(uint32_t frame_number,
 }
 
 status_t ZslBufferManager::ReturnMetadata(uint32_t frame_number,
-                                          const HalCameraMetadata* metadata) {
+                                          const HalCameraMetadata* metadata,
+                                          int partial_result) {
   ATRACE_CALL();
   std::unique_lock<std::mutex> lock(zsl_buffers_lock_);
 
   ZslBuffer zsl_buffer = {};
   zsl_buffer.frame_number = frame_number;
-  zsl_buffer.metadata = HalCameraMetadata::Clone(metadata);
-  if (zsl_buffer.metadata == nullptr) {
-    ALOGE("%s: Failed to Clone camera metadata.", __FUNCTION__);
-    return NO_MEMORY;
-  }
 
-  if (partially_filled_zsl_buffers_.empty() ||
-      partially_filled_zsl_buffers_.find(frame_number) ==
-          partially_filled_zsl_buffers_.end()) {
+  auto partially_filled_buffer_it =
+      partially_filled_zsl_buffers_.find(frame_number);
+  if (partially_filled_buffer_it == partially_filled_zsl_buffers_.end()) {
     // not able to distinguish these two cases through the current status of
     // the partial buffer
     ALOGV(
@@ -333,16 +331,44 @@ status_t ZslBufferManager::ReturnMetadata(uint32_t frame_number,
         __FUNCTION__, frame_number);
 
     zsl_buffer.buffer = {};
+    zsl_buffer.metadata = HalCameraMetadata::Clone(metadata);
+    if (zsl_buffer.metadata == nullptr) {
+      ALOGE("%s: Failed to Clone camera metadata.", __FUNCTION__);
+      return NO_MEMORY;
+    }
     partially_filled_zsl_buffers_[frame_number] = std::move(zsl_buffer);
-  } else if (partially_filled_zsl_buffers_[frame_number].metadata == nullptr &&
-             partially_filled_zsl_buffers_[frame_number].buffer.buffer !=
-                 kInvalidBufferHandle) {
+  } else if (partial_result < partial_result_count_) {
+    // Need to wait for more partial results
+    if (partially_filled_buffer_it->second.metadata == nullptr) {
+      // This is the first partial result, clone to create an entry
+      partially_filled_buffer_it->second.metadata =
+          HalCameraMetadata::Clone(metadata);
+      if (partially_filled_buffer_it->second.metadata == nullptr) {
+        ALOGE("%s: Failed to Clone camera metadata.", __FUNCTION__);
+        return NO_MEMORY;
+      }
+    } else {
+      // Append to previously received partial results
+      partially_filled_buffer_it->second.metadata->Append(
+          metadata->GetRawCameraMetadata());
+    }
+  } else if (partially_filled_buffer_it->second.buffer.buffer !=
+             kInvalidBufferHandle) {
     ALOGV(
         "%s: both buffer and metadata for frame[%u] are ready. Move to "
         "filled_zsl_buffers_.",
         __FUNCTION__, frame_number);
 
-    zsl_buffer.buffer = partially_filled_zsl_buffers_[frame_number].buffer;
+    zsl_buffer.buffer = partially_filled_buffer_it->second.buffer;
+    if (partially_filled_buffer_it->second.metadata == nullptr) {
+      // This will happen if partial_result_count_ == 1
+      zsl_buffer.metadata = HalCameraMetadata::Clone(metadata);
+    } else {
+      zsl_buffer.metadata =
+          std::move(partially_filled_buffer_it->second.metadata);
+      // This is the last partial result, append it to the others
+      zsl_buffer.metadata->Append(metadata->GetRawCameraMetadata());
+    }
     filled_zsl_buffers_[frame_number] = std::move(zsl_buffer);
     partially_filled_zsl_buffers_.erase(frame_number);
   } else {
