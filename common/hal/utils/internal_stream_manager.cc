@@ -41,7 +41,7 @@ int32_t GetNextAvailableStreamId() {
 }  // namespace
 
 std::unique_ptr<InternalStreamManager> InternalStreamManager::Create(
-    IHalBufferAllocator* buffer_allocator) {
+    IHalBufferAllocator* buffer_allocator, int partial_result_count) {
   ATRACE_CALL();
   auto stream_manager =
       std::unique_ptr<InternalStreamManager>(new InternalStreamManager());
@@ -50,13 +50,15 @@ std::unique_ptr<InternalStreamManager> InternalStreamManager::Create(
     return nullptr;
   }
 
-  stream_manager->Initialize(buffer_allocator);
+  stream_manager->Initialize(buffer_allocator, partial_result_count);
 
   return stream_manager;
 }
 
-void InternalStreamManager::Initialize(IHalBufferAllocator* buffer_allocator) {
+void InternalStreamManager::Initialize(IHalBufferAllocator* buffer_allocator,
+                                       int partial_result_count) {
   hwl_buffer_allocator_ = buffer_allocator;
+  partial_result_count_ = partial_result_count;
 }
 
 status_t InternalStreamManager::IsStreamRegisteredLocked(int32_t stream_id) const {
@@ -173,7 +175,8 @@ status_t InternalStreamManager::AllocateBuffersLocked(
   }
 
   auto buffer_manager = std::make_unique<ZslBufferManager>(
-      need_vendor_buffer ? hwl_buffer_allocator_ : nullptr);
+      need_vendor_buffer ? hwl_buffer_allocator_ : nullptr,
+      partial_result_count_);
   if (buffer_manager == nullptr) {
     ALOGE("%s: Failed to create a buffer manager for stream %d", __FUNCTION__,
           stream_id);
@@ -557,9 +560,10 @@ status_t InternalStreamManager::ReturnFilledBuffer(uint32_t frame_number,
                                                                buffer);
 }
 
-status_t InternalStreamManager::ReturnMetadata(
-    int32_t stream_id, uint32_t frame_number,
-    const HalCameraMetadata* metadata) {
+status_t InternalStreamManager::ReturnMetadata(int32_t stream_id,
+                                               uint32_t frame_number,
+                                               const HalCameraMetadata* metadata,
+                                               int partial_result) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(stream_mutex_);
 
@@ -575,8 +579,8 @@ status_t InternalStreamManager::ReturnMetadata(
     return BAD_VALUE;
   }
 
-  return buffer_managers_[owner_stream_id]->ReturnMetadata(frame_number,
-                                                           metadata);
+  return buffer_managers_[owner_stream_id]->ReturnMetadata(
+      frame_number, metadata, partial_result);
 }
 
 }  // namespace google_camera_hal

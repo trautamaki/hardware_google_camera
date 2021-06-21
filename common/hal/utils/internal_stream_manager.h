@@ -35,7 +35,8 @@ namespace google_camera_hal {
 class InternalStreamManager {
  public:
   static std::unique_ptr<InternalStreamManager> Create(
-      IHalBufferAllocator* buffer_allocator = nullptr);
+      IHalBufferAllocator* buffer_allocator = nullptr,
+      int partial_result_count = 1);
   virtual ~InternalStreamManager() = default;
 
   // stream contains the stream info to be registered. if stream.id is smaller
@@ -80,7 +81,8 @@ class InternalStreamManager {
 
   // Return a metadata to internal stream manager.
   status_t ReturnMetadata(int32_t stream_id, uint32_t frame_number,
-                          const HalCameraMetadata* metadata);
+                          const HalCameraMetadata* metadata,
+                          int partial_result = 1);
 
   // Get the most recent buffer and metadata.
   status_t GetMostRecentStreamBuffer(
@@ -102,7 +104,8 @@ class InternalStreamManager {
   static constexpr int32_t kInvalidStreamId = -1;
 
   // Initialize internal stream manager
-  void Initialize(IHalBufferAllocator* buffer_allocator);
+  void Initialize(IHalBufferAllocator* buffer_allocator,
+                  int partial_result_count);
 
   // Return if a stream is registered. Must be called with stream_mutex_ locked.
   status_t IsStreamRegisteredLocked(int32_t stream_id) const;
@@ -157,6 +160,9 @@ class InternalStreamManager {
 
   // external buffer allocator
   IHalBufferAllocator* hwl_buffer_allocator_ = nullptr;
+
+  // Partial result count reported by camera HAL
+  int partial_result_count_ = 1;
 };
 
 }  // namespace google_camera_hal
