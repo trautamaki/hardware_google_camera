@@ -808,7 +808,15 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
   updated_request->input_buffers = request.input_buffers;
   updated_request->input_buffer_metadata.clear();
   updated_request->output_buffers = request.output_buffers;
+  std::vector<uint32_t> physical_camera_ids =
+      device_session_hwl_->GetPhysicalCameraIds();
   for (auto& [camid, physical_setting] : request.physical_camera_settings) {
+    if (std::find(physical_camera_ids.begin(), physical_camera_ids.end(),
+                  camid) == physical_camera_ids.end()) {
+      ALOGE("%s: Pyhsical camera id %d in request had not registered",
+            __FUNCTION__, camid);
+      return BAD_VALUE;
+    }
     updated_request->physical_camera_settings[camid] =
         HalCameraMetadata::Clone(physical_setting.get());
   }
