@@ -87,12 +87,6 @@ bool IsSwDenoiseSnapshotCompatible(const CaptureRequest& request) {
     return false;
   }
 
-  if (request.settings->Get(ANDROID_COLOR_CORRECTION_MODE, &entry) != OK ||
-      *entry.data.u8 != ANDROID_COLOR_CORRECTION_MODE_HIGH_QUALITY) {
-    ALOGV("%s: ANDROID_COLOR_CORRECTION_MODE is not HQ", __FUNCTION__);
-    return false;
-  }
-
   if (request.settings->Get(ANDROID_CONTROL_EFFECT_MODE, &entry) != OK ||
       *entry.data.u8 != ANDROID_CONTROL_EFFECT_MODE_OFF) {
     ALOGV("%s: ANDROID_CONTROL_EFFECT_MODE is not off", __FUNCTION__);
