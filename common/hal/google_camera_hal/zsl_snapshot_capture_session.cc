@@ -61,7 +61,7 @@ bool IsSwDenoiseSnapshotCompatible(const CaptureRequest& request) {
     return false;
   }
 
-  if (request.settings->Get(ANDROID_CONTROL_ENABLE_ZSL_TRUE, &entry) != OK ||
+  if (request.settings->Get(ANDROID_CONTROL_ENABLE_ZSL, &entry) != OK ||
       *entry.data.u8 != ANDROID_CONTROL_ENABLE_ZSL_TRUE) {
     ALOGV("%s: ANDROID_CONTROL_ENABLE_ZSL is not true", __FUNCTION__);
     return false;
