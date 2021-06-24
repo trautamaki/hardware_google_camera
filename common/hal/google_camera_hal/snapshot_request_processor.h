@@ -52,8 +52,8 @@ class SnapshotRequestProcessor : public RequestProcessor {
   // Override functions of RequestProcessor end.
 
  protected:
-  explicit SnapshotRequestProcessor(HwlRequestBuffersFunc request_stream_buffers)
-      : request_stream_buffers_(request_stream_buffers) {
+  explicit SnapshotRequestProcessor(HwlSessionCallback session_callback)
+      : session_callback_(session_callback) {
   }
 
  private:
@@ -70,7 +70,7 @@ class SnapshotRequestProcessor : public RequestProcessor {
   uint32_t active_array_width_ = 0;
   uint32_t active_array_height_ = 0;
 
-  HwlRequestBuffersFunc request_stream_buffers_;
+  HwlSessionCallback session_callback_;
 };
 
 }  // namespace google_camera_hal
