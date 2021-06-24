@@ -99,7 +99,6 @@ void SnapshotResultProcessor::ProcessResult(ProcessBlockResult block_result) {
     if (res != OK) {
       ALOGE("%s: (%d)ReturnZslStreamBuffers fail", __FUNCTION__,
             result->frame_number);
-      return;
     } else {
       ALOGI("%s: (%d)ReturnZslStreamBuffers ok", __FUNCTION__,
             result->frame_number);
