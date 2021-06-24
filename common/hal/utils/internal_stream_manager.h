@@ -88,7 +88,7 @@ class InternalStreamManager {
   status_t GetMostRecentStreamBuffer(
       int32_t stream_id, std::vector<StreamBuffer>* input_buffers,
       std::vector<std::unique_ptr<HalCameraMetadata>>* input_buffer_metadata,
-      uint32_t payload_frames);
+      uint32_t payload_frames, int32_t min_filled_buffers = kMinFilledBuffers);
 
   // Return the buffer from GetMostRecentStreamBuffer
   status_t ReturnZslStreamBuffers(uint32_t frame_number, int32_t stream_id);
