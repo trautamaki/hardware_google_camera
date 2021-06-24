@@ -709,9 +709,13 @@ status_t ZslSnapshotCaptureSession::ProcessRequest(const CaptureRequest& request
     return BAD_VALUE;
   }
   if (IsSwDenoiseSnapshotCompatible(request)) {
-    // TODO(mhtan): Enable snapshot request processor
-    // res = snapshot_request_processor_->ProcessRequest(request);
-    res = realtime_request_processor_->ProcessRequest(request);
+    res = snapshot_request_processor_->ProcessRequest(request);
+    if (res != OK) {
+      ALOGW(
+          "%s: frame (%d) fall back to real time request for snapshot: %s (%d)",
+          __FUNCTION__, request.frame_number, strerror(-res), res);
+      res = realtime_request_processor_->ProcessRequest(request);
+    }
   } else {
     res = realtime_request_processor_->ProcessRequest(request);
   }
