@@ -432,9 +432,14 @@ bool InternalStreamManager::IsPendingBufferEmpty(int32_t stream_id) {
 status_t InternalStreamManager::GetMostRecentStreamBuffer(
     int32_t stream_id, std::vector<StreamBuffer>* input_buffers,
     std::vector<std::unique_ptr<HalCameraMetadata>>* input_buffer_metadata,
-    uint32_t payload_frames) {
+    uint32_t payload_frames, int32_t min_filled_buffers) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(stream_mutex_);
+
+  if (static_cast<int32_t>(payload_frames) < min_filled_buffers) {
+    ALOGW("%s: payload frames %d is smaller than min filled buffers %d",
+          __FUNCTION__, payload_frames, min_filled_buffers);
+  }
 
   if (!IsStreamAllocatedLocked(stream_id)) {
     ALOGE("%s: Stream %d was not allocated.", __FUNCTION__, stream_id);
@@ -456,7 +461,7 @@ status_t InternalStreamManager::GetMostRecentStreamBuffer(
 
   std::vector<ZslBufferManager::ZslBuffer> filled_buffers;
   buffer_managers_[owner_stream_id]->GetMostRecentZslBuffers(
-      &filled_buffers, payload_frames, kMinFilledBuffers);
+      &filled_buffers, payload_frames, min_filled_buffers);
 
   if (filled_buffers.size() == 0) {
     ALOGE("%s: There is no input buffers.", __FUNCTION__);
