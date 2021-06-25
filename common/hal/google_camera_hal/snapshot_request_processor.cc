@@ -38,7 +38,7 @@ std::unique_ptr<SnapshotRequestProcessor> SnapshotRequestProcessor::Create(
   }
 
   auto request_processor = std::unique_ptr<SnapshotRequestProcessor>(
-      new SnapshotRequestProcessor(session_callback.request_stream_buffers));
+      new SnapshotRequestProcessor(session_callback));
   if (request_processor == nullptr) {
     ALOGE("%s: Creating SnapshotRequestProcessor failed.", __FUNCTION__);
     return nullptr;
@@ -170,8 +170,9 @@ status_t SnapshotRequestProcessor::ProcessRequest(const CaptureRequest& request)
   block_request.settings = HalCameraMetadata::Clone(request.settings.get());
 
   for (const auto& output_buffer : request.output_buffers) {
-    request_stream_buffers_(output_buffer.stream_id, /*buffer_sizes=*/1,
-                            &block_request.output_buffers, request.frame_number);
+    session_callback_.request_stream_buffers(
+        output_buffer.stream_id, /*buffer_sizes=*/1,
+        &block_request.output_buffers, request.frame_number);
   }
 
   for (auto& [camera_id, physical_metadata] : request.physical_camera_settings) {
@@ -182,10 +183,12 @@ status_t SnapshotRequestProcessor::ProcessRequest(const CaptureRequest& request)
   // Get multiple yuv buffer and metadata from internal stream as input
   status_t result = internal_stream_manager_->GetMostRecentStreamBuffer(
       yuv_stream_id_, &(block_request.input_buffers),
-      &(block_request.input_buffer_metadata), payload_frames_);
+      &(block_request.input_buffer_metadata), /*payload_frames=*/1,
+      /*min_filled_buffers=*/1);
   if (result != OK) {
     ALOGE("%s: frame:%d GetStreamBuffer failed.", __FUNCTION__,
           request.frame_number);
+    session_callback_.return_stream_buffers(block_request.output_buffers);
     return UNKNOWN_ERROR;
   }
 
@@ -195,7 +198,13 @@ status_t SnapshotRequestProcessor::ProcessRequest(const CaptureRequest& request)
   ALOGD("%s: frame number %u is a snapshot request.", __FUNCTION__,
         request.frame_number);
 
-  return process_block_->ProcessRequests(block_requests, request);
+  result = process_block_->ProcessRequests(block_requests, request);
+  if (result != OK) {
+    session_callback_.return_stream_buffers(
+        block_requests[0].request.output_buffers);
+  }
+
+  return result;
 }
 
 status_t SnapshotRequestProcessor::Flush() {

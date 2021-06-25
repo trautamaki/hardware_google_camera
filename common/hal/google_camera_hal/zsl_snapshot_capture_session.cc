@@ -87,12 +87,6 @@ bool IsSwDenoiseSnapshotCompatible(const CaptureRequest& request) {
     return false;
   }
 
-  if (request.settings->Get(ANDROID_COLOR_CORRECTION_MODE, &entry) != OK ||
-      *entry.data.u8 != ANDROID_COLOR_CORRECTION_MODE_HIGH_QUALITY) {
-    ALOGV("%s: ANDROID_COLOR_CORRECTION_MODE is not HQ", __FUNCTION__);
-    return false;
-  }
-
   if (request.settings->Get(ANDROID_CONTROL_EFFECT_MODE, &entry) != OK ||
       *entry.data.u8 != ANDROID_CONTROL_EFFECT_MODE_OFF) {
     ALOGV("%s: ANDROID_CONTROL_EFFECT_MODE is not off", __FUNCTION__);
@@ -299,16 +293,12 @@ status_t ZslSnapshotCaptureSession::BuildPipelines(
 
   for (uint32_t i = 0; i < hal_configured_streams->size(); i++) {
     if (hal_configured_streams->at(i).id == additional_stream_id_) {
-      if (hal_configured_streams->at(i).max_buffers < kRawMinBufferCount) {
-        hal_configured_streams->at(i).max_buffers = kRawMinBufferCount;
-      }
-      // Allocate internal raw stream buffers
-      uint32_t additional_num_buffers =
-          (hal_configured_streams->at(i).max_buffers >= kRawBufferCount)
-              ? 0
-              : (kRawBufferCount - hal_configured_streams->at(i).max_buffers);
+      // Reserve additional buffer(s).
+      hal_configured_streams->at(i).max_buffers += kAdditionalBufferNumber;
+      // Allocate internal YUV stream buffers
       res = internal_stream_manager_->AllocateBuffers(
-          hal_configured_streams->at(i), additional_num_buffers);
+          hal_configured_streams->at(i),
+          /*additional_num_buffers=*/kAdditionalBufferNumber);
       if (res != OK) {
         ALOGE("%s: AllocateBuffers failed.", __FUNCTION__);
         return UNKNOWN_ERROR;
