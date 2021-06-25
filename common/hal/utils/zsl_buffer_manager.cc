@@ -161,7 +161,7 @@ buffer_handle_t ZslBufferManager::GetEmptyBufferLocked() {
   } else if (partially_filled_zsl_buffers_.size() > 0) {
     auto buffer_iter = partially_filled_zsl_buffers_.begin();
     while (buffer_iter != partially_filled_zsl_buffers_.end()) {
-      if (buffer_iter->second.metadata != nullptr) {
+      if (buffer_iter->second.partial_result == partial_result_count_) {
         if (buffer_iter->second.buffer.buffer != kInvalidBufferHandle) {
           ALOGE("%s: Invalid: both are ready in partial zsl queue.",
                 __FUNCTION__);
@@ -172,7 +172,8 @@ buffer_handle_t ZslBufferManager::GetEmptyBufferLocked() {
             "%s: Remove metadata-only buffer in partially filled zsl "
             "buffer queue. Releasing the metadata resource.",
             __FUNCTION__);
-      } else if (buffer_iter->second.buffer.buffer == kInvalidBufferHandle) {
+      } else if (buffer_iter->second.buffer.buffer == kInvalidBufferHandle &&
+                 buffer_iter->second.partial_result == 0) {
         ALOGE(
             "%s: Invalid: both buffer and metadata are empty in partial "
             "zsl queue.",
@@ -289,17 +290,18 @@ status_t ZslBufferManager::ReturnFilledBuffer(uint32_t frame_number,
     zsl_buffer.metadata = nullptr;
     partially_filled_zsl_buffers_[frame_number] = std::move(zsl_buffer);
   } else if (partially_filled_zsl_buffers_[frame_number].buffer.buffer ==
-                 kInvalidBufferHandle &&
-             partially_filled_zsl_buffers_[frame_number].metadata != nullptr) {
-    ALOGV(
-        "%s: both buffer and metadata for frame[%u] are ready. Move to "
-        "filled_zsl_buffers_.",
-        __FUNCTION__, frame_number);
-
-    zsl_buffer.metadata =
-        std::move(partially_filled_zsl_buffers_[frame_number].metadata);
-    filled_zsl_buffers_[frame_number] = std::move(zsl_buffer);
-    partially_filled_zsl_buffers_.erase(frame_number);
+             kInvalidBufferHandle) {
+    partially_filled_zsl_buffers_[frame_number].buffer = buffer;
+    if (partially_filled_zsl_buffers_[frame_number].partial_result ==
+        partial_result_count_) {
+      ALOGV(
+          "%s: both buffer and metadata for frame[%u] are ready. Move to "
+          "filled_zsl_buffers_.",
+          __FUNCTION__, frame_number);
+      filled_zsl_buffers_[frame_number] =
+          std::move(partially_filled_zsl_buffers_[frame_number]);
+      partially_filled_zsl_buffers_.erase(frame_number);
+    }
   } else {
     ALOGE(
         "%s: the buffer for frame[%u] already returned or the metadata is "
@@ -319,6 +321,7 @@ status_t ZslBufferManager::ReturnMetadata(uint32_t frame_number,
 
   ZslBuffer zsl_buffer = {};
   zsl_buffer.frame_number = frame_number;
+  zsl_buffer.partial_result = partial_result;
 
   auto partially_filled_buffer_it =
       partially_filled_zsl_buffers_.find(frame_number);
@@ -338,6 +341,7 @@ status_t ZslBufferManager::ReturnMetadata(uint32_t frame_number,
     }
     partially_filled_zsl_buffers_[frame_number] = std::move(zsl_buffer);
   } else if (partial_result < partial_result_count_) {
+    partially_filled_buffer_it->second.partial_result = partial_result;
     // Need to wait for more partial results
     if (partially_filled_buffer_it->second.metadata == nullptr) {
       // This is the first partial result, clone to create an entry
@@ -352,31 +356,28 @@ status_t ZslBufferManager::ReturnMetadata(uint32_t frame_number,
       partially_filled_buffer_it->second.metadata->Append(
           metadata->GetRawCameraMetadata());
     }
-  } else if (partially_filled_buffer_it->second.buffer.buffer !=
-             kInvalidBufferHandle) {
-    ALOGV(
-        "%s: both buffer and metadata for frame[%u] are ready. Move to "
-        "filled_zsl_buffers_.",
-        __FUNCTION__, frame_number);
-
+  } else {
     zsl_buffer.buffer = partially_filled_buffer_it->second.buffer;
+    partially_filled_buffer_it->second.partial_result = partial_result;
     if (partially_filled_buffer_it->second.metadata == nullptr) {
       // This will happen if partial_result_count_ == 1
-      zsl_buffer.metadata = HalCameraMetadata::Clone(metadata);
+      partially_filled_buffer_it->second.metadata =
+          HalCameraMetadata::Clone(metadata);
     } else {
-      zsl_buffer.metadata =
-          std::move(partially_filled_buffer_it->second.metadata);
       // This is the last partial result, append it to the others
-      zsl_buffer.metadata->Append(metadata->GetRawCameraMetadata());
+      partially_filled_buffer_it->second.metadata->Append(
+          metadata->GetRawCameraMetadata());
     }
-    filled_zsl_buffers_[frame_number] = std::move(zsl_buffer);
-    partially_filled_zsl_buffers_.erase(frame_number);
-  } else {
-    ALOGE(
-        "%s: the metadata for frame[%u] already returned or the buffer is "
-        "missing.",
-        __FUNCTION__, frame_number);
-    return INVALID_OPERATION;
+    if (partially_filled_buffer_it->second.buffer.buffer !=
+        kInvalidBufferHandle) {
+      ALOGV(
+          "%s: both buffer and metadata for frame[%u] are ready. Move to "
+          "filled_zsl_buffers_.",
+          __FUNCTION__, frame_number);
+      filled_zsl_buffers_[frame_number] =
+          std::move(partially_filled_buffer_it->second);
+      partially_filled_zsl_buffers_.erase(frame_number);
+    }
   }
 
   if (partially_filled_zsl_buffers_.size() > kMaxPartialZslBuffers) {
