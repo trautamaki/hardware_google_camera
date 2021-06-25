@@ -313,9 +313,11 @@
   ], 
   "android.scaler.availableInputOutputFormatsMapMaximumResolution" : [
    "32",
-   "1",
-   "32"
-  ],
+   "3",
+   "32",
+   "33",
+   "35",
+  ], 
   "android.reprocess.maxCaptureStall": [
    "2"
   ], 
