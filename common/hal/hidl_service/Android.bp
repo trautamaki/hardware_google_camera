@@ -46,17 +46,6 @@ gch_lazy_hal_cc_defaults {
     },
 }
 
-cc_genrule {
-  name: "hidl_camera_build_version",
-  tools: ["//vendor/google/services/LyricCameraHAL/src/apex:preproc_manifest"],
-  cmd: "$(location //vendor/google/services/LyricCameraHAL/src/apex:preproc_manifest) $(in) $(out)",
-  vendor: true,
-  srcs: [
-    "hidl_camera_build_version.inl",
-  ],
-  out: ["hidl_camera_build_version.h"],
-}
-
 cc_defaults {
     name: "camera_service_defaults",
     defaults: [
@@ -74,9 +63,6 @@ cc_defaults {
         "hidl_utils.cc",
         "libc_wrappers.cc",
         "service.cc",
-    ],
-    generated_headers: [
-        "hidl_camera_build_version",
     ],
     compile_multilib: "first",
     shared_libs: [
