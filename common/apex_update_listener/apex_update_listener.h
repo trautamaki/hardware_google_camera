@@ -86,7 +86,7 @@ class ApexUpdateListener {
   std::set<Info> last_info_;
   std::thread thread_;
 
-  void ThreadFunction();
+  oid ThreadFunction();
   static std::optional<std::set<Info>> TrySlurpInfo(
       const std::string& apex_name, const std::string& apex_info_list_file_name);
 };
