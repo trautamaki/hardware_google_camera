@@ -51,6 +51,8 @@ class ZslBufferManager {
     StreamBuffer buffer;
     // Original result metadata of this ZSL buffer captured by HAL.
     std::unique_ptr<HalCameraMetadata> metadata;
+    // Last partial result received
+    int partial_result = 0;
   };
 
   // Allocate buffers. This can only be called once.
