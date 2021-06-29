@@ -35,8 +35,8 @@ namespace google_camera_hal {
 
 #if GCH_HWL_USE_DLOPEN
 static std::string kDepthGeneratorLib = "/vendor/lib64/libdepthgenerator.so";
-using android::depth_generator::CreateDepthGenerator_t;
 #endif
+using android::depth_generator::CreateDepthGenerator_t;
 const float kSmallOffset = 0.01f;
 
 std::unique_ptr<DepthProcessBlock> DepthProcessBlock::Create(
