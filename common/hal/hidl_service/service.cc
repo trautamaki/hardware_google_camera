@@ -27,6 +27,8 @@
 #include <malloc.h>
 #include <utils/Errors.h>
 
+#include <apex_update_listener.h>
+
 #include "hidl_camera_provider.h"
 
 using ::android::hardware::camera::provider::V2_7::ICameraProvider;
@@ -46,6 +48,17 @@ int main() {
   android::ProcessState::initWithDriver("/dev/vndbinder");
   android::hardware::configureRpcThreadpool(/*maxThreads=*/6,
                                             /*callerWillJoin=*/true);
+
+#ifdef __ANDROID_APEX__
+  auto restart_on_update =
+      ApexUpdateListener::Make("com.google.pixel.camera.hal", [](auto, auto) {
+        ALOGI("APEX version updated. Restarting.");
+        exit(0);
+      });
+  ALOGI("Using ApexUpdateListener: %p", restart_on_update.get());
+#else
+  ALOGI("Not using ApexUpdateListener since not running in an apex.");
+#endif
 
   android::sp<ICameraProvider> camera_provider = HidlCameraProvider::Create();
   if (camera_provider == nullptr) {
