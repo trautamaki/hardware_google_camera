@@ -37,12 +37,17 @@ using ::testing::AtLeast;
 using ::testing::Return;
 
 // HAL external capture session library path
+#if defined(__ANDROID_APEX__)
+constexpr char kExternalCaptureSessionDir[] =
+    "/apex/com.google.pixel.camera.hal/camera/capture_sessions/";
+#else
 #if defined(_LP64)
 constexpr char kExternalCaptureSessionDir[] =
     "/vendor/lib64/camera/capture_sessions/";
 #else  // defined(_LP64)
 constexpr char kExternalCaptureSessionDir[] =
     "/vendor/lib/camera/capture_sessions/";
+#endif
 #endif
 
 class CameraDeviceSessionTests : public ::testing::Test {
