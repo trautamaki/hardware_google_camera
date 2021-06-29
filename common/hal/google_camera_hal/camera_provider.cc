@@ -27,15 +27,10 @@
 #include "vendor_tag_utils.h"
 
 // HWL layer implementation path
-#if defined(__ANDROID_APEX__)
-std::string kCameraHwlLib =
-    "/apex/com.google.pixel.camera.hal/lib64/libgooglecamerahwl_impl.so";
-#else
 #if defined(_LP64)
-std::string kCameraHwlLib = "libgooglecamerahwl_impl.so";
+std::string kCameraHwlLib = "/vendor/lib64/libgooglecamerahwl_impl.so";
 #else  // defined(_LP64)
 std::string kCameraHwlLib = "/vendor/lib/libgooglecamerahwl_impl.so";
-#endif
 #endif
 
 namespace android {
