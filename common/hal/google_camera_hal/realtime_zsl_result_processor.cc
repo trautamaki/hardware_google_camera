@@ -210,7 +210,8 @@ void RealtimeZslResultProcessor::ProcessResult(ProcessBlockResult block_result) 
     result->result_metadata->Erase(ANDROID_CONTROL_ENABLE_ZSL);
 
     res = internal_stream_manager_->ReturnMetadata(
-        stream_id_, result->frame_number, result->result_metadata.get());
+        stream_id_, result->frame_number, result->result_metadata.get(),
+        result->partial_result);
     if (res != OK) {
       ALOGW("%s: (%d)ReturnMetadata fail", __FUNCTION__, result->frame_number);
     }
