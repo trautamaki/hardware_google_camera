@@ -17,14 +17,14 @@
 #define LOG_TAG "GCH_HidlCameraDeviceSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 //#define LOG_NDEBUG 0
-#include <log/log.h>
+#include "hidl_camera_device_session.h"
 
 #include <cutils/properties.h>
 #include <cutils/trace.h>
+#include <log/log.h>
 #include <malloc.h>
 #include <utils/Trace.h>
 
-#include "hidl_camera_device_session.h"
 #include "hidl_profiler.h"
 #include "hidl_utils.h"
 
@@ -690,6 +690,10 @@ Return<Status> HidlCameraDeviceSession::flush() {
     return Status::INTERNAL_ERROR;
   }
 
+  hidl_profiler_->SetLatencyProfiler(device_session_->GetProfiler(
+      hidl_profiler_->GetCameraId(), hidl_profiler_->GetLatencyFlag()));
+  hidl_profiler_->SetFpsProfiler(device_session_->GetProfiler(
+      hidl_profiler_->GetCameraId(), hidl_profiler_->GetFpsFlag()));
   auto profiler =
       hidl_profiler_->MakeScopedProfiler(HidlProfiler::ScopedType::kFlush);
 

@@ -147,7 +147,7 @@ class Profiler {
   // Create profiler.
   static std::shared_ptr<Profiler> Create(int option);
 
-  virtual ~Profiler(){};
+  virtual ~Profiler() = default;
 
   // adb setprop options.
   enum SetPropFlag {
@@ -163,6 +163,8 @@ class Profiler {
     kDynamicStartBit = 1 << 5,
     // Dumps result using proto format.
     kProto = 1 << 6,
+    // Customized profiler derived from Profiler
+    kCustomProfiler = 1 << 7,
   };
 
   // Setup the name of use case the profiler is running.
@@ -175,7 +177,7 @@ class Profiler {
   //  dump_file_prefix: file prefix name. In the current setting,
   //    "/data/vendor/camera/" is a valid folder for camera to dump file.
   //    A valid prefix can be "/data/vendor/camera/test_prefix_".
-  virtual void SetDumpFilePrefix(std::string dump_file_prefix) = 0;
+  virtual void SetDumpFilePrefix(const std::string& dump_file_prefix) = 0;
 
   // Start to profile.
   // We use start and end to choose which code snippet to be profile.
@@ -184,13 +186,13 @@ class Profiler {
   // Arguments:
   //   name: the name of the node to be profiled.
   //   request_id: frame requesd id.
-  virtual void Start(const std::string name, int request_id) = 0;
+  virtual void Start(const std::string& name, int request_id) = 0;
 
   // End the profileing.
   // Arguments:
   //   name: the name of the node to be profiled. Should be the same in Start().
   //   request_id: frame requesd id.
-  virtual void End(const std::string name, int request_id) = 0;
+  virtual void End(const std::string& name, int request_id) = 0;
 
   // Print out the profiling result in the standard output (ANDROID_LOG_ERROR).
   virtual void PrintResult() = 0;
@@ -205,8 +207,11 @@ class Profiler {
   // The interval unit is second and interval_seconds must >= 1
   virtual void SetFpsPrintInterval(int32_t interval_seconds) = 0;
 
+  virtual int64_t GetLatencyInNanoseconds(const std::string& name,
+                                          int request_id) = 0;
+
  protected:
-  Profiler(){};
+  Profiler() = default;
 };
 
 // A scoped utility class to facilitate profiling.

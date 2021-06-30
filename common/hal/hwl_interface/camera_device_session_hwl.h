@@ -22,6 +22,7 @@
 #include "hal_camera_metadata.h"
 #include "hwl_types.h"
 #include "multicam_coordinator_hwl.h"
+#include "profiler.h"
 #include "session_data_defs.h"
 #include "zoom_ratio_mapper_hwl.h"
 
@@ -163,6 +164,12 @@ class CameraDeviceSessionHwl {
 
   // Get zoom ratio mapper from HWL.
   virtual std::unique_ptr<ZoomRatioMapperHwl> GetZoomRatioMapperHwl() = 0;
+
+  // Get customized profiler
+  virtual std::unique_ptr<google::camera_common::Profiler> GetProfiler(
+      uint32_t /* camera_id */, int /* option */) {
+    return nullptr;
+  }
 };
 
 }  // namespace google_camera_hal
