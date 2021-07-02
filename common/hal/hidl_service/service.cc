@@ -21,12 +21,15 @@
 #endif
 
 #include <android/hardware/camera/provider/2.7/ICameraProvider.h>
+#include <apex_update_listener.h>
 #include <binder/ProcessState.h>
+#include <cutils/properties.h>
 #include <hidl/HidlLazyUtils.h>
 #include <hidl/HidlTransportSupport.h>
 #include <malloc.h>
 #include <utils/Errors.h>
 
+#include "hidl_camera_build_version.h"
 #include "hidl_camera_provider.h"
 
 using ::android::hardware::camera::provider::V2_7::ICameraProvider;
@@ -46,6 +49,27 @@ int main() {
   android::ProcessState::initWithDriver("/dev/vndbinder");
   android::hardware::configureRpcThreadpool(/*maxThreads=*/6,
                                             /*callerWillJoin=*/true);
+
+#ifdef __ANDROID_APEX__
+  int start_count = property_get_int32("vendor.camera.hal.start.count", 0);
+  property_set("vendor.camera.hal.start.count",
+               std::to_string(++start_count).c_str());
+  property_set("vendor.camera.hal.version",
+               std::to_string(kHalManifestBuildNumber).c_str());
+  property_set("vendor.camera.hal.build_id", kAndroidBuildId);
+  auto start_on_update =
+      ApexUpdateListener::Make("com.google.pixel.camera.hal", [](auto, auto) {
+        ALOGI("APEX version updated. starting.");
+        exit(0);
+      });
+  ALOGI(
+      "Using ApexUpdateListener: %p Start Count: %d Current Version: %s "
+      "(%ld)",
+      start_on_update.get(), start_count, kAndroidBuildId,
+      kHalManifestBuildNumber);
+#else
+  ALOGI("Not using ApexUpdateListener since not running in an apex.");
+#endif
 
   android::sp<ICameraProvider> camera_provider = HidlCameraProvider::Create();
   if (camera_provider == nullptr) {
