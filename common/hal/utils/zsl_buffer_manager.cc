@@ -473,9 +473,10 @@ void ZslBufferManager::GetMostRecentZslBuffers(
     // Only include recent buffers.
     if (current_timestamp - buffer_timestamp < kMaxBufferTimestampDiff) {
       zsl_buffers->push_back(std::move(zsl_buffer_iter->second));
+      zsl_buffer_iter = filled_zsl_buffers_.erase(zsl_buffer_iter);
+    } else {
+      zsl_buffer_iter++;
     }
-
-    zsl_buffer_iter = filled_zsl_buffers_.erase(zsl_buffer_iter);
   }
 }
 
