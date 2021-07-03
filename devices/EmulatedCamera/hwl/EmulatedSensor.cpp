@@ -736,10 +736,47 @@ bool EmulatedSensor::threadLoop() {
           sensor_binning_factor_info_[(*b)->camera_id].has_non_raw_stream = true;
       }
 
+      // TODO: remove hack. Implement RAW -> YUV / JPEG reprocessing http://b/192382904
+      bool treat_as_reprocess =
+          (device_chars->second.quad_bayer_sensor && reprocess_request &&
+           (*next_input_buffer->begin())->format == PixelFormat::RAW16)
+              ? false
+              : reprocess_request;
+
       switch ((*b)->format) {
         case PixelFormat::RAW16:
           if (!reprocess_request) {
-            if (device_chars->second.quad_bayer_sensor && !max_res_mode) {
+            uint64_t min_full_res_raw_size =
+                2 * device_chars->second.full_res_width *
+                device_chars->second.full_res_height;
+            uint64_t min_default_raw_size =
+                2 * device_chars->second.width * device_chars->second.height;
+            bool default_mode_for_qb =
+                device_chars->second.quad_bayer_sensor && !max_res_mode;
+            size_t buffer_size = (*b)->plane.img.buffer_size;
+            if (default_mode_for_qb) {
+              if (buffer_size < min_default_raw_size) {
+                ALOGE(
+                    "%s: Output buffer size too small for RAW capture in "
+                    "default "
+                    "mode, "
+                    "expected %" PRIu64 ", got %zu, for camera id %d",
+                    __FUNCTION__, min_default_raw_size, buffer_size,
+                    (*b)->camera_id);
+                (*b)->stream_buffer.status = BufferStatus::kError;
+                break;
+              }
+            } else if (buffer_size < min_full_res_raw_size) {
+              ALOGE(
+                  "%s: Output buffer size too small for RAW capture in max res "
+                  "mode, "
+                  "expected %" PRIu64 ", got %zu, for camera id %d",
+                  __FUNCTION__, min_full_res_raw_size, buffer_size,
+                  (*b)->camera_id);
+              (*b)->stream_buffer.status = BufferStatus::kError;
+              break;
+            }
+            if (default_mode_for_qb) {
               CaptureRawBinned(
                   (*b)->plane.img.img, (*b)->plane.img.stride_in_bytes,
                   device_settings->second.gain, device_chars->second);
@@ -800,12 +837,13 @@ bool EmulatedSensor::threadLoop() {
         case PixelFormat::BLOB:
           if ((*b)->dataSpace == HAL_DATASPACE_V0_JFIF) {
             YUV420Frame yuv_input{
-                .width =
-                    reprocess_request ? (*next_input_buffer->begin())->width : 0,
-                .height = reprocess_request
+                .width = treat_as_reprocess
+                             ? (*next_input_buffer->begin())->width
+                             : 0,
+                .height = treat_as_reprocess
                               ? (*next_input_buffer->begin())->height
                               : 0,
-                .planes = reprocess_request
+                .planes = treat_as_reprocess
                               ? (*next_input_buffer->begin())->plane.img_y_crcb
                               : YCbCrPlanes{}};
             auto jpeg_input = std::make_unique<JpegYUV420Input>();
@@ -827,9 +865,12 @@ bool EmulatedSensor::threadLoop() {
 
             bool rotate =
                 device_settings->second.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
-            ProcessType process_type = reprocess_request ? REPROCESS :
-              (device_settings->second.edge_mode == ANDROID_EDGE_MODE_HIGH_QUALITY) ?
-              HIGH_QUALITY : REGULAR;
+            ProcessType process_type =
+                treat_as_reprocess ? REPROCESS
+                                   : (device_settings->second.edge_mode ==
+                                      ANDROID_EDGE_MODE_HIGH_QUALITY)
+                                         ? HIGH_QUALITY
+                                         : REGULAR;
             auto ret = ProcessYUV420(
                 yuv_input, yuv_output, device_settings->second.gain,
                 process_type, device_settings->second.zoom_ratio,
@@ -862,10 +903,10 @@ bool EmulatedSensor::threadLoop() {
         case PixelFormat::YCBCR_420_888: {
           YUV420Frame yuv_input{
               .width =
-                  reprocess_request ? (*next_input_buffer->begin())->width : 0,
+                  treat_as_reprocess ? (*next_input_buffer->begin())->width : 0,
               .height =
-                  reprocess_request ? (*next_input_buffer->begin())->height : 0,
-              .planes = reprocess_request
+                  treat_as_reprocess ? (*next_input_buffer->begin())->height : 0,
+              .planes = treat_as_reprocess
                             ? (*next_input_buffer->begin())->plane.img_y_crcb
                             : YCbCrPlanes{}};
           YUV420Frame yuv_output{.width = (*b)->width,
@@ -873,9 +914,12 @@ bool EmulatedSensor::threadLoop() {
                                  .planes = (*b)->plane.img_y_crcb};
           bool rotate =
               device_settings->second.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
-          ProcessType process_type = reprocess_request ? REPROCESS :
-            (device_settings->second.edge_mode == ANDROID_EDGE_MODE_HIGH_QUALITY) ?
-            HIGH_QUALITY : REGULAR;
+          ProcessType process_type = treat_as_reprocess
+                                         ? REPROCESS
+                                         : (device_settings->second.edge_mode ==
+                                            ANDROID_EDGE_MODE_HIGH_QUALITY)
+                                               ? HIGH_QUALITY
+                                               : REGULAR;
           auto ret = ProcessYUV420(
               yuv_input, yuv_output, device_settings->second.gain,
               process_type, device_settings->second.zoom_ratio,
