@@ -46,9 +46,29 @@ gch_lazy_hal_cc_defaults {
     },
 }
 
+sh_binary_host {
+    name: "camera_hal_version_script",
+    src: "version_script.sh",
+    filename_from_src: true,
+}
+
+cc_genrule {
+    name: "hidl_camera_build_version",
+    tools: [":camera_hal_version_script"],
+    cmd: "$(location :camera_hal_version_script) $(in) $(out)",
+    vendor: true,
+    srcs: [
+        "hidl_camera_build_version.inl",
+    ],
+    out: ["hidl_camera_build_version.h"],
+}
+
 cc_defaults {
     name: "camera_service_defaults",
-    defaults: ["google_camera_hal_defaults"],
+    defaults: [
+        "google_camera_hal_defaults",
+        "apex_update_listener_cc_defaults_static",
+    ],
     vendor: true,
     relative_install_path: "hw",
     srcs: [
@@ -58,7 +78,11 @@ cc_defaults {
         "hidl_profiler.cc",
         "hidl_thermal_utils.cc",
         "hidl_utils.cc",
+        "libc_wrappers.cc",
         "service.cc",
+    ],
+    generated_headers: [
+        "hidl_camera_build_version",
     ],
     compile_multilib: "first",
     shared_libs: [
@@ -90,7 +114,7 @@ cc_defaults {
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
     ],
-    vintf_fragments: ["android.hardware.camera.provider@2.7-service-google.xml"]
+    vintf_fragments: ["android.hardware.camera.provider@2.7-service-google.xml"],
 }
 
 cc_binary {
