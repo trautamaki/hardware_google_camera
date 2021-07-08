@@ -60,6 +60,8 @@ class SnapshotRequestProcessor : public RequestProcessor {
   status_t Initialize(CameraDeviceSessionHwl* device_session_hwl,
                       int32_t yuv_stream_id);
   bool IsReadyForNextRequest();
+
+  static constexpr int kZslBufferSize = 3;
   std::mutex process_block_lock_;
 
   // Protected by process_block_lock_.
