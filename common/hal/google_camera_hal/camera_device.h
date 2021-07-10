@@ -21,6 +21,7 @@
 #include "camera_device_hwl.h"
 #include "camera_device_session.h"
 #include "hal_camera_metadata.h"
+#include "profiler.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -81,6 +82,9 @@ class CameraDevice {
   bool IsStreamCombinationSupported(const StreamConfiguration& stream_config);
 
   status_t LoadExternalCaptureSession();
+
+  std::unique_ptr<google::camera_common::Profiler> GetProfiler(uint32_t camere_id,
+                                                               int option);
 
  protected:
   CameraDevice() = default;

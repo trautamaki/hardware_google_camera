@@ -1848,5 +1848,10 @@ void CameraDeviceSession::ReturnStreamBuffers(
   }
 }
 
+std::unique_ptr<google::camera_common::Profiler>
+CameraDeviceSession::GetProfiler(uint32_t camera_id, int option) {
+  return device_session_hwl_->GetProfiler(camera_id, option);
+}
+
 }  // namespace google_camera_hal
 }  // namespace android

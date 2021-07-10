@@ -16,9 +16,10 @@
 
 #define LOG_TAG "GCH_HidlCameraDevice"
 //#define LOG_NDEBUG 0
+#include "hidl_camera_device.h"
+
 #include <log/log.h>
 
-#include "hidl_camera_device.h"
 #include "hidl_camera_device_session.h"
 #include "hidl_profiler.h"
 #include "hidl_utils.h"
@@ -68,6 +69,10 @@ status_t HidlCameraDevice::Initialize(
     ALOGE("%s: Failed to create HidlProfiler.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
+  hidl_profiler_->SetLatencyProfiler(google_camera_device_->GetProfiler(
+      camera_id_, hidl_profiler_->GetLatencyFlag()));
+  hidl_profiler_->SetFpsProfiler(google_camera_device_->GetProfiler(
+      camera_id_, hidl_profiler_->GetFpsFlag()));
 
   return OK;
 }
