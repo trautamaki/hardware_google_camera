@@ -66,6 +66,18 @@ class HidlProfiler {
   // Call to profile frame rate for each stream.
   virtual void ProfileFrameRate(const std::string& name) = 0;
 
+  // Give a customized latency profiler so that client side can intercept various calls.
+  virtual void SetLatencyProfiler(
+      std::unique_ptr<google::camera_common::Profiler> profiler) = 0;
+
+  // Give a customized fps profiler so that client side can intercept various calls.
+  virtual void SetFpsProfiler(
+      std::unique_ptr<google::camera_common::Profiler> profiler) = 0;
+
+  virtual uint32_t GetCameraId() const = 0;
+  virtual int32_t GetLatencyFlag() const = 0;
+  virtual int32_t GetFpsFlag() const = 0;
+
  protected:
   HidlProfiler() = default;
 };

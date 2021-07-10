@@ -125,6 +125,9 @@ class CameraDeviceSession {
                                      const HalCameraMetadata* new_session,
                                      bool* reconfiguration_required);
 
+  std::unique_ptr<google::camera_common::Profiler> GetProfiler(uint32_t camere_id,
+                                                               int option);
+
  protected:
   CameraDeviceSession() = default;
 
