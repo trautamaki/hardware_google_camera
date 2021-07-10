@@ -50,6 +50,7 @@ class HidlProfilerImpl : public HidlProfiler {
  public:
   HidlProfilerImpl(uint32_t camera_id, int32_t latency_flag, int32_t fps_flag)
       : camera_id_string_("Cam" + std::to_string(camera_id)),
+        camera_id_(camera_id),
         latency_flag_(latency_flag),
         fps_flag_(fps_flag) {
   }
@@ -58,7 +59,7 @@ class HidlProfilerImpl : public HidlProfiler {
       ScopedType type) override {
     std::lock_guard lock(api_mutex_);
 
-    if (type == ScopedType::kConfigureStream) {
+    if (type == ScopedType::kConfigureStream && fps_profiler_ == nullptr) {
       fps_profiler_ = CreateFpsProfiler();
     }
 
@@ -140,6 +141,27 @@ class HidlProfilerImpl : public HidlProfiler {
     }
   }
 
+  void SetLatencyProfiler(std::unique_ptr<Profiler> profiler) override {
+    latency_profiler_ = std::move(profiler);
+    if (latency_profiler_ != nullptr) {
+      latency_profiler_->SetDumpFilePrefix(
+          "/data/vendor/camera/profiler/hidl_open_close_");
+      latency_profiler_->Start(kOverall, Profiler::kInvalidRequestId);
+      has_camera_open_ = false;
+      config_count_ = 0;
+      flush_count_ = 0;
+      idle_count_ = 0;
+    }
+  }
+
+  void SetFpsProfiler(std::unique_ptr<Profiler> profiler) override {
+    fps_profiler_ = std::move(profiler);
+    if (fps_profiler_ != nullptr) {
+      fps_profiler_->SetDumpFilePrefix(
+          "/data/vendor/camera/profiler/hidl_fps_");
+    }
+  }
+
  private:
   std::shared_ptr<Profiler> CreateLatencyProfiler() {
     if (latency_flag_ == Profiler::SetPropFlag::kDisable) {
@@ -188,7 +210,18 @@ class HidlProfilerImpl : public HidlProfiler {
     }
   }
 
+  uint32_t GetCameraId() const {
+    return camera_id_;
+  }
+  int32_t GetLatencyFlag() const {
+    return latency_flag_;
+  }
+  int32_t GetFpsFlag() const {
+    return fps_flag_;
+  }
+
   const std::string camera_id_string_;
+  const uint32_t camera_id_;
   const int32_t latency_flag_;
   const int32_t fps_flag_;
 
@@ -216,13 +249,33 @@ class HidlProfilerMock : public HidlProfiler {
 
   void ProfileFrameRate(const std::string&) override {
   }
+
+  void SetLatencyProfiler(
+      std::unique_ptr<google::camera_common::Profiler> /* profiler */) override {
+  }
+
+  void SetFpsProfiler(
+      std::unique_ptr<google::camera_common::Profiler> /* profiler */) override {
+  }
+
+  uint32_t GetCameraId() const override {
+    return 0;
+  }
+  int32_t GetLatencyFlag() const override {
+    return 0;
+  }
+  int32_t GetFpsFlag() const override {
+    return 0;
+  }
 };
 
 }  // anonymous namespace
 
 std::shared_ptr<HidlProfiler> HidlProfiler::Create(uint32_t camera_id) {
-  int32_t latency_flag = property_get_int32(kPropKeyProfileOpenClose, 0);
-  int32_t fps_flag = property_get_int32(kPropKeyProfileFps, 0);
+  int32_t latency_flag = property_get_int32(
+      kPropKeyProfileOpenClose, Profiler::SetPropFlag::kCustomProfiler);
+  int32_t fps_flag = property_get_int32(kPropKeyProfileFps,
+                                        Profiler::SetPropFlag::kCustomProfiler);
   if (latency_flag == Profiler::SetPropFlag::kDisable &&
       fps_flag == Profiler::SetPropFlag::kDisable) {
     return std::make_shared<HidlProfilerMock>();

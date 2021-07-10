@@ -87,6 +87,7 @@ cc_library_shared {
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@3.0",
         "android.hardware.graphics.mapper@4.0",
+        "lib_profiler",
         "libbase",
         "libcamera_metadata",
         "libcutils",
@@ -107,5 +108,8 @@ cc_library_shared {
     ],
     export_header_lib_headers: [
         "libgooglecamerahal_headers",
+    ],
+    export_shared_lib_headers: [
+        "lib_profiler",
     ],
 }

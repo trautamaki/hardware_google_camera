@@ -15,12 +15,11 @@
  */
 
 #define LOG_TAG "MockDeviceSessionHwl"
-#include <log/log.h>
+#include "mock_device_session_hwl.h"
 
 #include <hardware/gralloc.h>
+#include <log/log.h>
 #include <system/graphics-base.h>
-
-#include "mock_device_session_hwl.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -280,6 +279,12 @@ status_t FakeCameraDeviceSessionHwl::IsReconfigurationRequired(
 
 std::unique_ptr<ZoomRatioMapperHwl>
 FakeCameraDeviceSessionHwl::GetZoomRatioMapperHwl() {
+  return nullptr;
+}
+
+std::unique_ptr<google::camera_common::Profiler>
+FakeCameraDeviceSessionHwl::GetProfiler(uint32_t /* camera_id */,
+                                        int /* option */) {
   return nullptr;
 }
 
