@@ -111,6 +111,9 @@ cc_defaults {
         "libutils",
         "lib_profiler",
     ],
+    export_shared_lib_headers: [
+        "lib_profiler",
+    ],
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
     ],

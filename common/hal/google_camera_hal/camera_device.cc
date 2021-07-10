@@ -27,6 +27,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <utils/Trace.h>
+
 #include <thread>
 
 #include "utils.h"
@@ -302,6 +303,14 @@ status_t CameraDevice::LoadExternalCaptureSession() {
 }
 
 CameraDevice::~CameraDevice() {
+}
+
+std::unique_ptr<google::camera_common::Profiler> CameraDevice::GetProfiler(
+    uint32_t camera_id, int option) {
+  if (option & google::camera_common::Profiler::SetPropFlag::kCustomProfiler) {
+    return camera_device_hwl_->GetProfiler(camera_id, option);
+  }
+  return nullptr;
 }
 
 }  // namespace google_camera_hal

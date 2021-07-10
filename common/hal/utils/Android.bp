@@ -49,6 +49,7 @@ cc_library_shared {
         "zsl_buffer_manager.cc",
     ],
     shared_libs: [
+        "lib_profiler",
         "libcamera_metadata",
         "libcutils",
         "libgrallocusage",
@@ -57,6 +58,9 @@ cc_library_shared {
         "libutils",
         "libui",
         "libsync",
+    ],
+    export_shared_lib_headers: [
+        "lib_profiler",
     ],
     export_include_dirs: ["."],
     include_dirs: [

@@ -65,7 +65,7 @@ class ProfilerImpl : public Profiler {
   //  dump_file_prefix: file prefix name. In the current setting,
   //    "/data/vendor/camera/" is a valid folder for camera to dump file.
   //    A valid prefix can be "/data/vendor/camera/test_prefix_".
-  void SetDumpFilePrefix(std::string dump_file_prefix) override final;
+  void SetDumpFilePrefix(const std::string& dump_file_prefix) override final;
 
   // Start to profile.
   // We use start and end to choose which code snippet to be profile.
@@ -74,25 +74,29 @@ class ProfilerImpl : public Profiler {
   // Arguments:
   //   name: the name of the node to be profiled.
   //   request_id: frame requesd id.
-  void Start(const std::string name,
+  void Start(const std::string& name,
              int request_id = kInvalidRequestId) override final;
 
   // End the profileing.
   // Arguments:
   //   name: the name of the node to be profiled. Should be the same in Start().
   //   request_id: frame requesd id.
-  void End(const std::string name,
+  void End(const std::string& name,
            int request_id = kInvalidRequestId) override final;
 
   // Print out the profiling result in the standard output (ANDROID_LOG_ERROR).
-  virtual void PrintResult() override;
+  void PrintResult() override;
 
   // Profile the frame rate
-  virtual void ProfileFrameRate(const std::string&) override final;
+  void ProfileFrameRate(const std::string&) override final;
 
   // Set the interval of FPS print
   // The unit is second and interval_seconds must >= 1
-  virtual void SetFpsPrintInterval(int32_t interval_seconds) override final;
+  void SetFpsPrintInterval(int32_t interval_seconds) override final;
+
+  // Get the latency associated with the name
+  int64_t GetLatencyInNanoseconds(const std::string& name,
+                                  int request_id) override final;
 
  protected:
   // A structure to hold start time, end time, and count of profiling code
@@ -177,7 +181,7 @@ class ProfilerImpl : public Profiler {
   // Dump the result to the disk.
   // Argument:
   //   filepath: file path to dump file.
-  virtual void DumpResult(std::string filepath);
+  virtual void DumpResult(const std::string& filepath);
 
   // Dump result in text format.
   void DumpTxt(std::string_view filepath);
@@ -205,7 +209,7 @@ ProfilerImpl::~ProfilerImpl() {
   }
 }
 
-void ProfilerImpl::DumpResult(std::string filepath) {
+void ProfilerImpl::DumpResult(const std::string& filepath) {
   if (setting_ & SetPropFlag::kProto) {
     DumpPb(filepath + kStrPb);
   } else {
@@ -224,7 +228,7 @@ void ProfilerImpl::CreateFolder(const std::string& folder_path) {
   }
 }
 
-void ProfilerImpl::SetDumpFilePrefix(std::string dump_file_prefix) {
+void ProfilerImpl::SetDumpFilePrefix(const std::string& dump_file_prefix) {
   dump_file_prefix_ = dump_file_prefix;
   if (setting_ & SetPropFlag::kDumpBit) {
     if (auto index = dump_file_prefix_.rfind('/'); index != std::string::npos) {
@@ -278,7 +282,7 @@ void ProfilerImpl::ProfileFrameRate(const std::string& name) {
   }
 }
 
-void ProfilerImpl::Start(const std::string name, int request_id) {
+void ProfilerImpl::Start(const std::string& name, int request_id) {
   if (setting_ == SetPropFlag::kDisable) {
     return;
   }
@@ -304,7 +308,7 @@ void ProfilerImpl::Start(const std::string name, int request_id) {
   }
 }
 
-void ProfilerImpl::End(const std::string name, int request_id) {
+void ProfilerImpl::End(const std::string& name, int request_id) {
   if (setting_ == SetPropFlag::kDisable) {
     return;
   }
@@ -491,6 +495,22 @@ void ProfilerImpl::DumpPb(std::string_view filepath) {
   }
 }
 
+// Get the latency associated with the name
+int64_t ProfilerImpl::GetLatencyInNanoseconds(const std::string& name,
+                                              int request_id) {
+  // Will use name to add various TraceInt64 here
+  int valid_request_id = (request_id == kInvalidRequestId) ? 0 : request_id + 1;
+  int64_t latency_ns = 0;
+  {
+    std::lock_guard<std::mutex> lk(lock_);
+    if (static_cast<std::size_t>(valid_request_id) < timing_map_[name].size()) {
+      TimeSlot& slot = timing_map_[name][valid_request_id];
+      latency_ns = slot.end - slot.start;
+    }
+  }
+  return latency_ns;
+}
+
 class ProfilerStopwatchImpl : public ProfilerImpl {
  public:
   ProfilerStopwatchImpl(SetPropFlag setting) : ProfilerImpl(setting){};
@@ -500,8 +520,8 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
       return;
     }
     if (setting_ & SetPropFlag::kPrintBit) {
-      // Virtual function won't work in parent class's destructor. need to call
-      // it by ourself.
+      // Virtual function won't work in parent class's destructor. need to
+      // call it by ourself.
       PrintResult();
       // Erase the print bit to prevent parent class print again.
       setting_ = static_cast<SetPropFlag>(setting_ & (~SetPropFlag::kPrintBit));
@@ -541,7 +561,7 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
     ALOGI("");
   }
 
-  void DumpResult(std::string filepath) override {
+  void DumpResult(const std::string& filepath) override {
     if (std::ofstream fout(filepath, std::ios::out); fout.is_open()) {
       for (const auto& [node_name, time_series] : timing_map_) {
         fout << node_name << " ";
@@ -561,25 +581,15 @@ class ProfilerDummy : public Profiler {
   ProfilerDummy(){};
   ~ProfilerDummy(){};
 
-  void SetUseCase(std::string) override final {
-  }
-
-  void SetDumpFilePrefix(std::string) override final {
-  }
-
-  void Start(const std::string, int) override final {
-  }
-
-  void End(const std::string, int) override final {
-  }
-
-  void PrintResult() override final {
-  }
-
-  void ProfileFrameRate(const std::string&) override final {
-  }
-
-  void SetFpsPrintInterval(int32_t) override final {
+  void SetUseCase(std::string) override final{};
+  void SetDumpFilePrefix(const std::string&) override final{};
+  void Start(const std::string&, int) override final{};
+  void End(const std::string&, int) override final{};
+  void PrintResult() override final{};
+  void ProfileFrameRate(const std::string&) override final{};
+  void SetFpsPrintInterval(int32_t) override final{};
+  int64_t GetLatencyInNanoseconds(const std::string&, int) override final {
+    return 0;
   }
 };
 
