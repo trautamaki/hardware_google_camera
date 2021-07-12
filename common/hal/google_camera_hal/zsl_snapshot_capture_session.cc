@@ -388,7 +388,8 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   for (auto& hal_stream : *hal_config_) {
     if (hal_stream.id == additional_stream_id) {
       // Set the producer usage so that the buffer will be 64 byte aligned.
-      hal_stream.producer_usage |= GRALLOC_USAGE_HW_TEXTURE;
+      hal_stream.producer_usage |=
+          (GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_SW_READ_OFTEN);
     }
   }
 
