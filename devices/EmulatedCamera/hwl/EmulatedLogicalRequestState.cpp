@@ -43,11 +43,15 @@ status_t EmulatedLogicalRequestState::Initialize(
 
     physical_device_map_ = std::move(physical_devices);
 
+    static const float ZOOM_RATIO_THRESHOLD = 0.001f;
     for (const auto& one_zoom_range : zoom_ratio_physical_camera_info_) {
       ALOGV("%s: cameraId %d, focalLength %f, zoomRatioRange [%f, %f]",
             __FUNCTION__, one_zoom_range.physical_camera_id,
             one_zoom_range.focal_length, one_zoom_range.min_zoom_ratio,
             one_zoom_range.max_zoom_ratio);
+      if (std::abs(one_zoom_range.min_zoom_ratio - 1.0f) < ZOOM_RATIO_THRESHOLD) {
+        current_physical_camera_ = one_zoom_range.physical_camera_id;
+      }
     }
 
     if (zoom_ratio_physical_camera_info_.size() > 1) {
@@ -259,7 +263,8 @@ EmulatedLogicalRequestState::AdaptLogicalCharacteristics(
 
 status_t EmulatedLogicalRequestState::UpdateRequestForDynamicStreams(
     HwlPipelineRequest* request, const std::vector<EmulatedPipeline>& pipelines,
-    const DynamicStreamIdMapType& dynamic_stream_id_map) {
+    const DynamicStreamIdMapType& dynamic_stream_id_map,
+    bool use_default_physical_camera) {
   if (request == nullptr) {
     ALOGE("%s: Request must not be null!", __FUNCTION__);
     return BAD_VALUE;
@@ -282,14 +287,14 @@ status_t EmulatedLogicalRequestState::UpdateRequestForDynamicStreams(
             __FUNCTION__);
       return BAD_VALUE;
     }
-    float zoom_ratio = entry.data.f[0];
-    for (const auto& one_range : zoom_ratio_physical_camera_info_) {
-      if (zoom_ratio >= one_range.min_zoom_ratio &&
-          zoom_ratio <= one_range.max_zoom_ratio) {
-        current_physical_camera_ = one_range.physical_camera_id;
-        ALOGV("%s: current_physical_camera_ is %d", __FUNCTION__,
-              current_physical_camera_);
-        break;
+    if (!use_default_physical_camera) {
+      float zoom_ratio = entry.data.f[0];
+      for (const auto& one_range : zoom_ratio_physical_camera_info_) {
+        if (zoom_ratio >= one_range.min_zoom_ratio &&
+            zoom_ratio <= one_range.max_zoom_ratio) {
+          current_physical_camera_ = one_range.physical_camera_id;
+          break;
+        }
       }
     }
   }
