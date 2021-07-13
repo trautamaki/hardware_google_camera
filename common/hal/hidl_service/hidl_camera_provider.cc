@@ -164,13 +164,23 @@ status_t HidlCameraProvider::Initialize() {
 
 Return<Status> HidlCameraProvider::setCallback(
     const sp<ICameraProviderCallback>& callback) {
+  bool first_time = false;
   {
     std::unique_lock<std::mutex> lock(callbacks_lock_);
+    first_time = callbacks_ == nullptr;
     callbacks_ = callback;
   }
-
   google_camera_provider_->TriggerDeferredCallbacks();
-
+#ifdef __ANDROID_APEX__
+  if (first_time) {
+    std::string ready_property_name = "vendor.camera.hal.ready.count";
+    int ready_count = property_get_int32(ready_property_name.c_str(), 0);
+    property_set(ready_property_name.c_str(),
+                 std::to_string(++ready_count).c_str());
+    ALOGI("HidlCameraProvider::setCallback() first time ready count: %d ",
+          ready_count);
+  }
+#endif
   return Status::OK;
 }
 
@@ -203,7 +213,6 @@ Return<void> HidlCameraProvider::getVendorTags(getVendorTags_cb _hidl_cb) {
 Return<void> HidlCameraProvider::getCameraIdList(getCameraIdList_cb _hidl_cb) {
   std::vector<uint32_t> camera_ids;
   hidl_vec<hidl_string> hidl_camera_ids;
-
   status_t res = google_camera_provider_->GetCameraIdList(&camera_ids);
   if (res != OK) {
     ALOGE("%s: Getting camera ID list failed: %s(%d)", __FUNCTION__,
