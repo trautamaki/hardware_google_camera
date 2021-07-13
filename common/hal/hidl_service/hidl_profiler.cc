@@ -142,6 +142,9 @@ class HidlProfilerImpl : public HidlProfiler {
   }
 
   void SetLatencyProfiler(std::unique_ptr<Profiler> profiler) override {
+    if (profiler == nullptr || latency_profiler_ == nullptr) {
+      return;
+    }
     latency_profiler_ = std::move(profiler);
     if (latency_profiler_ != nullptr) {
       latency_profiler_->SetDumpFilePrefix(
@@ -155,6 +158,9 @@ class HidlProfilerImpl : public HidlProfiler {
   }
 
   void SetFpsProfiler(std::unique_ptr<Profiler> profiler) override {
+    if (profiler == nullptr || fps_profiler_ == nullptr) {
+      return;
+    }
     fps_profiler_ = std::move(profiler);
     if (fps_profiler_ != nullptr) {
       fps_profiler_->SetDumpFilePrefix(
