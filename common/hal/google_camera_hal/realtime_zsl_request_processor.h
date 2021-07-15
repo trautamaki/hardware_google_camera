@@ -17,6 +17,7 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_REQUEST_PROCESSOR_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_REQUEST_PROCESSOR_H_
 
+#include <shared_mutex>
 #include "process_block.h"
 #include "request_processor.h"
 #include "vendor_tag_types.h"
@@ -63,7 +64,7 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
 
  private:
   status_t Initialize(CameraDeviceSessionHwl* device_session_hwl);
-  std::mutex process_block_lock_;
+  std::shared_mutex process_block_lock_;
 
   // Protected by process_block_lock_.
   std::unique_ptr<ProcessBlock> process_block_;
