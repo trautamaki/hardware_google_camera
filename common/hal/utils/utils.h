@@ -37,11 +37,14 @@ bool IsYUVSnapshotStream(const Stream& stream);
 bool IsDepthStream(const Stream& stream);
 bool IsOutputZslStream(const Stream& stream);
 
+bool HasCapability(const HalCameraMetadata* metadata, uint8_t capability);
+
 status_t GetSensorPhysicalSize(const HalCameraMetadata* characteristics,
                                float* width, float* height);
 
 status_t GetSensorActiveArraySize(const HalCameraMetadata* characteristics,
-                                  Rect* active_array);
+                                  Rect* active_array,
+                                  bool maximum_resolution = false);
 
 status_t GetSensorPixelArraySize(const HalCameraMetadata* characteristics,
                                  Dimension* pixel_array);

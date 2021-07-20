@@ -457,6 +457,7 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
   }
 
   ZoomRatioMapper::InitParams params;
+  params.camera_id = camera_id_;
   params.active_array_dimension = {
       active_array_size.right - active_array_size.left + 1,
       active_array_size.bottom - active_array_size.top + 1};

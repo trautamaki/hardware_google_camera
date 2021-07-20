@@ -143,21 +143,42 @@ status_t GetSensorPhysicalSize(const HalCameraMetadata* characteristics,
   return OK;
 }
 
+bool HasCapability(const HalCameraMetadata* metadata, uint8_t capability) {
+  if (metadata == nullptr) {
+    return false;
+  }
+
+  camera_metadata_ro_entry_t entry;
+  auto ret = metadata->Get(ANDROID_REQUEST_AVAILABLE_CAPABILITIES, &entry);
+  if (ret != OK) {
+    return false;
+  }
+  for (size_t i = 0; i < entry.count; i++) {
+    if (entry.data.u8[i] == capability) {
+      return true;
+    }
+  }
+  return false;
+}
+
 status_t GetSensorActiveArraySize(const HalCameraMetadata* characteristics,
-                                  Rect* active_array) {
+                                  Rect* active_array, bool maximum_resolution) {
   if (characteristics == nullptr || active_array == nullptr) {
     ALOGE("%s: characteristics or active_array is nullptr", __FUNCTION__);
     return BAD_VALUE;
   }
-
+  uint32_t active_array_tag =
+      maximum_resolution
+          ? ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE_MAXIMUM_RESOLUTION
+          : ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE;
   camera_metadata_ro_entry entry;
-  status_t res =
-      characteristics->Get(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE, &entry);
+  status_t res = characteristics->Get(active_array_tag, &entry);
   if (res != OK || entry.count != 4) {
     ALOGE(
         "%s: Getting ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE failed: %s(%d) "
-        "count: %zu",
-        __FUNCTION__, strerror(-res), res, entry.count);
+        "count: %zu max resolution ? %s",
+        __FUNCTION__, strerror(-res), res, entry.count,
+        maximum_resolution ? "true" : "false");
     return res;
   }
 
