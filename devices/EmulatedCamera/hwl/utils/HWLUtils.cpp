@@ -16,31 +16,14 @@
 
 #define LOG_TAG "HWLUtils"
 #include "HWLUtils.h"
-
 #include <log/log.h>
+#include "utils.h"
 
 #include <map>
 
 namespace android {
 
-bool HasCapability(const HalCameraMetadata* metadata, uint8_t capability) {
-  if (metadata == nullptr) {
-    return false;
-  }
-
-  camera_metadata_ro_entry_t entry;
-  auto ret = metadata->Get(ANDROID_REQUEST_AVAILABLE_CAPABILITIES, &entry);
-  if (ret != OK) {
-    return false;
-  }
-  for (size_t i = 0; i < entry.count; i++) {
-    if (entry.data.u8[i] == capability) {
-      return true;
-    }
-  }
-
-  return false;
-}
+using google_camera_hal::utils::HasCapability;
 
 status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
                                   SensorCharacteristics* sensor_chars /*out*/) {
