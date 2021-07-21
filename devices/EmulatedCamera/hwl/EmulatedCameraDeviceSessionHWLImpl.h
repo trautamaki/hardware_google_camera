@@ -169,6 +169,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   uint32_t camera_id_ = 0;
   bool error_state_ = false;
   bool pipelines_built_ = false;
+  bool has_raw_stream_ = false;
   std::unique_ptr<HalCameraMetadata> static_metadata_;
   std::vector<EmulatedPipeline> pipelines_;
   std::unique_ptr<EmulatedRequestProcessor> request_processor_;
