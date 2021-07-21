@@ -51,7 +51,8 @@ class EmulatedRequestProcessor {
   status_t ProcessPipelineRequests(
       uint32_t frame_number, std::vector<HwlPipelineRequest>& requests,
       const std::vector<EmulatedPipeline>& pipelines,
-      const DynamicStreamIdMapType& dynamic_stream_id_map);
+      const DynamicStreamIdMapType& dynamic_stream_id_map,
+      bool use_default_physical_camera);
 
   status_t GetDefaultRequest(
       RequestTemplate type,
