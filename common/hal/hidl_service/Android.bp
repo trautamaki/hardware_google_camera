@@ -101,6 +101,7 @@ cc_defaults {
         "android.hardware.graphics.mapper@4.0",
         "android.hardware.thermal@2.0",
         "libbinder",
+        "libbase",
         "libcamera_metadata",
         "libcutils",
         "libfmq",
