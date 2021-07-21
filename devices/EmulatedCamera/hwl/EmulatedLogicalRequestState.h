@@ -80,7 +80,8 @@ class EmulatedLogicalRequestState {
   status_t UpdateRequestForDynamicStreams(
       HwlPipelineRequest* request,
       const std::vector<EmulatedPipeline>& pipelines,
-      const DynamicStreamIdMapType& dynamic_stream_id_map_type);
+      const DynamicStreamIdMapType& dynamic_stream_id_map_type,
+      bool use_default_physical_camera);
 
  private:
   uint32_t logical_camera_id_ = 0;
