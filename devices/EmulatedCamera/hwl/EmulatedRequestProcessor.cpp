@@ -61,7 +61,8 @@ EmulatedRequestProcessor::~EmulatedRequestProcessor() {
 status_t EmulatedRequestProcessor::ProcessPipelineRequests(
     uint32_t frame_number, std::vector<HwlPipelineRequest>& requests,
     const std::vector<EmulatedPipeline>& pipelines,
-    const DynamicStreamIdMapType& dynamic_stream_id_map) {
+    const DynamicStreamIdMapType& dynamic_stream_id_map,
+    bool use_default_physical_camera) {
   ATRACE_CALL();
   status_t res = OK;
 
@@ -84,8 +85,8 @@ status_t EmulatedRequestProcessor::ProcessPipelineRequests(
       }
     }
 
-    res = request_state_->UpdateRequestForDynamicStreams(&request, pipelines,
-                                                         dynamic_stream_id_map);
+    res = request_state_->UpdateRequestForDynamicStreams(
+        &request, pipelines, dynamic_stream_id_map, use_default_physical_camera);
     if (res != OK) {
       ALOGE("%s: Failed to update request for dynamic streams: %s(%d)",
             __FUNCTION__, strerror(-res), res);

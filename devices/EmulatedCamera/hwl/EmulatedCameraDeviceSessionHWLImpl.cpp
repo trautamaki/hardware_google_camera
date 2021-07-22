@@ -208,6 +208,10 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
       dynamic_stream_id_map_[stream.physical_camera_id][stream.group_id] =
           stream.id;
     }
+    if (!stream.is_physical_camera_stream &&
+        (stream.format == HAL_PIXEL_FORMAT_RAW16)) {
+      has_raw_stream_ = true;
+    }
   }
 
   pipelines_.push_back(emulated_pipeline);
@@ -276,6 +280,7 @@ void EmulatedCameraDeviceSessionHwlImpl::DestroyPipelines() {
   }
 
   pipelines_built_ = false;
+  has_raw_stream_ = false;
   pipelines_.clear();
   request_processor_ = nullptr;
 }
@@ -332,7 +337,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequests(
   }
 
   return request_processor_->ProcessPipelineRequests(
-      frame_number, requests, pipelines_, dynamic_stream_id_map_);
+      frame_number, requests, pipelines_, dynamic_stream_id_map_,
+      has_raw_stream_);
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::Flush() {
