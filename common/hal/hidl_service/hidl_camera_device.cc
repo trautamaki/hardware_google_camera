@@ -69,11 +69,6 @@ status_t HidlCameraDevice::Initialize(
     ALOGE("%s: Failed to create HidlProfiler.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  hidl_profiler_->SetLatencyProfiler(google_camera_device_->GetProfiler(
-      camera_id_, hidl_profiler_->GetLatencyFlag()));
-  hidl_profiler_->SetFpsProfiler(google_camera_device_->GetProfiler(
-      camera_id_, hidl_profiler_->GetFpsFlag()));
-
   return OK;
 }
 
@@ -144,8 +139,12 @@ Return<Status> HidlCameraDevice::setTorchMode(TorchMode mode) {
 Return<void> HidlCameraDevice::open(
     const sp<V3_2::ICameraDeviceCallback>& callback,
     ICameraDevice::open_cb _hidl_cb) {
-  auto profiler =
-      hidl_profiler_->MakeScopedProfiler(HidlProfiler::ScopedType::kOpen);
+  auto profiler = hidl_profiler_->MakeScopedProfiler(
+      HidlProfiler::ScopedType::kOpen,
+      google_camera_device_->GetProfiler(camera_id_,
+                                         hidl_profiler_->GetLatencyFlag()),
+      google_camera_device_->GetProfiler(camera_id_,
+                                         hidl_profiler_->GetFpsFlag()));
 
   std::unique_ptr<google_camera_hal::CameraDeviceSession> session;
   status_t res = google_camera_device_->CreateCameraDeviceSession(&session);
