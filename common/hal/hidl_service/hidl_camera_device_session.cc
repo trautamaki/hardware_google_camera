@@ -95,6 +95,7 @@ void HidlCameraDeviceSession::ProcessCaptureResult(
         first_request_frame_number_ == hal_result->frame_number) {
       num_pending_first_frame_buffers_ -= hal_result->output_buffers.size();
       if (num_pending_first_frame_buffers_ == 0) {
+        ALOGI("%s: First frame done", __FUNCTION__);
         hidl_profiler_->FirstFrameEnd();
         ATRACE_ASYNC_END("first_frame", 0);
         ATRACE_ASYNC_END("switch_mode", 0);
