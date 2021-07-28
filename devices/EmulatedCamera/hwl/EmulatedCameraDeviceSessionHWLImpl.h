@@ -31,17 +31,48 @@ namespace android {
 
 using google_camera_hal::CameraDeviceHwl;
 using google_camera_hal::CameraDeviceSessionHwl;
+using google_camera_hal::CaptureRequest;
+using google_camera_hal::CaptureResult;
+using google_camera_hal::Dimension;
 using google_camera_hal::HalStream;
 using google_camera_hal::HwlOfflinePipelineRole;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineRequest;
 using google_camera_hal::HwlSessionCallback;
 using google_camera_hal::IMulticamCoordinatorHwl;
-using google_camera_hal::StreamConfiguration;
 using google_camera_hal::RequestTemplate;
 using google_camera_hal::SessionDataKey;
 using google_camera_hal::Stream;
 using google_camera_hal::StreamConfiguration;
+using google_camera_hal::ZoomRatioMapperHwl;
+
+class EmulatedCameraZoomRatioMapperHwlImpl : public ZoomRatioMapperHwl {
+ public:
+  EmulatedCameraZoomRatioMapperHwlImpl(
+      const std::unordered_map<uint32_t, std::pair<Dimension, Dimension>>& dims);
+  virtual ~EmulatedCameraZoomRatioMapperHwlImpl() = default;
+
+  // Limit zoom ratio if concurrent mode is on
+  virtual void LimitZoomRatioIfConcurrent(float*) const override{};
+
+  // Get the array dimensions to be used for this capture request / result
+  virtual bool GetActiveArrayDimensionToBeUsed(
+      uint32_t camera_id, const HalCameraMetadata* settings,
+      Dimension* active_array_dimension) const override;
+  // Apply zoom ratio to capture request
+  virtual void UpdateCaptureRequest(CaptureRequest*) override{};
+
+  // Apply zoom ratio to capture result
+  virtual void UpdateCaptureResult(CaptureResult*) override{};
+
+  static std::unique_ptr<EmulatedCameraZoomRatioMapperHwlImpl> Create(
+      const std::unordered_map<uint32_t, std::pair<Dimension, Dimension>>& dims);
+
+ private:
+  // camera id -> {max res dimension (array size), default dimension }
+  std::unordered_map<uint32_t, std::pair<Dimension, Dimension>>
+      camera_ids_to_dimensions_;
+};
 
 // Implementation of CameraDeviceSessionHwl interface
 class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
@@ -140,7 +171,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
   std::unique_ptr<google_camera_hal::ZoomRatioMapperHwl> GetZoomRatioMapperHwl()
       override {
-    return nullptr;
+    return std::move(zoom_ratio_mapper_hwl_impl_);
   }
   // End override functions in CameraDeviceSessionHwl
 
@@ -183,6 +214,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   LogicalCharacteristics logical_chars_;
   HwlSessionCallback session_callback_;
   DynamicStreamIdMapType dynamic_stream_id_map_;
+  std::unique_ptr<EmulatedCameraZoomRatioMapperHwlImpl> zoom_ratio_mapper_hwl_impl_;
 };
 
 }  // namespace android
