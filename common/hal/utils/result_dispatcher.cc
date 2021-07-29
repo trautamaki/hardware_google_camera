@@ -228,8 +228,11 @@ status_t ResultDispatcher::AddResult(std::unique_ptr<CaptureResult> result) {
       failed = true;
     }
   }
-
-  notify_callback_condition_.notify_one();
+  {
+    std::unique_lock<std::mutex> lock(notify_callback_lock);
+    is_result_shutter_updated_ = true;
+    notify_callback_condition_.notify_one();
+  }
   return failed ? UNKNOWN_ERROR : OK;
 }
 
@@ -256,8 +259,11 @@ status_t ResultDispatcher::AddShutter(uint32_t frame_number,
 
   shutter_it->second.timestamp_ns = timestamp_ns;
   shutter_it->second.ready = true;
-
-  notify_callback_condition_.notify_one();
+  {
+    std::unique_lock<std::mutex> lock(notify_callback_lock);
+    is_result_shutter_updated_ = true;
+    notify_callback_condition_.notify_one();
+  }
   return OK;
 }
 
@@ -393,12 +399,14 @@ void ResultDispatcher::NotifyCallbackThreadLoop() {
       ALOGV("%s: NotifyCallbackThreadLoop exits.", __FUNCTION__);
       return;
     }
-
-    if (notify_callback_condition_.wait_for(
-            lock, std::chrono::milliseconds(kCallbackThreadTimeoutMs)) ==
-        std::cv_status::timeout) {
-      PrintTimeoutMessages();
+    if (!is_result_shutter_updated_) {
+      if (notify_callback_condition_.wait_for(
+              lock, std::chrono::milliseconds(kCallbackThreadTimeoutMs)) ==
+          std::cv_status::timeout) {
+        PrintTimeoutMessages();
+      }
     }
+    is_result_shutter_updated_ = false;
   }
 }
 
