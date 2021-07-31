@@ -187,6 +187,9 @@ class ResultDispatcher {
 
   // Protected by notify_callback_lock.
   bool notify_callback_thread_exiting = false;
+
+  // State of callback thread is notified or not.
+  volatile bool is_result_shutter_updated_ = false;
 };
 
 }  // namespace google_camera_hal
