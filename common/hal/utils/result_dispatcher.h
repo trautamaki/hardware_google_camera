@@ -65,7 +65,6 @@ class ResultDispatcher {
   // Remove a pending request.
   void RemovePendingRequest(uint32_t frame_number);
 
- protected:
   ResultDispatcher(uint32_t partial_result_count,
                    ProcessCaptureResultFunc process_capture_result,
                    NotifyFunc notify);

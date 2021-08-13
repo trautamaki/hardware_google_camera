@@ -609,8 +609,8 @@ status_t ZslSnapshotCaptureSession::Initialize(
   if (res == OK) {
     partial_result_count_ = partial_result_entry.data.i32[0];
   }
-  result_dispatcher_ = ResultDispatcher::Create(partial_result_count_,
-                                                process_capture_result, notify);
+  result_dispatcher_ = ZslResultDispatcher::Create(
+      partial_result_count_, process_capture_result, notify);
   if (result_dispatcher_ == nullptr) {
     ALOGE("%s: Cannot create result dispatcher.", __FUNCTION__);
     return UNKNOWN_ERROR;
@@ -677,7 +677,15 @@ status_t ZslSnapshotCaptureSession::Initialize(
 
 status_t ZslSnapshotCaptureSession::ProcessRequest(const CaptureRequest& request) {
   ATRACE_CALL();
-  status_t res = result_dispatcher_->AddPendingRequest(request);
+  bool is_zsl_request = false;
+  camera_metadata_ro_entry entry;
+  if (request.settings != nullptr) {
+    if (request.settings->Get(ANDROID_CONTROL_ENABLE_ZSL, &entry) == OK &&
+        *entry.data.u8 == ANDROID_CONTROL_ENABLE_ZSL_TRUE) {
+      is_zsl_request = true;
+    }
+  }
+  status_t res = result_dispatcher_->AddPendingRequest(request, is_zsl_request);
   if (res != OK) {
     ALOGE("%s: frame(%d) fail to AddPendingRequest", __FUNCTION__,
           request.frame_number);
