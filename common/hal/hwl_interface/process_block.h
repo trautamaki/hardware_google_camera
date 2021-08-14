@@ -96,6 +96,25 @@ class ProcessBlock {
   virtual status_t Flush() = 0;
 };
 
+// ExternalProcessBlockFactory defines the interface of an external process
+// block, in addition to `class ProcessBlock`.
+class ExternalProcessBlockFactory {
+ public:
+  virtual ~ExternalProcessBlockFactory() = default;
+
+  // Create is called by the client to create a process block and get a unique
+  // pointer to the process block.
+  virtual std::unique_ptr<ProcessBlock> CreateProcessBlock(
+      CameraDeviceSessionHwl* device_session_hwl) = 0;
+
+  virtual std::string GetBlockName() const = 0;
+};
+
+#if !GCH_HWL_USE_DLOPEN
+extern "C" __attribute__((weak)) ExternalProcessBlockFactory*
+GetSnapshotProcessBlockFactory();
+#endif
+
 }  // namespace google_camera_hal
 }  // namespace android
 

@@ -60,8 +60,8 @@ class CaptureSession {
   virtual status_t Flush() = 0;
 };
 
-// ExternalCaptureSessionFactory defines the interface of an external capture session,
-// in addition to `class CaptureSession`.
+// ExternalCaptureSessionFactory defines the interface of an external capture
+// session, in addition to `class CaptureSession`.
 class ExternalCaptureSessionFactory {
  public:
   virtual ~ExternalCaptureSessionFactory() = default;
@@ -78,14 +78,15 @@ class ExternalCaptureSessionFactory {
       CameraDeviceSessionHwl* device_session_hwl,
       const StreamConfiguration& stream_config,
       ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-      HwlRequestBuffersFunc request_stream_buffers,
+      HwlSessionCallback session_callback,
       std::vector<HalStream>* hal_configured_streams,
       CameraBufferAllocatorHwl* camera_allocator_hwl) = 0;
 };
 
-// GetCaptureSessionFactory should be called by the client to discover an external
-// capture session via dlsym.
-extern "C" ExternalCaptureSessionFactory* GetCaptureSessionFactory();
+#if !GCH_HWL_USE_DLOPEN
+extern "C" __attribute__((weak)) ExternalCaptureSessionFactory*
+GetCaptureSessionFactory();
+#endif
 
 }  // namespace google_camera_hal
 }  // namespace android

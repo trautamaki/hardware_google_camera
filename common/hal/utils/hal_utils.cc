@@ -42,6 +42,8 @@ status_t CreateHwlPipelineRequest(HwlPipelineRequest* hwl_request,
   hwl_request->settings = HalCameraMetadata::Clone(request.settings.get());
   hwl_request->input_buffers = request.input_buffers;
   hwl_request->output_buffers = request.output_buffers;
+  hwl_request->input_width = request.input_width;
+  hwl_request->input_height = request.input_height;
 
   for (auto& metadata : request.input_buffer_metadata) {
     hwl_request->input_buffer_metadata.push_back(
@@ -113,9 +115,13 @@ std::unique_ptr<CaptureResult> ConvertToCaptureResult(
 }
 
 bool ContainsOutputBuffer(const CaptureRequest& request,
-                          const buffer_handle_t& buffer) {
+                          const StreamBuffer& buffer) {
   for (auto& request_buffer : request.output_buffers) {
-    if (request_buffer.buffer == buffer) {
+    if (request_buffer.buffer == buffer.buffer) {
+      return true;
+    } else if (buffer.buffer == nullptr &&
+               request_buffer.stream_id == buffer.stream_id) {
+      // Framework passed in an empty buffer and HAL allocated the buffer.
       return true;
     }
   }
@@ -130,7 +136,7 @@ bool AreAllRemainingBuffersRequested(
     bool found = false;
 
     for (auto& block_request : process_block_requests) {
-      if (ContainsOutputBuffer(block_request.request, buffer.buffer)) {
+      if (ContainsOutputBuffer(block_request.request, buffer)) {
         found = true;
         break;
       }
@@ -336,7 +342,7 @@ bool IsStreamHdrplusCompatible(const StreamConfiguration& stream_config,
     return false;
   }
 
-  if (property_get_bool("persist.camera.hdrplus.disable", false)) {
+  if (property_get_bool("persist.vendor.camera.hdrplus.disable", false)) {
     ALOGI("%s: HDR+ is disabled by property", __FUNCTION__);
     return false;
   }
@@ -356,7 +362,7 @@ bool IsStreamHdrplusCompatible(const StreamConfiguration& stream_config,
     return false;
   }
 
-  if (property_get_bool("persist.camera.fatp.enable", false)) {
+  if (property_get_bool("persist.vendor.camera.fatp.enable", false)) {
     ALOGI("%s: Do not use HDR+ for FATP mode", __FUNCTION__);
     return false;
   }
@@ -448,7 +454,7 @@ bool IsStreamHdrplusCompatible(const StreamConfiguration& stream_config,
   }
 
   // TODO(b/128633958): remove this after depth block is in place
-  if (property_get_bool("persist.camera.rgbird.forceinternal", false)) {
+  if (property_get_bool("persist.vendor.camera.rgbird.forceinternal", false)) {
     return false;
   }
 
@@ -654,10 +660,11 @@ void DumpStreamConfiguration(const StreamConfiguration& stream_configuration,
         stream_configuration.operation_mode);
   for (uint32_t i = 0; i < stream_configuration.streams.size(); i++) {
     auto& stream = stream_configuration.streams[i];
-    ALOGI("==== [%u]stream_id %d, format %d, res %ux%u, usage %" PRIu64
-          ", is_phy %d, phy_cam_id %u",
-          i, stream.id, stream.format, stream.width, stream.height, stream.usage,
-          stream.is_physical_camera_stream, stream.physical_camera_id);
+    ALOGI("==== [%u]stream_id %d, type %d, format %d, res %ux%u, usage %" PRIu64
+          ", is_phy %d, phy_cam_id %u, group_id %d",
+          i, stream.id, stream.stream_type, stream.format, stream.width,
+          stream.height, stream.usage, stream.is_physical_camera_stream,
+          stream.physical_camera_id, stream.group_id);
   }
   ALOGI("%s", str.c_str());
 }

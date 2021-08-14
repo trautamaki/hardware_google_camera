@@ -17,6 +17,8 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_SESSION_DATA_DEFS_H
 #define HARDWARE_GOOGLE_CAMERA_HAL_SESSION_DATA_DEFS_H
 
+#include <cstdint>
+
 namespace android {
 namespace google_camera_hal {
 
