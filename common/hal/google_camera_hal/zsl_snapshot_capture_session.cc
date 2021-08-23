@@ -231,12 +231,16 @@ std::unique_ptr<CaptureSession> ZslSnapshotCaptureSession::Create(
 }
 
 ZslSnapshotCaptureSession::~ZslSnapshotCaptureSession() {
+  auto release_thread = std::thread([this]() {
+    ATRACE_NAME("Release snapshot request processor");
+    snapshot_request_processor_ = nullptr;
+  });
   if (camera_device_session_hwl_ != nullptr) {
     camera_device_session_hwl_->DestroyPipelines();
   }
   // Need to explicitly release SnapshotProcessBlock by releasing
   // SnapshotRequestProcessor before the lib handle is released.
-  snapshot_request_processor_ = nullptr;
+  release_thread.join();
   dlclose(snapshot_process_block_lib_handle_);
 }
 
