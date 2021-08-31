@@ -163,28 +163,28 @@ bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
     return false;
   }
 
-  bool has_jpeg_stream = false;
+  bool has_eligible_snapshot_stream = false;
   bool has_preview_stream = false;
-  bool has_yuv_stream = false;
   for (const auto& stream : stream_config.streams) {
     if (stream.is_physical_camera_stream) {
       ALOGE("%s: support logical camera only", __FUNCTION__);
       return false;
     }
-    if (utils::IsJPEGSnapshotStream(stream)) {
-      has_jpeg_stream = true;
+    if (utils::IsJPEGSnapshotStream(stream) ||
+        utils::IsYUVSnapshotStream(stream)) {
+      if (utils::IsSoftwareDenoiseEligibleSnapshotStream(stream)) {
+        has_eligible_snapshot_stream = true;
+      }
     } else if (utils::IsPreviewStream(stream)) {
       has_preview_stream = true;
-    } else if (utils::IsYUVSnapshotStream(stream)) {
-      has_yuv_stream = true;
     } else {
       ALOGE("%s: only support preview + (snapshot and/or YUV) streams",
             __FUNCTION__);
       return false;
     }
   }
-  if (!has_jpeg_stream && !has_yuv_stream) {
-    ALOGE("%s: no JPEG or YUV stream", __FUNCTION__);
+  if (!has_eligible_snapshot_stream) {
+    ALOGE("%s: no eligible JPEG or YUV stream", __FUNCTION__);
     return false;
   }
 
