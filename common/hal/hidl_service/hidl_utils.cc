@@ -1150,8 +1150,7 @@ status_t ConvertToHalDeviceState(
       hal_device_state = google_camera_hal::DeviceState::kFolded;
       break;
     default:
-      ALOGE("%s: Failed unknown device state %lu", __FUNCTION__,
-            hidl_device_state);
+      ALOGE("%s: Failed unknown device state", __FUNCTION__);
       return BAD_VALUE;
   }
 
