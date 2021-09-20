@@ -273,11 +273,13 @@ status_t ResultDispatcher::AddError(const ErrorMessage& error) {
   uint32_t frame_number = error.frame_number;
   // No need to deliver the shutter message on an error
   if (error.error_code == ErrorCode::kErrorDevice ||
-      error.error_code == ErrorCode::kErrorResult) {
+      error.error_code == ErrorCode::kErrorResult ||
+      error.error_code == ErrorCode::kErrorRequest) {
     pending_shutters_.erase(frame_number);
   }
   // No need to deliver the result metadata on a result metadata error
-  if (error.error_code == ErrorCode::kErrorResult) {
+  if (error.error_code == ErrorCode::kErrorResult ||
+      error.error_code == ErrorCode::kErrorRequest) {
     pending_final_metadata_.erase(frame_number);
   }
 
