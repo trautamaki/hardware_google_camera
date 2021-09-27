@@ -307,10 +307,7 @@ CameraDevice::~CameraDevice() {
 
 std::unique_ptr<google::camera_common::Profiler> CameraDevice::GetProfiler(
     uint32_t camera_id, int option) {
-  if (option & google::camera_common::Profiler::SetPropFlag::kCustomProfiler) {
-    return camera_device_hwl_->GetProfiler(camera_id, option);
-  }
-  return nullptr;
+  return camera_device_hwl_->GetProfiler(camera_id, option);
 }
 
 }  // namespace google_camera_hal

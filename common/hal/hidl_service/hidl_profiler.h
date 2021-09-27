@@ -55,7 +55,9 @@ class HidlProfiler {
 
   // Make a ScopedProfiler for given type.
   virtual std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(
-      ScopedType type) = 0;
+      ScopedType type,
+      std::unique_ptr<google::camera_common::Profiler> custom_latency_profiler,
+      std::unique_ptr<google::camera_common::Profiler> custom_fps_profiler) = 0;
 
   // Call when first frame is requested.
   virtual void FirstFrameStart() = 0;
@@ -65,14 +67,6 @@ class HidlProfiler {
 
   // Call to profile frame rate for each stream.
   virtual void ProfileFrameRate(const std::string& name) = 0;
-
-  // Give a customized latency profiler so that client side can intercept various calls.
-  virtual void SetLatencyProfiler(
-      std::unique_ptr<google::camera_common::Profiler> profiler) = 0;
-
-  // Give a customized fps profiler so that client side can intercept various calls.
-  virtual void SetFpsProfiler(
-      std::unique_ptr<google::camera_common::Profiler> profiler) = 0;
 
   virtual uint32_t GetCameraId() const = 0;
   virtual int32_t GetLatencyFlag() const = 0;

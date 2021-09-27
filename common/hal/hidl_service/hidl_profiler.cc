@@ -56,15 +56,21 @@ class HidlProfilerImpl : public HidlProfiler {
   }
 
   std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(
-      ScopedType type) override {
+      ScopedType type,
+      std::unique_ptr<google::camera_common::Profiler> custom_latency_profiler,
+      std::unique_ptr<google::camera_common::Profiler> custom_fps_profiler)
+      override {
     std::lock_guard lock(api_mutex_);
-
     if (type == ScopedType::kConfigureStream && fps_profiler_ == nullptr) {
-      fps_profiler_ = CreateFpsProfiler();
+      if (SetFpsProfiler(std::move(custom_fps_profiler)) == false) {
+        fps_profiler_ = CreateFpsProfiler();
+      }
     }
 
     if (latency_profiler_ == nullptr) {
-      latency_profiler_ = CreateLatencyProfiler();
+      if (SetLatencyProfiler(std::move(custom_latency_profiler)) == false) {
+        latency_profiler_ = CreateLatencyProfiler();
+      }
       if (latency_profiler_ != nullptr) {
         has_camera_open_ = false;
         config_count_ = 0;
@@ -141,33 +147,6 @@ class HidlProfilerImpl : public HidlProfiler {
     }
   }
 
-  void SetLatencyProfiler(std::unique_ptr<Profiler> profiler) override {
-    if (profiler == nullptr || latency_profiler_ == nullptr) {
-      return;
-    }
-    latency_profiler_ = std::move(profiler);
-    if (latency_profiler_ != nullptr) {
-      latency_profiler_->SetDumpFilePrefix(
-          "/data/vendor/camera/profiler/hidl_open_close_");
-      latency_profiler_->Start(kOverall, Profiler::kInvalidRequestId);
-      has_camera_open_ = false;
-      config_count_ = 0;
-      flush_count_ = 0;
-      idle_count_ = 0;
-    }
-  }
-
-  void SetFpsProfiler(std::unique_ptr<Profiler> profiler) override {
-    if (profiler == nullptr || fps_profiler_ == nullptr) {
-      return;
-    }
-    fps_profiler_ = std::move(profiler);
-    if (fps_profiler_ != nullptr) {
-      fps_profiler_->SetDumpFilePrefix(
-          "/data/vendor/camera/profiler/hidl_fps_");
-    }
-  }
-
  private:
   std::shared_ptr<Profiler> CreateLatencyProfiler() {
     if (latency_flag_ == Profiler::SetPropFlag::kDisable) {
@@ -226,6 +205,33 @@ class HidlProfilerImpl : public HidlProfiler {
     return fps_flag_;
   }
 
+  bool SetLatencyProfiler(std::unique_ptr<Profiler> profiler) {
+    if (profiler == nullptr) {
+      return false;
+    }
+    latency_profiler_ = std::move(profiler);
+    if (latency_profiler_ != nullptr) {
+      latency_profiler_->SetDumpFilePrefix(
+          "/data/vendor/camera/profiler/hidl_open_close_");
+      latency_profiler_->Start(kOverall, Profiler::kInvalidRequestId);
+      return true;
+    }
+    return false;
+  }
+
+  bool SetFpsProfiler(std::unique_ptr<Profiler> profiler) {
+    if (profiler == nullptr) {
+      return false;
+    }
+    fps_profiler_ = std::move(profiler);
+    if (fps_profiler_ != nullptr) {
+      fps_profiler_->SetDumpFilePrefix(
+          "/data/vendor/camera/profiler/hidl_fps_");
+      return true;
+    }
+    return false;
+  }
+
   const std::string camera_id_string_;
   const uint32_t camera_id_;
   const int32_t latency_flag_;
@@ -243,26 +249,15 @@ class HidlProfilerImpl : public HidlProfiler {
 };
 
 class HidlProfilerMock : public HidlProfiler {
-  std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(ScopedType) override {
+  std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(
+      ScopedType, std::unique_ptr<google::camera_common::Profiler>,
+      std::unique_ptr<google::camera_common::Profiler>) override {
     return nullptr;
   }
 
-  void FirstFrameStart() override {
-  }
-
-  void FirstFrameEnd() override {
-  }
-
-  void ProfileFrameRate(const std::string&) override {
-  }
-
-  void SetLatencyProfiler(
-      std::unique_ptr<google::camera_common::Profiler> /* profiler */) override {
-  }
-
-  void SetFpsProfiler(
-      std::unique_ptr<google::camera_common::Profiler> /* profiler */) override {
-  }
+  void FirstFrameStart() override{};
+  void FirstFrameEnd() override{};
+  void ProfileFrameRate(const std::string&) override{};
 
   uint32_t GetCameraId() const override {
     return 0;
