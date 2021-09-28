@@ -564,7 +564,11 @@ Return<void> HidlCameraDeviceSession::configureStreams_3_7(
   }
 
   auto profiler = hidl_profiler_->MakeScopedProfiler(
-      HidlProfiler::ScopedType::kConfigureStream);
+      HidlProfiler::ScopedType::kConfigureStream,
+      device_session_->GetProfiler(hidl_profiler_->GetCameraId(),
+                                   hidl_profiler_->GetLatencyFlag()),
+      device_session_->GetProfiler(hidl_profiler_->GetCameraId(),
+                                   hidl_profiler_->GetFpsFlag()));
 
   first_frame_requested_ = false;
   num_pending_first_frame_buffers_ = 0;
@@ -691,12 +695,12 @@ Return<Status> HidlCameraDeviceSession::flush() {
     return Status::INTERNAL_ERROR;
   }
 
-  hidl_profiler_->SetLatencyProfiler(device_session_->GetProfiler(
-      hidl_profiler_->GetCameraId(), hidl_profiler_->GetLatencyFlag()));
-  hidl_profiler_->SetFpsProfiler(device_session_->GetProfiler(
-      hidl_profiler_->GetCameraId(), hidl_profiler_->GetFpsFlag()));
-  auto profiler =
-      hidl_profiler_->MakeScopedProfiler(HidlProfiler::ScopedType::kFlush);
+  auto profiler = hidl_profiler_->MakeScopedProfiler(
+      HidlProfiler::ScopedType::kFlush,
+      device_session_->GetProfiler(hidl_profiler_->GetCameraId(),
+                                   hidl_profiler_->GetLatencyFlag()),
+      device_session_->GetProfiler(hidl_profiler_->GetCameraId(),
+                                   hidl_profiler_->GetFpsFlag()));
 
   status_t res = device_session_->Flush();
   if (res != OK) {
@@ -711,8 +715,12 @@ Return<Status> HidlCameraDeviceSession::flush() {
 Return<void> HidlCameraDeviceSession::close() {
   ATRACE_NAME("HidlCameraDeviceSession::close");
   if (device_session_ != nullptr) {
-    auto profiler =
-        hidl_profiler_->MakeScopedProfiler(HidlProfiler::ScopedType::kClose);
+    auto profiler = hidl_profiler_->MakeScopedProfiler(
+        HidlProfiler::ScopedType::kClose,
+        device_session_->GetProfiler(hidl_profiler_->GetCameraId(),
+                                     hidl_profiler_->GetLatencyFlag()),
+        device_session_->GetProfiler(hidl_profiler_->GetCameraId(),
+                                     hidl_profiler_->GetFpsFlag()));
     device_session_ = nullptr;
   }
   return Void();
