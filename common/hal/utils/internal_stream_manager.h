@@ -19,12 +19,12 @@
 
 #include <hardware/gralloc.h>
 #include <utils/Errors.h>
+
 #include <unordered_map>
 
 #include "camera_buffer_allocator_hwl.h"
 #include "hal_buffer_allocator.h"
 #include "hal_types.h"
-#include "hwl_buffer_allocator.h"
 #include "zsl_buffer_manager.h"
 
 namespace android {
@@ -35,7 +35,8 @@ namespace google_camera_hal {
 class InternalStreamManager {
  public:
   static std::unique_ptr<InternalStreamManager> Create(
-      IHalBufferAllocator* buffer_allocator = nullptr);
+      IHalBufferAllocator* buffer_allocator = nullptr,
+      int partial_result_count = 1);
   virtual ~InternalStreamManager() = default;
 
   // stream contains the stream info to be registered. if stream.id is smaller
@@ -80,13 +81,14 @@ class InternalStreamManager {
 
   // Return a metadata to internal stream manager.
   status_t ReturnMetadata(int32_t stream_id, uint32_t frame_number,
-                          const HalCameraMetadata* metadata);
+                          const HalCameraMetadata* metadata,
+                          int partial_result = 1);
 
   // Get the most recent buffer and metadata.
   status_t GetMostRecentStreamBuffer(
       int32_t stream_id, std::vector<StreamBuffer>* input_buffers,
       std::vector<std::unique_ptr<HalCameraMetadata>>* input_buffer_metadata,
-      uint32_t payload_frames);
+      uint32_t payload_frames, int32_t min_filled_buffers = kMinFilledBuffers);
 
   // Return the buffer from GetMostRecentStreamBuffer
   status_t ReturnZslStreamBuffers(uint32_t frame_number, int32_t stream_id);
@@ -102,7 +104,8 @@ class InternalStreamManager {
   static constexpr int32_t kInvalidStreamId = -1;
 
   // Initialize internal stream manager
-  void Initialize(IHalBufferAllocator* buffer_allocator);
+  void Initialize(IHalBufferAllocator* buffer_allocator,
+                  int partial_result_count);
 
   // Return if a stream is registered. Must be called with stream_mutex_ locked.
   status_t IsStreamRegisteredLocked(int32_t stream_id) const;
@@ -142,9 +145,6 @@ class InternalStreamManager {
 
   std::mutex stream_mutex_;
 
-  // Next available stream ID. Protected by stream_mutex_.
-  int32_t next_available_stream_id_ = kStreamIdStart;
-
   // Map from stream ID to registered stream. Protected by stream_mutex_.
   std::unordered_map<int32_t, Stream> registered_streams_;
 
@@ -160,6 +160,9 @@ class InternalStreamManager {
 
   // external buffer allocator
   IHalBufferAllocator* hwl_buffer_allocator_ = nullptr;
+
+  // Partial result count reported by camera HAL
+  int partial_result_count_ = 1;
 };
 
 }  // namespace google_camera_hal

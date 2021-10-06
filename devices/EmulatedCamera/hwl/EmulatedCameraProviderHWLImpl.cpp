@@ -285,19 +285,51 @@ status_t EmulatedCameraProviderHwlImpl::IsConcurrentStreamCombinationSupported(
       ALOGE("%s: Camera id %u does not exist", __FUNCTION__, config.camera_id);
       return BAD_VALUE;
     }
+
     auto stream_configuration_map = std::make_unique<StreamConfigurationMap>(
         *(static_metadata_[config.camera_id]));
-    SensorCharacteristics sensor_chars;
-    status_t ret = GetSensorCharacteristics(
-        (static_metadata_[config.camera_id]).get(), &sensor_chars);
+    auto stream_configuration_map_max_resolution =
+        std::make_unique<StreamConfigurationMap>(
+            *(static_metadata_[config.camera_id]), /*maxResolution*/ true);
+
+    LogicalCharacteristics sensor_chars;
+    status_t ret =
+        GetSensorCharacteristics((static_metadata_[config.camera_id]).get(),
+                                 &sensor_chars[config.camera_id]);
     if (ret != OK) {
       ALOGE("%s: Unable to extract sensor chars for camera id %u", __FUNCTION__,
             config.camera_id);
       return UNKNOWN_ERROR;
     }
+
+    PhysicalStreamConfigurationMap physical_stream_configuration_map;
+    PhysicalStreamConfigurationMap physical_stream_configuration_map_max_resolution;
+    auto const& physicalCameraInfo = camera_id_map_[config.camera_id];
+    for (size_t i = 0; i < physicalCameraInfo.size(); i++) {
+      uint32_t physical_camera_id = physicalCameraInfo[i].second;
+      physical_stream_configuration_map.emplace(
+          physical_camera_id, std::make_unique<StreamConfigurationMap>(
+                                  *(static_metadata_[physical_camera_id])));
+
+      physical_stream_configuration_map_max_resolution.emplace(
+          physical_camera_id,
+          std::make_unique<StreamConfigurationMap>(
+              *(static_metadata_[physical_camera_id]), /*maxResolution*/ true));
+
+      ret = GetSensorCharacteristics(static_metadata_[physical_camera_id].get(),
+                                     &sensor_chars[physical_camera_id]);
+      if (ret != OK) {
+        ALOGE("%s: Unable to extract camera %d sensor characteristics %s (%d)",
+              __FUNCTION__, physical_camera_id, strerror(-ret), ret);
+        return ret;
+      }
+    }
+
     if (!EmulatedSensor::IsStreamCombinationSupported(
-            config.stream_configuration, *stream_configuration_map,
-            sensor_chars)) {
+            config.camera_id, config.stream_configuration,
+            *stream_configuration_map, *stream_configuration_map_max_resolution,
+            physical_stream_configuration_map,
+            physical_stream_configuration_map_max_resolution, sensor_chars)) {
       return OK;
     }
   }
@@ -690,7 +722,7 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
       }
     }
   }
-  static_metadata_.resize(sizeof(configurationFileLocation));
+  static_metadata_.resize(ARRAY_SIZE(kConfigurationFileLocation));
 
   for (const auto& config_path : configurationFileLocation) {
     if (!android::base::ReadFileToString(config_path, &config)) {

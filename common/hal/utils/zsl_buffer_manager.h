@@ -39,7 +39,8 @@ class ZslBufferManager {
  public:
   // allocator will be used to allocate buffers. If allocator is nullptr,
   // GrallocBufferAllocator will be used to allocate buffers.
-  ZslBufferManager(IHalBufferAllocator* allocator = nullptr);
+  ZslBufferManager(IHalBufferAllocator* allocator = nullptr,
+                   int partial_result_count = 1);
   virtual ~ZslBufferManager();
 
   // Defines a ZSL buffer.
@@ -50,6 +51,8 @@ class ZslBufferManager {
     StreamBuffer buffer;
     // Original result metadata of this ZSL buffer captured by HAL.
     std::unique_ptr<HalCameraMetadata> metadata;
+    // Last partial result received
+    int partial_result = 0;
   };
 
   // Allocate buffers. This can only be called once.
@@ -73,7 +76,7 @@ class ZslBufferManager {
   // ZSL buffer manager will make a copy of metadata.
   // The caller still owns metadata.
   status_t ReturnMetadata(uint32_t frame_number,
-                          const HalCameraMetadata* metadata);
+                          const HalCameraMetadata* metadata, int partial_result);
 
   // Get a number of the most recent ZSL buffers.
   // If numBuffers is larger than available ZSL buffers,
@@ -181,6 +184,9 @@ class ZslBufferManager {
 
   // Count the number when there are enough unused buffers.
   uint32_t idle_buffer_frame_counter_ = 0;
+
+  // Partial result count reported by camera HAL
+  int partial_result_count_ = 1;
 };
 
 }  // namespace google_camera_hal

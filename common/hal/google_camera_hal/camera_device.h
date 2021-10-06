@@ -21,6 +21,7 @@
 #include "camera_device_hwl.h"
 #include "camera_device_session.h"
 #include "hal_camera_metadata.h"
+#include "profiler.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -36,7 +37,8 @@ class CameraDevice {
   // lifetime of CameraDevice
   static std::unique_ptr<CameraDevice> Create(
       std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
-      CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
+      CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr,
+      const std::vector<std::string>* configure_streams_libs = nullptr);
 
   virtual ~CameraDevice();
 
@@ -81,6 +83,9 @@ class CameraDevice {
 
   status_t LoadExternalCaptureSession();
 
+  std::unique_ptr<google::camera_common::Profiler> GetProfiler(uint32_t camere_id,
+                                                               int option);
+
  protected:
   CameraDevice() = default;
 
@@ -98,6 +103,8 @@ class CameraDevice {
   std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries_;
   // Opened library handles that should be closed on destruction
   std::vector<void*> external_capture_session_lib_handles_;
+
+  const std::vector<std::string>* configure_streams_libs_ = nullptr;
 };
 
 }  // namespace google_camera_hal
