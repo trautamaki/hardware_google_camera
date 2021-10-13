@@ -217,6 +217,8 @@ status_t StreamBufferCacheManager::AddStreamBufferCacheLocked(
 }
 
 void StreamBufferCacheManager::WorkloadThreadLoop() {
+  // max thread name len = 16
+  pthread_setname_np(pthread_self(), "StreamBufMgr");
   while (1) {
     bool exiting = false;
     {

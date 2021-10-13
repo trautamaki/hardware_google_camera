@@ -391,6 +391,9 @@ status_t ResultDispatcher::AddBuffer(uint32_t frame_number,
 }
 
 void ResultDispatcher::NotifyCallbackThreadLoop() {
+  // max thread name len = 16
+  pthread_setname_np(pthread_self(), "ResDispatcher");
+
   while (1) {
     NotifyShutters();
     NotifyFinalResultMetadata();
