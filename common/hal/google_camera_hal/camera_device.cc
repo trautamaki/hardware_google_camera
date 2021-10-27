@@ -208,6 +208,23 @@ status_t CameraDevice::SetTorchMode(TorchMode mode) {
   return camera_device_hwl_->SetTorchMode(mode);
 }
 
+status_t CameraDevice::TurnOnTorchWithStrengthLevel(int32_t torch_strength) {
+  ATRACE_CALL();
+  return camera_device_hwl_->TurnOnTorchWithStrengthLevel(torch_strength);
+}
+
+status_t CameraDevice::GetTorchStrengthLevel(int32_t& torch_strength) const {
+  ATRACE_CALL();
+  status_t res = camera_device_hwl_->GetTorchStrengthLevel(torch_strength);
+  if (res != OK) {
+    ALOGE("%s: GetTorchStrengthLevel() failed: %s (%d).", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
+  return res;
+}
+
 status_t CameraDevice::DumpState(int fd) {
   ATRACE_CALL();
   return camera_device_hwl_->DumpState(fd);
