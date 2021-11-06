@@ -45,7 +45,7 @@ cc_defaults {
         "-Wextra"
     ],
     header_libs: [
-        "libgooglecamerahal_headers",
+        "//hardware/google/camera:libgooglecamerahal_headers",
         "libhardware_headers",
     ],
 }
