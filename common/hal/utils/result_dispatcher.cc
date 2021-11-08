@@ -66,8 +66,8 @@ ResultDispatcher::ResultDispatcher(
 ResultDispatcher::~ResultDispatcher() {
   ATRACE_CALL();
   {
-    std::unique_lock<std::mutex> lock(notify_callback_lock);
-    notify_callback_thread_exiting = true;
+    std::unique_lock<std::mutex> lock(notify_callback_lock_);
+    notify_callback_thread_exiting_ = true;
   }
 
   notify_callback_condition_.notify_one();
@@ -229,7 +229,7 @@ status_t ResultDispatcher::AddResult(std::unique_ptr<CaptureResult> result) {
     }
   }
   {
-    std::unique_lock<std::mutex> lock(notify_callback_lock);
+    std::unique_lock<std::mutex> lock(notify_callback_lock_);
     is_result_shutter_updated_ = true;
     notify_callback_condition_.notify_one();
   }
@@ -260,7 +260,7 @@ status_t ResultDispatcher::AddShutter(uint32_t frame_number,
   shutter_it->second.timestamp_ns = timestamp_ns;
   shutter_it->second.ready = true;
   {
-    std::unique_lock<std::mutex> lock(notify_callback_lock);
+    std::unique_lock<std::mutex> lock(notify_callback_lock_);
     is_result_shutter_updated_ = true;
     notify_callback_condition_.notify_one();
   }
@@ -399,8 +399,8 @@ void ResultDispatcher::NotifyCallbackThreadLoop() {
     NotifyFinalResultMetadata();
     NotifyBuffers();
 
-    std::unique_lock<std::mutex> lock(notify_callback_lock);
-    if (notify_callback_thread_exiting) {
+    std::unique_lock<std::mutex> lock(notify_callback_lock_);
+    if (notify_callback_thread_exiting_) {
       ALOGV("%s: NotifyCallbackThreadLoop exits.", __FUNCTION__);
       return;
     }
