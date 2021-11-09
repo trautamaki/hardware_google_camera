@@ -17,8 +17,8 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_DEVICE_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_DEVICE_H_
 
-#include <android/hardware/camera/device/3.5/ICameraDeviceCallback.h>
-#include <android/hardware/camera/device/3.7/ICameraDevice.h>
+#include <android/hardware/camera/device/3.8/ICameraDevice.h>
+#include <android/hardware/camera/device/3.8/ICameraDeviceCallback.h>
 
 #include "camera_device.h"
 #include "hidl_profiler.h"
@@ -27,14 +27,14 @@ namespace android {
 namespace hardware {
 namespace camera {
 namespace device {
-namespace V3_7 {
+namespace V3_8 {
 namespace implementation {
 
 using ::android::hardware::camera::common::V1_0::CameraResourceCost;
 using ::android::hardware::camera::common::V1_0::Status;
 using ::android::hardware::camera::common::V1_0::TorchMode;
-using ::android::hardware::camera::device::V3_5::ICameraDeviceCallback;
-using ::android::hardware::camera::device::V3_7::ICameraDevice;
+using ::android::hardware::camera::device::V3_8::ICameraDevice;
+using ::android::hardware::camera::device::V3_8::ICameraDeviceCallback;
 using ::android::hardware::camera::implementation::HidlProfiler;
 
 using ::android::google_camera_hal::CameraDevice;
@@ -77,7 +77,7 @@ class HidlCameraDevice : public ICameraDevice {
       ICameraDevice::isStreamCombinationSupported_cb _hidl_cb) override;
 
   Return<void> isStreamCombinationSupported_3_7(
-      const StreamConfiguration& streams,
+      const V3_7::StreamConfiguration& streams,
       ICameraDevice::isStreamCombinationSupported_cb _hidl_cb) override;
 
   // End of override functions in ICameraDevice
@@ -94,7 +94,7 @@ class HidlCameraDevice : public ICameraDevice {
 };
 
 }  // namespace implementation
-}  // namespace V3_7
+}  // namespace V3_8
 }  // namespace device
 }  // namespace camera
 }  // namespace hardware

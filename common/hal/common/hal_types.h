@@ -253,14 +253,15 @@ struct ErrorMessage {
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_2::ShutterMsg
+// ::android::hardware::camera::device::V3_8::ShutterMsg
 struct ShutterMessage {
   uint32_t frame_number = 0;
   uint64_t timestamp_ns = 0;
+  uint64_t readout_timestamp_ns = 0;
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_2::NotifyMsg
+// ::android::hardware::camera::device::V3_8::NotifyMsg
 struct NotifyMessage {
   MessageType type = MessageType::kError;
 

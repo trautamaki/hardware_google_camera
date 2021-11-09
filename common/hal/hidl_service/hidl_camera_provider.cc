@@ -85,7 +85,7 @@ status_t HidlCameraProvider::Initialize() {
             std::unique_lock<std::mutex> lock(callbacks_lock_);
             callbacks_->cameraDeviceStatusChange(
                 "device@" +
-                    device::V3_7::implementation::HidlCameraDevice::kDeviceVersion +
+                    device::V3_8::implementation::HidlCameraDevice::kDeviceVersion +
                     "/" + kProviderName + "/" + camera_id,
                 hidl_camera_device_status);
           }),
@@ -126,7 +126,7 @@ status_t HidlCameraProvider::Initialize() {
             std::unique_lock<std::mutex> lock(callbacks_lock_);
             callbacks_2_6_->physicalCameraDeviceStatusChange(
                 "device@" +
-                    device::V3_7::implementation::HidlCameraDevice::kDeviceVersion +
+                    device::V3_8::implementation::HidlCameraDevice::kDeviceVersion +
                     "/" + kProviderName + "/" + camera_id,
                 physical_camera_id, hidl_camera_device_status);
           }),
@@ -150,7 +150,7 @@ status_t HidlCameraProvider::Initialize() {
             std::unique_lock<std::mutex> lock(callbacks_lock_);
             callbacks_->torchModeStatusChange(
                 "device@" +
-                    device::V3_7::implementation::HidlCameraDevice::kDeviceVersion +
+                    device::V3_8::implementation::HidlCameraDevice::kDeviceVersion +
                     "/" + kProviderName + "/" + camera_id,
                 hidl_torch_status);
           }),
@@ -226,7 +226,7 @@ Return<void> HidlCameraProvider::getCameraIdList(getCameraIdList_cb _hidl_cb) {
     // camera ID is in the form of "device@<major>.<minor>/<type>/<id>"
     hidl_camera_ids[i] =
         "device@" +
-        device::V3_7::implementation::HidlCameraDevice::kDeviceVersion + "/" +
+        device::V3_8::implementation::HidlCameraDevice::kDeviceVersion + "/" +
         kProviderName + "/" + std::to_string(camera_ids[i]);
   }
 
@@ -369,7 +369,7 @@ Return<void> HidlCameraProvider::getCameraDeviceInterface_V3_x(
   }
 
   auto hidl_camera_device =
-      device::V3_7::implementation::HidlCameraDevice::Create(
+      device::V3_8::implementation::HidlCameraDevice::Create(
           std::move(google_camera_device));
   if (hidl_camera_device == nullptr) {
     ALOGE("%s: Creating HidlCameraDevice failed", __FUNCTION__);

@@ -313,6 +313,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   bool threadLoop() override;
 
   nsecs_t next_capture_time_;
+  nsecs_t next_readout_time_;
 
   struct SensorBinningFactorInfo {
     bool has_raw_stream = false;

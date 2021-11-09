@@ -17,9 +17,9 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_DEVICE_SESSION_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_DEVICE_SESSION_H_
 
-#include <android/hardware/camera/device/3.5/ICameraDeviceCallback.h>
-#include <android/hardware/camera/device/3.7/ICameraDevice.h>
 #include <android/hardware/camera/device/3.7/ICameraDeviceSession.h>
+#include <android/hardware/camera/device/3.8/ICameraDevice.h>
+#include <android/hardware/camera/device/3.8/ICameraDeviceCallback.h>
 #include <android/hardware/thermal/2.0/IThermal.h>
 #include <fmq/MessageQueue.h>
 
@@ -33,16 +33,16 @@ namespace android {
 namespace hardware {
 namespace camera {
 namespace device {
-namespace V3_7 {
+namespace V3_8 {
 namespace implementation {
 
 using ::android::hardware::camera::common::V1_0::Status;
 using ::android::hardware::camera::device::V3_2::BufferCache;
 using ::android::hardware::camera::device::V3_2::RequestTemplate;
-using ::android::hardware::camera::device::V3_5::ICameraDeviceCallback;
 using ::android::hardware::camera::device::V3_7::CaptureRequest;
 using ::android::hardware::camera::device::V3_7::ICameraDeviceSession;
 using ::android::hardware::camera::device::V3_7::StreamConfiguration;
+using ::android::hardware::camera::device::V3_8::ICameraDeviceCallback;
 using ::android::hardware::camera::implementation::HidlProfiler;
 
 using MetadataQueue =
@@ -231,7 +231,7 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
 };
 
 }  // namespace implementation
-}  // namespace V3_7
+}  // namespace V3_8
 }  // namespace device
 }  // namespace camera
 }  // namespace hardware

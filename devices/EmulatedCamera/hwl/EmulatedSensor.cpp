@@ -628,9 +628,11 @@ bool EmulatedSensor::threadLoop() {
   }
 
   auto frame_duration = EmulatedSensor::kSupportedFrameDurationRange[0];
+  auto exposure_time = EmulatedSensor::kSupportedExposureTimeRange[0];
   // Frame duration must always be the same among all physical devices
   if ((settings.get() != nullptr) && (!settings->empty())) {
     frame_duration = settings->begin()->second.frame_duration;
+    exposure_time = settings->begin()->second.exposure_time;
   }
 
   nsecs_t start_real_time = systemTime();
@@ -642,6 +644,7 @@ bool EmulatedSensor::threadLoop() {
    * Stage 2: Capture new image
    */
   next_capture_time_ = frame_end_real_time;
+  next_readout_time_ = frame_end_real_time + exposure_time;
 
   sensor_binning_factor_info_.clear();
 
@@ -660,6 +663,14 @@ bool EmulatedSensor::threadLoop() {
         ALOGW("%s: Reprocess timestamp absent!", __FUNCTION__);
       }
 
+      ret = next_result->result_metadata->Get(ANDROID_SENSOR_EXPOSURE_TIME,
+                                              &entry);
+      if ((ret == OK) && (entry.count == 1)) {
+        next_readout_time_ = next_capture_time_ + entry.data.i64[0];
+      } else {
+        next_readout_time_ = next_capture_time_;
+      }
+
       reprocess_request = true;
   }
 
@@ -670,7 +681,9 @@ bool EmulatedSensor::threadLoop() {
           .type = MessageType::kShutter,
           .message.shutter = {
               .frame_number = next_buffers->at(0)->frame_number,
-              .timestamp_ns = static_cast<uint64_t>(next_capture_time_)}};
+              .timestamp_ns = static_cast<uint64_t>(next_capture_time_),
+              .readout_timestamp_ns =
+                  static_cast<uint64_t>(next_readout_time_)}};
       callback.notify(next_result->pipeline_id, msg);
     }
     auto b = next_buffers->begin();
