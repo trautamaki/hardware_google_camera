@@ -31,8 +31,8 @@ namespace hidl_utils {
 using ::android::hardware::camera::device::V3_2::ErrorCode;
 using ::android::hardware::camera::device::V3_2::ErrorMsg;
 using ::android::hardware::camera::device::V3_2::MsgType;
-using ::android::hardware::camera::device::V3_2::ShutterMsg;
-using ::android::hardware::camera::device::V3_7::implementation::HidlCameraDevice;
+using ::android::hardware::camera::device::V3_8::ShutterMsg;
+using ::android::hardware::camera::device::V3_8::implementation::HidlCameraDevice;
 using android::hardware::camera::metadata::V3_6::
     CameraMetadataEnumAndroidSensorPixelMode;
 using ::android::hardware::camera::provider::V2_7::implementation::HidlCameraProvider;
@@ -497,8 +497,9 @@ status_t ConvertToHidlShutterMessage(
     return BAD_VALUE;
   }
 
-  hidl_shutter->frameNumber = hal_shutter.frame_number;
-  hidl_shutter->timestamp = hal_shutter.timestamp_ns;
+  hidl_shutter->v3_2.frameNumber = hal_shutter.frame_number;
+  hidl_shutter->v3_2.timestamp = hal_shutter.timestamp_ns;
+  hidl_shutter->readoutTimestamp = hal_shutter.readout_timestamp_ns;
   return OK;
 }
 

@@ -19,6 +19,7 @@
 
 #include <android/hardware/camera/common/1.0/types.h>
 #include <android/hardware/camera/device/3.7/ICameraDeviceSession.h>
+#include <android/hardware/camera/device/3.8/types.h>
 #include <fmq/MessageQueue.h>
 #include <hal_types.h>
 #include <hidl/HidlSupport.h>
@@ -42,7 +43,6 @@ using ::android::hardware::camera::common::V1_0::VendorTagSection;
 using ::android::hardware::camera::device::V3_2::BufferCache;
 using ::android::hardware::camera::device::V3_2::BufferStatus;
 using ::android::hardware::camera::device::V3_2::CameraMetadata;
-using ::android::hardware::camera::device::V3_2::NotifyMsg;
 using ::android::hardware::camera::device::V3_2::RequestTemplate;
 using ::android::hardware::camera::device::V3_2::StreamBuffer;
 using ::android::hardware::camera::device::V3_2::StreamConfigurationMode;
@@ -58,6 +58,7 @@ using ::android::hardware::camera::device::V3_5::StreamBuffersVal;
 using ::android::hardware::camera::device::V3_6::HalStreamConfiguration;
 using ::android::hardware::camera::device::V3_7::CaptureRequest;
 using ::android::hardware::camera::device::V3_7::StreamConfiguration;
+using ::android::hardware::camera::device::V3_8::NotifyMsg;
 using ::android::hardware::camera::provider::V2_5::DeviceState;
 
 // Util functions to convert the types between HIDL and Google Camera HAL.
