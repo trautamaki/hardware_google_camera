@@ -437,7 +437,7 @@
   "1"
  ], 
  "android.request.pipelineMaxDepth": [
-  "4"
+  "8"
  ], 
  "android.scaler.availableMaxDigitalZoom": [
   "10.00000000"

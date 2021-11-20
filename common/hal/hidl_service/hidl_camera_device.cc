@@ -28,14 +28,14 @@ namespace android {
 namespace hardware {
 namespace camera {
 namespace device {
-namespace V3_7 {
+namespace V3_8 {
 namespace implementation {
 
 namespace hidl_utils = ::android::hardware::camera::implementation::hidl_utils;
 
 using ::android::google_camera_hal::HalCameraMetadata;
 
-const std::string HidlCameraDevice::kDeviceVersion = "3.7";
+const std::string HidlCameraDevice::kDeviceVersion = "3.8";
 
 std::unique_ptr<HidlCameraDevice> HidlCameraDevice::Create(
     std::unique_ptr<CameraDevice> google_camera_device) {
@@ -246,7 +246,7 @@ Return<void> HidlCameraDevice::isStreamCombinationSupported_3_7(
 }
 
 }  // namespace implementation
-}  // namespace V3_7
+}  // namespace V3_8
 }  // namespace device
 }  // namespace camera
 }  // namespace hardware
