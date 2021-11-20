@@ -250,6 +250,16 @@ Return<void> HidlCameraDevice::isStreamCombinationSupported(
 Return<void> HidlCameraDevice::isStreamCombinationSupported_3_7(
     const V3_7::StreamConfiguration& streams,
     ICameraDevice::isStreamCombinationSupported_cb _hidl_cb) {
+  StreamConfiguration streams3_8;
+
+  hidl_utils::ConvertStreamConfigurationV37ToV38(streams, &streams3_8);
+
+  return isStreamCombinationSupported_3_8(streams3_8, _hidl_cb);
+}
+
+Return<void> HidlCameraDevice::isStreamCombinationSupported_3_8(
+    const V3_8::StreamConfiguration& streams,
+    ICameraDevice::isStreamCombinationSupported_cb _hidl_cb) {
   bool is_supported = false;
   google_camera_hal::StreamConfiguration stream_config;
   status_t res = hidl_utils::ConverToHalStreamConfig(streams, &stream_config);

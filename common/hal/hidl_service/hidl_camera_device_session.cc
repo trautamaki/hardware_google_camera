@@ -553,8 +553,53 @@ Return<void> HidlCameraDeviceSession::constructDefaultRequestSettings(
   return Void();
 }
 
+Return<void> HidlCameraDeviceSession::configureStreams_3_8(
+    const V3_8::StreamConfiguration& requestedConfiguration,
+    ICameraDeviceSession::configureStreams_3_6_cb _hidl_cb) {
+  ATRACE_NAME("HidlCameraDeviceSession::configureStreams_3_8");
+  HalStreamConfiguration hidl_hal_configs;
+  if (device_session_ == nullptr) {
+    _hidl_cb(Status::ILLEGAL_ARGUMENT, hidl_hal_configs);
+    return Void();
+  }
+
+  auto profiler = hidl_profiler_->MakeScopedProfiler(
+      HidlProfiler::ScopedType::kConfigureStream,
+      device_session_->GetProfiler(hidl_profiler_->GetCameraId(),
+                                   hidl_profiler_->GetLatencyFlag()),
+      device_session_->GetProfiler(hidl_profiler_->GetCameraId(),
+                                   hidl_profiler_->GetFpsFlag()));
+
+  first_frame_requested_ = false;
+  num_pending_first_frame_buffers_ = 0;
+
+  google_camera_hal::StreamConfiguration hal_stream_config;
+  status_t res = hidl_utils::ConverToHalStreamConfig(requestedConfiguration,
+                                                     &hal_stream_config);
+  if (res != OK) {
+    _hidl_cb(Status::ILLEGAL_ARGUMENT, hidl_hal_configs);
+    return Void();
+  }
+
+  std::vector<google_camera_hal::HalStream> hal_configured_streams;
+  res = device_session_->ConfigureStreams(hal_stream_config,
+                                          &hal_configured_streams);
+  if (res != OK) {
+    ALOGE("%s: Configuring streams failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    _hidl_cb(hidl_utils::ConvertToHidlStatus(res), hidl_hal_configs);
+    return Void();
+  }
+
+  res = hidl_utils::ConvertToHidlHalStreamConfig(hal_configured_streams,
+                                                 &hidl_hal_configs);
+  _hidl_cb(hidl_utils::ConvertToHidlStatus(res), hidl_hal_configs);
+
+  return Void();
+}
+
 Return<void> HidlCameraDeviceSession::configureStreams_3_7(
-    const StreamConfiguration& requestedConfiguration,
+    const V3_7::StreamConfiguration& requestedConfiguration,
     ICameraDeviceSession::configureStreams_3_6_cb _hidl_cb) {
   ATRACE_NAME("HidlCameraDeviceSession::configureStreams_3_7");
   HalStreamConfiguration hidl_hal_configs;
@@ -803,7 +848,7 @@ Return<void> HidlCameraDeviceSession::configureStreams_3_5(
 Return<void> HidlCameraDeviceSession::configureStreams_3_6(
     const V3_5::StreamConfiguration& requestedConfiguration,
     configureStreams_3_6_cb _hidl_cb) {
-  StreamConfiguration requestedConfiguration3_7;
+  V3_7::StreamConfiguration requestedConfiguration3_7;
   requestedConfiguration3_7.streams.resize(
       requestedConfiguration.v3_4.streams.size());
   for (size_t i = 0; i < requestedConfiguration.v3_4.streams.size(); i++) {
