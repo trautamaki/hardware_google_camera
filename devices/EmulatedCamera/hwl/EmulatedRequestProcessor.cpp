@@ -332,8 +332,9 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
   auto stream = emulated_stream;
   // Make sure input stream formats are correctly mapped here
   if (stream.is_input) {
-    stream.override_format =
-        EmulatedSensor::OverrideFormat(stream.override_format);
+    stream.override_format = EmulatedSensor::OverrideFormat(
+        stream.override_format,
+        ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD);
   }
   if (override_width > 0 && override_height > 0) {
     buffer->width = override_width;

@@ -113,6 +113,12 @@ struct ColorFilterXYZ {
   float bZ = 1.0570f;
 };
 
+typedef std::unordered_map<
+    camera_metadata_enum_android_request_available_dynamic_range_profiles_map,
+    std::unordered_set<
+        camera_metadata_enum_android_request_available_dynamic_range_profiles_map>>
+    ProfileMap;
+
 struct SensorCharacteristics {
   size_t width = 0;
   size_t height = 0;
@@ -137,6 +143,8 @@ struct SensorCharacteristics {
   uint32_t orientation = 0;
   bool is_front_facing = false;
   bool quad_bayer_sensor = false;
+  bool is_10bit_dynamic_range_capable = false;
+  ProfileMap dynamic_range_profiles;
 };
 
 // Maps logical/physical camera ids to sensor characteristics
@@ -147,9 +155,25 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   EmulatedSensor();
   ~EmulatedSensor();
 
-  static android_pixel_format_t OverrideFormat(android_pixel_format_t format) {
-    if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
-      return HAL_PIXEL_FORMAT_YCBCR_420_888;
+  static android_pixel_format_t OverrideFormat(
+      android_pixel_format_t format,
+      camera_metadata_enum_android_request_available_dynamic_range_profiles_map
+          profile) {
+    switch (profile) {
+      case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD:
+        if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+          return HAL_PIXEL_FORMAT_YCBCR_420_888;
+        }
+        break;
+      case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10:
+        if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+          return static_cast<android_pixel_format_t>(
+              HAL_PIXEL_FORMAT_YCBCR_P010);
+        }
+        break;
+      default:
+        ALOGE("%s: Unsupported dynamic range profile 0x%x", __FUNCTION__,
+              profile);
     }
 
     return format;
