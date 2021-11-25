@@ -122,6 +122,13 @@ class CameraDeviceSessionHwl {
   // this method should return an empty std::vector.
   virtual std::vector<uint32_t> GetPhysicalCameraIds() const = 0;
 
+  // Returns true if the two given physical camera ids can be streamed
+  // simultaneously from this device session.
+  virtual bool CanStreamSimultaneously(uint32_t /* physical_camera_id_1 */,
+                                       uint32_t /* physical_camera_id_2 */) const {
+    return true;
+  }
+
   // Return the characteristics that this camera device session is associated with.
   virtual status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics) const = 0;
