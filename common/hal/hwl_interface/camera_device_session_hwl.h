@@ -172,6 +172,11 @@ class CameraDeviceSessionHwl {
   // Get zoom ratio mapper from HWL.
   virtual std::unique_ptr<ZoomRatioMapperHwl> GetZoomRatioMapperHwl() = 0;
 
+  // Get maximum number of cameras allowed to stream concurrently.
+  virtual int GetMaxSupportedConcurrentCameras() const {
+    return 1;
+  }
+
   // Get customized profiler
   virtual std::unique_ptr<google::camera_common::Profiler> GetProfiler(
       uint32_t /* camera_id */, int /* option */) {
