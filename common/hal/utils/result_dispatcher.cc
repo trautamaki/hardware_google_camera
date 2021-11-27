@@ -286,7 +286,7 @@ status_t ResultDispatcher::AddError(const ErrorMessage& error) {
   }
 
   NotifyMessage message = {.type = MessageType::kError, .message.error = error};
-  ALOGD("%s: Notify error %u for frame %u stream %d", __FUNCTION__,
+  ALOGV("%s: Notify error %u for frame %u stream %d", __FUNCTION__,
         error.error_code, frame_number, error.error_stream_id);
   notify_(message);
 
