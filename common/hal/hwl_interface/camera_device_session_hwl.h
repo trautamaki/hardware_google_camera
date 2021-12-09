@@ -182,6 +182,13 @@ class CameraDeviceSessionHwl {
       uint32_t /* camera_id */, int /* option */) {
     return nullptr;
   }
+
+  // Release unused framework buffers from cache. This should be called when a
+  // ProcessCaptureRequest call includes a non-empty cachesToRemove argument. It
+  // is used to pass the list of buffers to the HWL to handle any internal
+  // caching of file descriptors done by the HWL.
+  virtual void RemoveCachedBuffers(const native_handle_t* /*handle*/) {
+  }
 };
 
 }  // namespace google_camera_hal
