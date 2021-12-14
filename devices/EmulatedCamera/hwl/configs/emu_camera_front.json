@@ -182,6 +182,12 @@
   "android.flash.info.available": [
    "TRUE"
   ], 
+  "android.flash.info.strengthMaximumLevel": [
+  "10"
+ ],
+  "android.flash.info.strengthDefaultLevel": [
+  "3"
+ ],
   "android.hotPixel.availableHotPixelModes": [
    "0", 
    "1", 
