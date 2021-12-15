@@ -1416,6 +1416,8 @@ void CameraDeviceSession::RemoveBufferCache(
       }
     };
 
+    device_session_hwl_->RemoveCachedBuffers(buffer_handle_it->second);
+
     if (buffer_mapper_v4_ != nullptr) {
       free_buffer_mapper(buffer_mapper_v4_);
     } else if (buffer_mapper_v3_ != nullptr) {
