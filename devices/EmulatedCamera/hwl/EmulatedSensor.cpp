@@ -733,8 +733,12 @@ bool EmulatedSensor::threadLoop() {
       scene_->SetTestPatternData(device_settings->second.test_pattern_data);
 
       uint32_t handshake_divider =
-        (device_settings->second.video_stab == ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON) ?
-        kReducedSceneHandshake : kRegularSceneHandshake;
+          (device_settings->second.video_stab ==
+           ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON) ||
+                  (device_settings->second.video_stab ==
+                   ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION)
+              ? kReducedSceneHandshake
+              : kRegularSceneHandshake;
       scene_->CalculateScene(next_capture_time_, handshake_divider);
 
       (*b)->stream_buffer.status = BufferStatus::kOk;
