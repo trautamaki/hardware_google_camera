@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_PROFILER_H_
-#define HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_PROFILER_H_
+#ifndef HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
+#define HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
 
 #include <memory>
 
@@ -26,13 +26,13 @@ namespace hardware {
 namespace camera {
 namespace implementation {
 
-class HidlScopedProfiler {
+class AidlScopedProfiler {
  public:
-  HidlScopedProfiler(std::shared_ptr<google::camera_common::Profiler> profiler,
+  AidlScopedProfiler(std::shared_ptr<google::camera_common::Profiler> profiler,
                      const std::string name, int id,
                      std::function<void()> end_callback);
 
-  ~HidlScopedProfiler();
+  ~AidlScopedProfiler();
 
  private:
   std::shared_ptr<google::camera_common::Profiler> profiler_;
@@ -41,7 +41,7 @@ class HidlScopedProfiler {
   std::function<void()> end_callback_;
 };
 
-class HidlProfiler {
+class AidlProfiler {
  public:
   enum class ScopedType {
     kOpen,
@@ -49,12 +49,12 @@ class HidlProfiler {
     kFlush,
     kClose,
   };
-  virtual ~HidlProfiler() = default;
+  virtual ~AidlProfiler() = default;
 
-  static std::shared_ptr<HidlProfiler> Create(uint32_t camera_id);
+  static std::shared_ptr<AidlProfiler> Create(uint32_t camera_id);
 
   // Make a ScopedProfiler for given type.
-  virtual std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(
+  virtual std::unique_ptr<AidlScopedProfiler> MakeScopedProfiler(
       ScopedType type,
       std::unique_ptr<google::camera_common::Profiler> custom_latency_profiler,
       std::unique_ptr<google::camera_common::Profiler> custom_fps_profiler) = 0;
@@ -73,7 +73,7 @@ class HidlProfiler {
   virtual int32_t GetFpsFlag() const = 0;
 
  protected:
-  HidlProfiler() = default;
+  AidlProfiler() = default;
 };
 
 }  // namespace implementation
@@ -81,4 +81,4 @@ class HidlProfiler {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_PROFILER_H_
+#endif  // HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_

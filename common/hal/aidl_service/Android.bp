@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+//TODO: b/196432585
+//Change the service names to match AIDL instead of HIDL major, minor versioning. Currently
+//left alone to avoid accidentally breaking targets.
+
 package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
@@ -54,18 +58,18 @@ python_binary_host {
 }
 
 cc_genrule {
-   name: "hidl_camera_build_version",
+   name: "aidl_camera_build_version",
    tool_files: ["version_script.py"],
    cmd: "python3 $(location version_script.py) $(in) $(out)",
    vendor: true,
    srcs: [
-       "hidl_camera_build_version.inl",
+       "aidl_camera_build_version.inl",
    ],
-   out: ["hidl_camera_build_version.h"],
+   out: ["aidl_camera_build_version.h"],
 }
 
 cc_defaults {
-    name: "camera_service_defaults",
+    name: "camera_service_defaults_common",
     defaults: [
         "google_camera_hal_defaults",
         "apex_update_listener_cc_defaults_static",
@@ -73,36 +77,28 @@ cc_defaults {
     vendor: true,
     relative_install_path: "hw",
     srcs: [
-        "hidl_camera_device.cc",
-        "hidl_camera_device_session.cc",
-        "hidl_camera_provider.cc",
-        "hidl_profiler.cc",
+        "aidl_camera_device.cc",
+        "aidl_camera_device_session.cc",
+        "aidl_camera_provider.cc",
+        "aidl_profiler.cc",
         "hidl_thermal_utils.cc",
-        "hidl_utils.cc",
+        "aidl_utils.cc",
         "libc_wrappers.cc",
-        "service.cc",
     ],
     generated_headers: [
-        "hidl_camera_build_version",
+        "aidl_camera_build_version",
     ],
     compile_multilib: "first",
     shared_libs: [
-        "android.hardware.camera.device@3.2",
-        "android.hardware.camera.device@3.3",
-        "android.hardware.camera.device@3.4",
-        "android.hardware.camera.device@3.5",
-        "android.hardware.camera.device@3.6",
-        "android.hardware.camera.device@3.7",
-        "android.hardware.camera.device@3.8",
-        "android.hardware.camera.provider@2.4",
-        "android.hardware.camera.provider@2.5",
-        "android.hardware.camera.provider@2.6",
-        "android.hardware.camera.provider@2.7",
+        "android.hardware.camera.device-V1-ndk",
+        "android.hardware.camera.common-V1-ndk",
+        "android.hardware.camera.provider-V1-ndk",
         "android.hardware.graphics.mapper@2.0",
         "android.hardware.graphics.mapper@3.0",
         "android.hardware.graphics.mapper@4.0",
         "android.hardware.thermal@2.0",
         "libbinder",
+        "libbinder_ndk",
         "libbase",
         "libcamera_metadata",
         "libcutils",
@@ -118,7 +114,17 @@ cc_defaults {
         "lib_profiler",
     ],
     static_libs: [
-        "android.hardware.camera.common@1.0-helper",
+        "libaidlcommonsupport",
+    ],
+}
+
+cc_defaults {
+    name: "camera_service_defaults",
+    defaults: [
+        "camera_service_defaults_common",
+    ],
+    srcs: [
+        "aidl_service.cc",
     ],
     vintf_fragments: [":android.hardware.camera.provider@2.7-service-google.xml"],
 }

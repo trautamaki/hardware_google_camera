@@ -16,16 +16,13 @@
 
 #define LOG_TAG "GCH_HidlThermalUtils"
 //#define LOG_NDEBUG 0
-#include <log/log.h>
-
 #include "hidl_thermal_utils.h"
-#include "hidl_utils.h"
+
+#include <log/log.h>
 
 namespace android {
 namespace hardware {
 namespace hidl_thermal_utils {
-
-namespace hidl_utils = ::android::hardware::camera::implementation::hidl_utils;
 
 std::unique_ptr<HidlThermalChangedCallback> HidlThermalChangedCallback::Create(
     google_camera_hal::NotifyThrottlingFunc notify_throttling) {
