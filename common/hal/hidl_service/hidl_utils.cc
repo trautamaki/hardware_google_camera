@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "android/hardware/camera/metadata/3.8/types.h"
 #define LOG_TAG "GCH_HidlUtils"
 //#define LOG_NDEBUG 0
 #include <log/log.h>
@@ -837,6 +838,63 @@ status_t ConverToHalStreamConfig(
 
   for (auto hidl_stream : hidl_stream_config.streams) {
     google_camera_hal::Stream hal_stream;
+    res = ConvertToHalStream(hidl_stream.v3_7.v3_4, &hal_stream);
+    if (res != OK) {
+      ALOGE("%s: Converting to HAL stream failed: %s(%d)", __FUNCTION__,
+            strerror(-res), res);
+      return res;
+    }
+    hal_stream.group_id = hidl_stream.v3_7.groupId;
+
+    hal_stream.used_in_max_resolution_mode = sensorPixelModeContains(
+        hidl_stream.v3_7, ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
+    hal_stream.used_in_default_resolution_mode =
+        hidl_stream.v3_7.sensorPixelModesUsed.size() > 0
+            ? sensorPixelModeContains(hidl_stream.v3_7,
+                                      ANDROID_SENSOR_PIXEL_MODE_DEFAULT)
+            : true;
+    hal_stream.dynamic_profile = static_cast<
+        camera_metadata_enum_android_request_available_dynamic_range_profiles_map>(
+        hidl_stream.dynamicRangeProfile);
+    hal_stream_config->streams.push_back(hal_stream);
+  }
+
+  res = ConvertToHalStreamConfigurationMode(hidl_stream_config.operationMode,
+                                            &hal_stream_config->operation_mode);
+  if (res != OK) {
+    ALOGE("%s: Converting to HAL opeation mode failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
+  res = ConvertToHalMetadata(0, nullptr, hidl_stream_config.sessionParams,
+                             &hal_stream_config->session_params);
+  if (res != OK) {
+    ALOGE("%s: Converting to HAL metadata failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
+  hal_stream_config->stream_config_counter =
+      hidl_stream_config.streamConfigCounter;
+  hal_stream_config->multi_resolution_input_image =
+      hidl_stream_config.multiResolutionInputImage;
+
+  return OK;
+}
+
+status_t ConverToHalStreamConfig(
+    const device::V3_7::StreamConfiguration& hidl_stream_config,
+    google_camera_hal::StreamConfiguration* hal_stream_config) {
+  if (hal_stream_config == nullptr) {
+    ALOGE("%s: hal_stream_config is nullptr.", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  status_t res;
+
+  for (auto hidl_stream : hidl_stream_config.streams) {
+    google_camera_hal::Stream hal_stream;
     res = ConvertToHalStream(hidl_stream.v3_4, &hal_stream);
     if (res != OK) {
       ALOGE("%s: Converting to HAL stream failed: %s(%d)", __FUNCTION__,
@@ -1116,7 +1174,7 @@ status_t ConvertToHalBufferReturnStatus(
 
 status_t ConvertStreamConfigurationV34ToV37(
     const device::V3_4::StreamConfiguration& config_3_4,
-    StreamConfiguration* config_3_7) {
+    device::V3_7::StreamConfiguration* config_3_7) {
   if (config_3_7 == nullptr) {
     ALOGE("%s: config_3_7 is nullptr.", __FUNCTION__);
     return BAD_VALUE;
@@ -1130,6 +1188,29 @@ status_t ConvertStreamConfigurationV34ToV37(
   config_3_7->operationMode = config_3_4.operationMode;
   config_3_7->sessionParams = config_3_4.sessionParams;
   config_3_7->multiResolutionInputImage = false;
+
+  return OK;
+}
+
+status_t ConvertStreamConfigurationV37ToV38(
+    const device::V3_7::StreamConfiguration& config_3_7,
+    device::V3_8::StreamConfiguration* config_3_8) {
+  if (config_3_8 == nullptr) {
+    ALOGE("%s: config_3_8 is nullptr.", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  config_3_8->streams.resize(config_3_7.streams.size());
+  for (size_t i = 0; i < config_3_7.streams.size(); i++) {
+    config_3_8->streams[i].v3_7 = config_3_7.streams[i];
+    config_3_8->streams[i].dynamicRangeProfile =
+        android::hardware::camera::metadata::V3_8::
+            CameraMetadataEnumAndroidRequestAvailableDynamicRangeProfilesMap::
+                ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD;
+  }
+  config_3_8->operationMode = config_3_7.operationMode;
+  config_3_8->sessionParams = config_3_7.sessionParams;
+  config_3_8->multiResolutionInputImage = config_3_7.multiResolutionInputImage;
 
   return OK;
 }

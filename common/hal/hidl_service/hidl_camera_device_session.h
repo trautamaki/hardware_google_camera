@@ -17,7 +17,7 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_DEVICE_SESSION_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_HIDL_SERVICE_HIDL_CAMERA_DEVICE_SESSION_H_
 
-#include <android/hardware/camera/device/3.7/ICameraDeviceSession.h>
+#include <android/hardware/camera/device/3.8/ICameraDeviceSession.h>
 #include <android/hardware/camera/device/3.8/ICameraDevice.h>
 #include <android/hardware/camera/device/3.8/ICameraDeviceCallback.h>
 #include <android/hardware/thermal/2.0/IThermal.h>
@@ -40,9 +40,9 @@ using ::android::hardware::camera::common::V1_0::Status;
 using ::android::hardware::camera::device::V3_2::BufferCache;
 using ::android::hardware::camera::device::V3_2::RequestTemplate;
 using ::android::hardware::camera::device::V3_7::CaptureRequest;
-using ::android::hardware::camera::device::V3_7::ICameraDeviceSession;
-using ::android::hardware::camera::device::V3_7::StreamConfiguration;
+using ::android::hardware::camera::device::V3_8::StreamConfiguration;
 using ::android::hardware::camera::device::V3_8::ICameraDeviceCallback;
+using ::android::hardware::camera::device::V3_8::ICameraDeviceSession;
 using ::android::hardware::camera::implementation::HidlProfiler;
 
 using MetadataQueue =
@@ -66,8 +66,18 @@ class HidlCameraDeviceSession : public ICameraDeviceSession {
   virtual ~HidlCameraDeviceSession();
 
   // Override functions in ICameraDeviceSession
-  Return<void> configureStreams_3_7(
+  Return<void> configureStreams_3_8(
       const StreamConfiguration& requestedConfiguration,
+      configureStreams_3_8_cb _hidl_cb) override;
+
+  Return<void> repeatingRequestEnd(
+      uint32_t /*frameNumber*/,
+      const hidl_vec<int32_t>& /*streamIds*/) override {
+    return Void();
+  }
+
+  Return<void> configureStreams_3_7(
+      const V3_7::StreamConfiguration& requestedConfiguration,
       configureStreams_3_7_cb _hidl_cb) override;
 
   Return<void> processCaptureRequest_3_7(

@@ -41,7 +41,8 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_REMOSAIC_REPROCESSING,
-    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR};
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DYNAMIC_RANGE_TEN_BIT};
 
 const std::set<uint8_t> EmulatedRequestState::kSupportedHWLevels = {
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED,
@@ -2741,8 +2742,12 @@ status_t EmulatedRequestState::InitializeReprocessDefaults() {
           config_map.GetValidOutputFormatsForInput(input_format);
       for (const auto& output_format : output_formats) {
         if (!EmulatedSensor::IsReprocessPathSupported(
-                EmulatedSensor::OverrideFormat(input_format),
-                EmulatedSensor::OverrideFormat(output_format))) {
+                EmulatedSensor::OverrideFormat(
+                    input_format,
+                    ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD),
+                EmulatedSensor::OverrideFormat(
+                    output_format,
+                    ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD))) {
           ALOGE(
               "%s: Input format: 0x%x to output format: 0x%x reprocess is"
               " currently not supported!",

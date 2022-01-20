@@ -84,6 +84,10 @@ class HidlCameraDevice : public ICameraDevice {
 
   Return<void> getTorchStrengthLevel(ICameraDevice::getTorchStrengthLevel_cb _hidl_cb) override;
 
+  Return<void> isStreamCombinationSupported_3_8(
+      const StreamConfiguration& streams,
+      ICameraDevice::isStreamCombinationSupported_cb _hidl_cb) override;
+
   // End of override functions in ICameraDevice
 
  protected:
