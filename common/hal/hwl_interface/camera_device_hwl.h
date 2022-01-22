@@ -61,12 +61,12 @@ class CameraDeviceHwl {
   // Change the torch strength level of this camera device. If the torch is OFF
   // and torchStrength > 0, then the torch will turn ON.
   virtual status_t TurnOnTorchWithStrengthLevel(int32_t /*torch_strength*/) {
-    return INVALID_OPERATION;
+    return UNKNOWN_TRANSACTION;
   }
 
   // Get the torch strength level of this camera device HWL.
   virtual status_t GetTorchStrengthLevel(int32_t& /*torch_strength*/) const {
-    return INVALID_OPERATION;
+    return UNKNOWN_TRANSACTION;
   }
 
   // Dump the camera device states in fd, using dprintf() or write().
