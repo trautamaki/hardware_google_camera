@@ -35,14 +35,11 @@
 namespace android {
 
 // Location of the camera configuration files.
-constexpr std::string_view kConfigurationFileNames[] = {
-    "emu_camera_back.json",
-    "emu_camera_front.json",
-    "emu_camera_depth.json",
+const char* EmulatedCameraProviderHwlImpl::kConfigurationFileLocation[] = {
+    "/vendor/etc/config/emu_camera_back.json",
+    "/vendor/etc/config/emu_camera_front.json",
+    "/vendor/etc/config/emu_camera_depth.json",
 };
-constexpr std::string_view kConfigurationFileDirVendor = "/vendor/etc/config/";
-constexpr std::string_view kConfigurationFileDirApex =
-    "/apex/com.google.emulated.camera.provider.hal/etc/config/";
 
 constexpr StreamSize s240pStreamSize = std::pair(240, 180);
 constexpr StreamSize s720pStreamSize = std::pair(1280, 720);
@@ -701,18 +698,11 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
   // accordingly, push any remaining physical cameras in the back.
   std::string config;
   size_t logical_id = 0;
-  std::vector<std::string> config_file_locations;
-  std::string config_dir = "";
-  struct stat st;
-  if (stat(kConfigurationFileDirApex.data(), &st) == 0) {
-    config_dir += kConfigurationFileDirApex.data();
-  } else {
-    config_dir += kConfigurationFileDirVendor.data();
-  }
+  std::vector<const char*> configurationFileLocation;
   char prop[PROPERTY_VALUE_MAX];
   if (!property_get_bool("ro.boot.qemu", false)) {
-    for (const auto& iter : kConfigurationFileNames) {
-      config_file_locations.emplace_back(config_dir + iter.data());
+    for (const auto& iter : kConfigurationFileLocation) {
+      configurationFileLocation.emplace_back(iter);
     }
   } else {
     // Android Studio Emulator
@@ -720,38 +710,34 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
       if (WaitForQemuSfFakeCameraPropertyAvailable() == OK) {
         property_get("vendor.qemu.sf.fake_camera", prop, nullptr);
         if (strcmp(prop, "both") == 0) {
-          config_file_locations.emplace_back(config_dir +
-                                             kConfigurationFileNames[0].data());
-          config_file_locations.emplace_back(config_dir +
-                                             kConfigurationFileNames[1].data());
+          configurationFileLocation.emplace_back(kConfigurationFileLocation[0]);
+          configurationFileLocation.emplace_back(kConfigurationFileLocation[1]);
         } else if (strcmp(prop, "front") == 0) {
-          config_file_locations.emplace_back(config_dir +
-                                             kConfigurationFileNames[1].data());
+          configurationFileLocation.emplace_back(kConfigurationFileLocation[1]);
           logical_id = 1;
         } else if (strcmp(prop, "back") == 0) {
-          config_file_locations.emplace_back(config_dir +
-                                             kConfigurationFileNames[0].data());
+          configurationFileLocation.emplace_back(kConfigurationFileLocation[0]);
           logical_id = 1;
         }
       }
     }
   }
-  static_metadata_.resize(ARRAY_SIZE(kConfigurationFileNames));
+  static_metadata_.resize(ARRAY_SIZE(kConfigurationFileLocation));
 
-  for (const auto& config_path : config_file_locations) {
+  for (const auto& config_path : configurationFileLocation) {
     if (!android::base::ReadFileToString(config_path, &config)) {
       ALOGW("%s: Could not open configuration file: %s", __FUNCTION__,
-            config_path.c_str());
+            config_path);
       continue;
     }
 
     Json::CharReaderBuilder builder;
     std::unique_ptr<Json::CharReader> config_reader(builder.newCharReader());
     Json::Value root;
-    std::string error_message;
-    if (!config_reader->parse(&*config.begin(), &*config.end(), &root,
-                              &error_message)) {
-      ALOGE("Could not parse configuration file: %s", error_message.c_str());
+    std::string errorMessage;
+    if (!config_reader->parse(&*config.begin(), &*config.end(), &root, &errorMessage)) {
+      ALOGE("Could not parse configuration file: %s",
+            errorMessage.c_str());
       return BAD_VALUE;
     }
 
