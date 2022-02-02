@@ -23,6 +23,7 @@
 #include <android/hardware/camera/provider/2.7/ICameraProvider.h>
 #include <apex_update_listener.h>
 #include <binder/ProcessState.h>
+#include <cinttypes>
 #include <cutils/properties.h>
 #include <hidl/HidlLazyUtils.h>
 #include <hidl/HidlTransportSupport.h>
@@ -64,7 +65,7 @@ int main() {
       });
   ALOGI(
       "Using ApexUpdateListener: %p Start Count: %d Current Version: %s "
-      "(%ld)",
+      "(%" PRId64 ")",
       start_on_update.get(), start_count, kAndroidBuildId,
       kHalManifestBuildNumber);
 #else
