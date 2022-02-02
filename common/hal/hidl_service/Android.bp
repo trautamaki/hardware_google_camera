@@ -120,7 +120,7 @@ cc_defaults {
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
     ],
-    vintf_fragments: ["android.hardware.camera.provider@2.7-service-google.xml"],
+    vintf_fragments: [":android.hardware.camera.provider@2.7-service-google.xml"],
 }
 
 cc_binary {
@@ -140,4 +140,9 @@ cc_binary {
     ],
     init_rc: ["android.hardware.camera.provider@2.7-service-google-lazy.rc"],
     cflags: ["-DLAZY_SERVICE"],
+}
+
+filegroup {
+    name: "android.hardware.camera.provider@2.7-service-google.xml",
+    srcs: ["android.hardware.camera.provider@2.7-service-google.xml"],
 }
