@@ -145,6 +145,7 @@ struct SensorCharacteristics {
   bool quad_bayer_sensor = false;
   bool is_10bit_dynamic_range_capable = false;
   ProfileMap dynamic_range_profiles;
+  bool support_stream_use_case = false;
 };
 
 // Maps logical/physical camera ids to sensor characteristics

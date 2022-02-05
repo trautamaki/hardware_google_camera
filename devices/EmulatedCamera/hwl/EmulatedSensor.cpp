@@ -482,6 +482,35 @@ bool EmulatedSensor::IsStreamCombinationSupported(
         return false;
       }
     }
+
+    if (!sensor_chars.at(logical_id).support_stream_use_case) {
+      if (stream.use_case != ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT) {
+        ALOGE("%s: Camera device doesn't support non-default stream use case!",
+              __FUNCTION__);
+        return false;
+      }
+    } else if (stream.use_case >
+               ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_VIDEO_CALL) {
+      ALOGE("%s: Stream with use case %d is not supported!", __FUNCTION__,
+            stream.use_case);
+      return false;
+    } else if (stream.use_case !=
+               ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT) {
+      if (stream.use_case ==
+              ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_STILL_CAPTURE) {
+        if (stream.format != HAL_PIXEL_FORMAT_YCBCR_420_888 &&
+            stream.format != HAL_PIXEL_FORMAT_BLOB) {
+          ALOGE("%s: Stream with use case %d isn't compatible with format %d",
+              __FUNCTION__, stream.use_case, stream.format);
+          return false;
+        }
+      } else if (stream.format != HAL_PIXEL_FORMAT_YCBCR_420_888 &&
+                 stream.format != HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+        ALOGE("%s: Stream with use case %d isn't compatible with format %d",
+              __FUNCTION__, stream.use_case, stream.format);
+        return false;
+      }
+    }
   }
 
   for (const auto& raw_count : raw_stream_count) {

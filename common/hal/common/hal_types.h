@@ -125,6 +125,8 @@ struct Stream {
   camera_metadata_enum_android_request_available_dynamic_range_profiles_map
       dynamic_profile =
           ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD;
+  camera_metadata_enum_android_scaler_available_stream_use_cases use_case =
+      ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT;
 };
 
 // See the definition of

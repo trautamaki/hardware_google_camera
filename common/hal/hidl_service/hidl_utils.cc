@@ -856,6 +856,9 @@ status_t ConverToHalStreamConfig(
     hal_stream.dynamic_profile = static_cast<
         camera_metadata_enum_android_request_available_dynamic_range_profiles_map>(
         hidl_stream.dynamicRangeProfile);
+    hal_stream.use_case =
+        static_cast<camera_metadata_enum_android_scaler_available_stream_use_cases>(
+            hidl_stream.useCase);
     hal_stream_config->streams.push_back(hal_stream);
   }
 
@@ -1207,6 +1210,9 @@ status_t ConvertStreamConfigurationV37ToV38(
         android::hardware::camera::metadata::V3_8::
             CameraMetadataEnumAndroidRequestAvailableDynamicRangeProfilesMap::
                 ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD;
+    config_3_8->streams[i].useCase = android::hardware::camera::metadata::V3_8::
+        CameraMetadataEnumAndroidScalerAvailableStreamUseCases::
+            ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT;
   }
   config_3_8->operationMode = config_3_7.operationMode;
   config_3_8->sessionParams = config_3_7.sessionParams;

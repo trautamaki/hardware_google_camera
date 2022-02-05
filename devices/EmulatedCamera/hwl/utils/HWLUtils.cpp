@@ -254,6 +254,14 @@ status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
     ALOGE("%s: Lens facing absent!", __FUNCTION__);
     return BAD_VALUE;
   }
+
+  if (HasCapability(metadata,
+                    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_STREAM_USE_CASE)) {
+    sensor_chars->support_stream_use_case = true;
+  } else {
+    sensor_chars->support_stream_use_case = false;
+  }
+
   return ret;
 }
 
