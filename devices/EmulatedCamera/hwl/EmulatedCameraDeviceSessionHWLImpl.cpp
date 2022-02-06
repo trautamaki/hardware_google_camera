@@ -297,7 +297,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
              .height = stream.height,
              .buffer_size = stream.buffer_size,
              .is_input = is_input,
-             .group_id = stream.group_id}));
+             .group_id = stream.group_id,
+             .use_case = stream.use_case}));
 
     if (stream.group_id != -1 && stream.is_physical_camera_stream) {
       // TODO: For quad bayer camera, the logical camera id should be used if
