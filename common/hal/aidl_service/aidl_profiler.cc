@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "GCH_HidlProfiler"
+#define LOG_TAG "GCH_AidlProfiler"
 
-#include "hidl_profiler.h"
+#include "aidl_profiler.h"
 
 #include <log/log.h>
 
@@ -46,16 +46,16 @@ constexpr char kHalTotal[] = "HAL Total";
 constexpr char kIdleString[] = "<-- IDLE -->";
 constexpr char kOverall[] = "Overall";
 
-class HidlProfilerImpl : public HidlProfiler {
+class AidlProfilerImpl : public AidlProfiler {
  public:
-  HidlProfilerImpl(uint32_t camera_id, int32_t latency_flag, int32_t fps_flag)
+  AidlProfilerImpl(uint32_t camera_id, int32_t latency_flag, int32_t fps_flag)
       : camera_id_string_("Cam" + std::to_string(camera_id)),
         camera_id_(camera_id),
         latency_flag_(latency_flag),
         fps_flag_(fps_flag) {
   }
 
-  std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(
+  std::unique_ptr<AidlScopedProfiler> MakeScopedProfiler(
       ScopedType type,
       std::unique_ptr<google::camera_common::Profiler> custom_latency_profiler,
       std::unique_ptr<google::camera_common::Profiler> custom_fps_profiler)
@@ -111,7 +111,7 @@ class HidlProfilerImpl : public HidlProfiler {
         ALOGE("%s: Unknown type %d", __FUNCTION__, type);
         return nullptr;
     }
-    return std::make_unique<HidlScopedProfiler>(
+    return std::make_unique<AidlScopedProfiler>(
         latency_profiler_, name, id, [this, type]() {
           std::lock_guard lock(api_mutex_);
           if (type == ScopedType::kClose) {
@@ -158,7 +158,7 @@ class HidlProfilerImpl : public HidlProfiler {
       return nullptr;
     }
     profiler->SetDumpFilePrefix(
-        "/data/vendor/camera/profiler/hidl_open_close_");
+        "/data/vendor/camera/profiler/aidl_open_close_");
     profiler->Start(kOverall, Profiler::kInvalidRequestId);
     return profiler;
   }
@@ -172,7 +172,7 @@ class HidlProfilerImpl : public HidlProfiler {
       ALOGE("%s: Failed to create profiler", __FUNCTION__);
       return nullptr;
     }
-    profiler->SetDumpFilePrefix("/data/vendor/camera/profiler/hidl_fps_");
+    profiler->SetDumpFilePrefix("/data/vendor/camera/profiler/aidl_fps_");
     return profiler;
   }
 
@@ -212,7 +212,7 @@ class HidlProfilerImpl : public HidlProfiler {
     latency_profiler_ = std::move(profiler);
     if (latency_profiler_ != nullptr) {
       latency_profiler_->SetDumpFilePrefix(
-          "/data/vendor/camera/profiler/hidl_open_close_");
+          "/data/vendor/camera/profiler/aidl_open_close_");
       latency_profiler_->Start(kOverall, Profiler::kInvalidRequestId);
       return true;
     }
@@ -226,7 +226,7 @@ class HidlProfilerImpl : public HidlProfiler {
     fps_profiler_ = std::move(profiler);
     if (fps_profiler_ != nullptr) {
       fps_profiler_->SetDumpFilePrefix(
-          "/data/vendor/camera/profiler/hidl_fps_");
+          "/data/vendor/camera/profiler/aidl_fps_");
       return true;
     }
     return false;
@@ -248,8 +248,8 @@ class HidlProfilerImpl : public HidlProfiler {
   uint8_t idle_count_;
 };
 
-class HidlProfilerMock : public HidlProfiler {
-  std::unique_ptr<HidlScopedProfiler> MakeScopedProfiler(
+class AidlProfilerMock : public AidlProfiler {
+  std::unique_ptr<AidlScopedProfiler> MakeScopedProfiler(
       ScopedType, std::unique_ptr<google::camera_common::Profiler>,
       std::unique_ptr<google::camera_common::Profiler>) override {
     return nullptr;
@@ -272,14 +272,14 @@ class HidlProfilerMock : public HidlProfiler {
 
 }  // anonymous namespace
 
-std::shared_ptr<HidlProfiler> HidlProfiler::Create(uint32_t camera_id) {
+std::shared_ptr<AidlProfiler> AidlProfiler::Create(uint32_t camera_id) {
   int32_t latency_flag = property_get_int32(
       kPropKeyProfileOpenClose, Profiler::SetPropFlag::kCustomProfiler);
   int32_t fps_flag = property_get_int32(kPropKeyProfileFps,
                                         Profiler::SetPropFlag::kCustomProfiler);
   if (latency_flag == Profiler::SetPropFlag::kDisable &&
       fps_flag == Profiler::SetPropFlag::kDisable) {
-    return std::make_shared<HidlProfilerMock>();
+    return std::make_shared<AidlProfilerMock>();
   }
   // Use stopwatch flag to print result.
   if ((latency_flag & Profiler::SetPropFlag::kPrintBit) != 0) {
@@ -290,10 +290,10 @@ std::shared_ptr<HidlProfiler> HidlProfiler::Create(uint32_t camera_id) {
     fps_flag |= Profiler::SetPropFlag::kPrintFpsPerIntervalBit;
     fps_flag &= ~Profiler::SetPropFlag::kPrintBit;
   }
-  return std::make_shared<HidlProfilerImpl>(camera_id, latency_flag, fps_flag);
+  return std::make_shared<AidlProfilerImpl>(camera_id, latency_flag, fps_flag);
 }
 
-HidlScopedProfiler::HidlScopedProfiler(std::shared_ptr<Profiler> profiler,
+AidlScopedProfiler::AidlScopedProfiler(std::shared_ptr<Profiler> profiler,
                                        const std::string name, int id,
                                        std::function<void()> end_callback)
     : profiler_(profiler),
@@ -304,7 +304,7 @@ HidlScopedProfiler::HidlScopedProfiler(std::shared_ptr<Profiler> profiler,
   profiler_->Start(kHalTotal, Profiler::kInvalidRequestId);
 }
 
-HidlScopedProfiler::~HidlScopedProfiler() {
+AidlScopedProfiler::~AidlScopedProfiler() {
   profiler_->End(kHalTotal, Profiler::kInvalidRequestId);
   profiler_->End(name_, id_);
   if (end_callback_) {

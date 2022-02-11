@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,27 +20,31 @@
 #define LOG_TAG "android.hardware.pixel.camera.provider@2.7-service"
 #endif
 
-#include <android/hardware/camera/provider/2.7/ICameraProvider.h>
+#include <aidl/android/hardware/camera/provider/ICameraProvider.h>
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
 #include <apex_update_listener.h>
 #include <binder/ProcessState.h>
-#include <cinttypes>
 #include <cutils/properties.h>
-#include <hidl/HidlLazyUtils.h>
 #include <hidl/HidlTransportSupport.h>
 #include <malloc.h>
 #include <utils/Errors.h>
 
-#include "hidl_camera_build_version.h"
-#include "hidl_camera_provider.h"
+#include <cinttypes>
 
-using ::android::hardware::camera::provider::V2_7::ICameraProvider;
-using ::android::hardware::camera::provider::V2_7::implementation::HidlCameraProvider;
+#include "aidl_camera_build_version.h"
+#include "aidl_camera_provider.h"
+
+using aidl::android::hardware::camera::provider::ICameraProvider;
+using ::android::hardware::camera::provider::implementation::AidlCameraProvider;
 
 #ifdef LAZY_SERVICE
 const bool kLazyService = true;
 #else
 const bool kLazyService = false;
 #endif
+
+const std::string kProviderInstance = "/internal/0";
 
 int main() {
   ALOGI("Google camera provider service is starting.");
@@ -50,6 +54,11 @@ int main() {
   android::ProcessState::initWithDriver("/dev/vndbinder");
   android::hardware::configureRpcThreadpool(/*maxThreads=*/6,
                                             /*callerWillJoin=*/true);
+
+  // Don't depend on vndbinder setting up threads in case we stop using them
+  // some day
+  ABinderProcess_setThreadPoolMaxThreadCount(6);
+  ABinderProcess_startThreadPool();
 
 #ifdef __ANDROID_APEX__
   int start_count = property_get_int32("vendor.camera.hal.start.count", 0);
@@ -72,25 +81,27 @@ int main() {
   ALOGI("Not using ApexUpdateListener since not running in an apex.");
 #endif
 
-  android::sp<ICameraProvider> camera_provider = HidlCameraProvider::Create();
+  std::shared_ptr<ICameraProvider> camera_provider =
+      AidlCameraProvider::Create();
   if (camera_provider == nullptr) {
     return android::NO_INIT;
   }
+  std::string instance =
+      std::string() + AidlCameraProvider::descriptor + kProviderInstance;
   if (kLazyService) {
-    android::hardware::LazyServiceRegistrar& lazy_registrar =
-        android::hardware::LazyServiceRegistrar::getInstance();
-    if (lazy_registrar.registerService(camera_provider, "internal/0") !=
-        android::OK) {
-      ALOGE("Cannot register Google camera provider lazy service");
+    if (AServiceManager_registerLazyService(camera_provider->asBinder().get(),
+                                            instance.c_str()) != STATUS_OK) {
+      ALOGE("Cannot register AIDL Google camera provider lazy service");
       return android::NO_INIT;
     }
   } else {
-    if (camera_provider->registerAsService("internal/0") != android::OK) {
-      ALOGE("Cannot register Google camera provider service");
+    if (AServiceManager_addService(camera_provider->asBinder().get(),
+                                   instance.c_str()) != STATUS_OK) {
+      ALOGE("Cannot register AIDL Google camera provider service");
       return android::NO_INIT;
     }
   }
-  android::hardware::joinRpcThreadpool();
+  ABinderProcess_joinThreadPool();
 
   // In normal operation, the threadpool should never return.
   return EXIT_FAILURE;
