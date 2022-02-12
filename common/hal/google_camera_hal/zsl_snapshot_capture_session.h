@@ -128,6 +128,7 @@ class ZslSnapshotCaptureSession : public CaptureSession {
       std::vector<HalStream>* hal_configured_streams);
 
   std::unique_ptr<ProcessBlock> CreateSnapshotProcessBlock();
+  std::unique_ptr<ProcessBlock> CreateDenoiseProcessBlock();
 
   // Invoked when receiving a result from result processor.
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
@@ -180,6 +181,10 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   GetProcessBlockFactoryFunc snapshot_process_block_factory_;
   // Opened library handles that should be closed on destruction
   void* snapshot_process_block_lib_handle_ = nullptr;
+
+  GetProcessBlockFactoryFunc denoise_process_block_factory_;
+  // Opened library handles that should be closed on destruction
+  void* denoise_process_block_lib_handle_ = nullptr;
 
   // Partial result count reported by HAL
   uint32_t partial_result_count_ = 1;
