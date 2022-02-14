@@ -32,7 +32,7 @@
 #include "hdrplus_result_processor.h"
 #include "realtime_process_block.h"
 #include "realtime_zsl_request_processor.h"
-#include "realtime_zsl_result_processor.h"
+#include "realtime_zsl_result_request_processor.h"
 #include "vendor_tag_defs.h"
 
 namespace android {
@@ -374,10 +374,11 @@ status_t HdrplusCaptureSession::SetupRealtimeProcessChain(
   }
 
   // Create realtime result processor.
-  auto result_processor = RealtimeZslResultProcessor::Create(
+  auto result_processor = RealtimeZslResultRequestProcessor::Create(
       internal_stream_manager_.get(), *raw_stream_id, HAL_PIXEL_FORMAT_RAW10);
   if (result_processor == nullptr) {
-    ALOGE("%s: Creating RealtimeZslResultProcessor failed.", __FUNCTION__);
+    ALOGE("%s: Creating RealtimeZslResultRequestProcessor failed.",
+          __FUNCTION__);
     return UNKNOWN_ERROR;
   }
   result_processor->SetResultCallback(process_capture_result, notify);

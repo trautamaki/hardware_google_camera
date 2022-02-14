@@ -405,17 +405,20 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   }
 
   // Create preview result processor. Stream ID is not set at this stage.
-  auto realtime_result_processor = RealtimeZslResultProcessor::Create(
-      internal_stream_manager_.get(), additional_stream_id,
-      HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
-  if (realtime_result_processor == nullptr) {
+  auto realtime_result_request_processor =
+      RealtimeZslResultRequestProcessor::Create(
+          internal_stream_manager_.get(), additional_stream_id,
+          HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
+  if (realtime_result_request_processor == nullptr) {
     ALOGE("%s: Creating RealtimeZslResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  realtime_result_processor_ = realtime_result_processor.get();
-  realtime_result_processor->SetResultCallback(process_capture_result, notify);
+  realtime_result_request_processor_ = realtime_result_request_processor.get();
+  realtime_result_request_processor->SetResultCallback(process_capture_result,
+                                                       notify);
 
-  res = process_block->SetResultProcessor(std::move(realtime_result_processor));
+  res = process_block->SetResultProcessor(
+      std::move(realtime_result_request_processor));
   if (res != OK) {
     ALOGE("%s: Setting result process in process block failed.", __FUNCTION__);
     return res;
@@ -539,14 +542,14 @@ status_t ZslSnapshotCaptureSession::SetupRealtimeProcessChain(
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify) {
   ATRACE_CALL();
   if (realtime_process_block_ != nullptr ||
-      realtime_result_processor_ != nullptr ||
+      realtime_result_request_processor_ != nullptr ||
       realtime_request_processor_ != nullptr) {
     ALOGE(
         "%s: realtime_process_block_(%p) or realtime_result_processor_(%p) or "
         "realtime_request_processor_(%p) is/are "
         "already set",
-        __FUNCTION__, realtime_process_block_, realtime_result_processor_,
-        realtime_request_processor_.get());
+        __FUNCTION__, realtime_process_block_,
+        realtime_result_request_processor_, realtime_request_processor_.get());
     return BAD_VALUE;
   }
 

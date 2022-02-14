@@ -25,7 +25,7 @@
 #include "hwl_types.h"
 #include "process_block.h"
 #include "realtime_zsl_request_processor.h"
-#include "realtime_zsl_result_processor.h"
+#include "realtime_zsl_result_request_processor.h"
 #include "request_processor.h"
 #include "result_processor.h"
 #include "snapshot_request_processor.h"
@@ -42,7 +42,7 @@ class CameraDeviceSession;
 //
 //  1.SnapshotRequestProcessor->SnapshotProcessBlock->SnapshotResultProcessor
 //
-//  2.RealtimeZslRequestProcessor->CaptureSessionWrapperProcessBlock->RealtimeZslResultProcessor
+//  2.RealtimeZslRequestProcessor->CaptureSessionWrapperProcessBlock->RealtimeZslResultRequestProcessor->DenoiseProcessBlock->BasicResultProcessor
 //                                    ||  /\
 //                                    \/  ||
 //                             embedded capture session
@@ -142,9 +142,10 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   // CaptureSessionWrapperProcessBlock will be owned and released by
   // RealtimeZslRequestProcessor.
   CaptureSessionWrapperProcessBlock* realtime_process_block_ = nullptr;
-  // RealtimeZslResultProcessor will be owned and released by
+  // RealtimeZslResultRequestProcessor will be owned and released by
   // CaptureSessionWrapperProcessBlock.
-  RealtimeZslResultProcessor* realtime_result_processor_ = nullptr;
+  RealtimeZslResultRequestProcessor* realtime_result_request_processor_ =
+      nullptr;
 
   std::unique_ptr<SnapshotRequestProcessor> snapshot_request_processor_;
   // SnapshotProcessBlock will be owned and released by
