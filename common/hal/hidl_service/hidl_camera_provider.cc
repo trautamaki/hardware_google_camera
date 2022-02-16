@@ -83,11 +83,16 @@ status_t HidlCameraProvider::Initialize() {
             }
 
             std::unique_lock<std::mutex> lock(callbacks_lock_);
-            callbacks_->cameraDeviceStatusChange(
+            auto cb_status = callbacks_->cameraDeviceStatusChange(
                 "device@" +
                     device::V3_7::implementation::HidlCameraDevice::kDeviceVersion +
                     "/" + kProviderName + "/" + camera_id,
                 hidl_camera_device_status);
+            if (!cb_status.isOk()) {
+              ALOGE("%s: device status change transaction error: %s",
+                    __FUNCTION__, cb_status.description().c_str());
+              return;
+            }
           }),
       .physical_camera_device_status_change = google_camera_hal::
           PhysicalCameraDeviceStatusChangeFunc([this](
@@ -148,11 +153,16 @@ status_t HidlCameraProvider::Initialize() {
             }
 
             std::unique_lock<std::mutex> lock(callbacks_lock_);
-            callbacks_->torchModeStatusChange(
+            auto cb_status = callbacks_->torchModeStatusChange(
                 "device@" +
                     device::V3_7::implementation::HidlCameraDevice::kDeviceVersion +
                     "/" + kProviderName + "/" + camera_id,
                 hidl_torch_status);
+            if (!cb_status.isOk()) {
+              ALOGE("%s: torch status change transaction error: %s",
+                    __FUNCTION__, cb_status.description().c_str());
+              return;
+            }
           }),
   };
 
