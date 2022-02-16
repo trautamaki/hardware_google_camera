@@ -304,7 +304,13 @@ void HidlCameraDeviceSession::ReturnStreamBuffers(
     }
   }
 
-  hidl_device_callback_->returnStreamBuffers(hidl_return_buffers);
+  auto hidl_res =
+      hidl_device_callback_->returnStreamBuffers(hidl_return_buffers);
+  if (!hidl_res.isOk()) {
+    ALOGE("%s: return stream buffers transaction failed: %s.", __FUNCTION__,
+          hidl_res.description().c_str());
+    return;
+  }
 }
 
 status_t HidlCameraDeviceSession::InitializeBufferMapper() {
