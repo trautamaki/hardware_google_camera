@@ -15,10 +15,10 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "GCH_RealtimeZslResultProcessor"
+#define LOG_TAG "GCH_RealtimeZslResultRequestProcessor"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 
-#include "realtime_zsl_result_processor.h"
+#include "realtime_zsl_result_request_processor.h"
 
 #include <inttypes.h>
 #include <log/log.h>
@@ -29,7 +29,8 @@
 namespace android {
 namespace google_camera_hal {
 
-std::unique_ptr<RealtimeZslResultProcessor> RealtimeZslResultProcessor::Create(
+std::unique_ptr<RealtimeZslResultRequestProcessor>
+RealtimeZslResultRequestProcessor::Create(
     InternalStreamManager* internal_stream_manager, int32_t stream_id,
     android_pixel_format_t pixel_format, uint32_t partial_result_count) {
   ATRACE_CALL();
@@ -38,18 +39,19 @@ std::unique_ptr<RealtimeZslResultProcessor> RealtimeZslResultProcessor::Create(
     return nullptr;
   }
 
-  auto result_processor = std::unique_ptr<RealtimeZslResultProcessor>(
-      new RealtimeZslResultProcessor(internal_stream_manager, stream_id,
-                                     pixel_format, partial_result_count));
+  auto result_processor = std::unique_ptr<RealtimeZslResultRequestProcessor>(
+      new RealtimeZslResultRequestProcessor(internal_stream_manager, stream_id,
+                                            pixel_format, partial_result_count));
   if (result_processor == nullptr) {
-    ALOGE("%s: Creating RealtimeZslResultProcessor failed.", __FUNCTION__);
+    ALOGE("%s: Creating RealtimeZslResultRequestProcessor failed.",
+          __FUNCTION__);
     return nullptr;
   }
 
   return result_processor;
 }
 
-RealtimeZslResultProcessor::RealtimeZslResultProcessor(
+RealtimeZslResultRequestProcessor::RealtimeZslResultRequestProcessor(
     InternalStreamManager* internal_stream_manager, int32_t stream_id,
     android_pixel_format_t pixel_format, uint32_t partial_result_count) {
   internal_stream_manager_ = internal_stream_manager;
@@ -58,14 +60,15 @@ RealtimeZslResultProcessor::RealtimeZslResultProcessor(
   partial_result_count_ = partial_result_count;
 }
 
-void RealtimeZslResultProcessor::SetResultCallback(
+void RealtimeZslResultRequestProcessor::SetResultCallback(
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify) {
   std::lock_guard<std::mutex> lock(callback_lock_);
   process_capture_result_ = process_capture_result;
   notify_ = notify;
 }
 
-void RealtimeZslResultProcessor::SaveLsForHdrplus(const CaptureRequest& request) {
+void RealtimeZslResultRequestProcessor::SaveLsForHdrplus(
+    const CaptureRequest& request) {
   if (request.settings != nullptr) {
     uint8_t lens_shading_map_mode;
     status_t res =
@@ -82,7 +85,7 @@ void RealtimeZslResultProcessor::SaveLsForHdrplus(const CaptureRequest& request)
   }
 }
 
-status_t RealtimeZslResultProcessor::HandleLsResultForHdrplus(
+status_t RealtimeZslResultRequestProcessor::HandleLsResultForHdrplus(
     uint32_t frameNumber, HalCameraMetadata* metadata) {
   if (metadata == nullptr) {
     ALOGE("%s: metadata is nullptr", __FUNCTION__);
@@ -106,7 +109,8 @@ status_t RealtimeZslResultProcessor::HandleLsResultForHdrplus(
   return OK;
 }
 
-void RealtimeZslResultProcessor::SaveFdForHdrplus(const CaptureRequest& request) {
+void RealtimeZslResultRequestProcessor::SaveFdForHdrplus(
+    const CaptureRequest& request) {
   // Enable face detect mode for internal use
   if (request.settings != nullptr) {
     uint8_t fd_mode;
@@ -123,7 +127,7 @@ void RealtimeZslResultProcessor::SaveFdForHdrplus(const CaptureRequest& request)
   }
 }
 
-status_t RealtimeZslResultProcessor::HandleFdResultForHdrplus(
+status_t RealtimeZslResultRequestProcessor::HandleFdResultForHdrplus(
     uint32_t frameNumber, HalCameraMetadata* metadata) {
   if (metadata == nullptr) {
     ALOGE("%s: metadata is nullptr", __FUNCTION__);
@@ -147,7 +151,7 @@ status_t RealtimeZslResultProcessor::HandleFdResultForHdrplus(
   return OK;
 }
 
-status_t RealtimeZslResultProcessor::AddPendingRequests(
+status_t RealtimeZslResultRequestProcessor::AddPendingRequests(
     const std::vector<ProcessBlockRequest>& process_block_requests,
     const CaptureRequest& remaining_session_request) {
   ATRACE_CALL();
@@ -167,7 +171,8 @@ status_t RealtimeZslResultProcessor::AddPendingRequests(
   return OK;
 }
 
-void RealtimeZslResultProcessor::ProcessResult(ProcessBlockResult block_result) {
+void RealtimeZslResultRequestProcessor::ProcessResult(
+    ProcessBlockResult block_result) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);
   std::unique_ptr<CaptureResult> result = std::move(block_result.result);
@@ -252,7 +257,7 @@ void RealtimeZslResultProcessor::ProcessResult(ProcessBlockResult block_result) 
   process_capture_result_(std::move(result));
 }
 
-void RealtimeZslResultProcessor::Notify(
+void RealtimeZslResultRequestProcessor::Notify(
     const ProcessBlockNotifyMessage& block_message) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);
@@ -265,9 +270,92 @@ void RealtimeZslResultProcessor::Notify(
   notify_(message);
 }
 
-status_t RealtimeZslResultProcessor::FlushPendingRequests() {
+status_t RealtimeZslResultRequestProcessor::FlushPendingRequests() {
   ATRACE_CALL();
   return INVALID_OPERATION;
+}
+
+status_t RealtimeZslResultRequestProcessor::ConfigureStreams(
+    InternalStreamManager* /*internal_stream_manager*/,
+    const StreamConfiguration& stream_config,
+    StreamConfiguration* process_block_stream_config) {
+  ATRACE_CALL();
+  if (process_block_stream_config == nullptr) {
+    ALOGE("%s: process_block_stream_config is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  process_block_stream_config->streams = stream_config.streams;
+  process_block_stream_config->operation_mode = stream_config.operation_mode;
+  process_block_stream_config->session_params =
+      HalCameraMetadata::Clone(stream_config.session_params.get());
+  process_block_stream_config->stream_config_counter =
+      stream_config.stream_config_counter;
+  process_block_stream_config->multi_resolution_input_image =
+      stream_config.multi_resolution_input_image;
+
+  return OK;
+}
+
+status_t RealtimeZslResultRequestProcessor::SetProcessBlock(
+    std::unique_ptr<ProcessBlock> process_block) {
+  ATRACE_CALL();
+  if (process_block == nullptr) {
+    ALOGE("%s: process_block is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  std::lock_guard lock(process_block_shared_lock_);
+  if (process_block_ != nullptr) {
+    ALOGE("%s: Already configured.", __FUNCTION__);
+    return ALREADY_EXISTS;
+  }
+
+  process_block_ = std::move(process_block);
+  return OK;
+}
+
+status_t RealtimeZslResultRequestProcessor::ProcessRequest(
+    const CaptureRequest& request) {
+  ATRACE_CALL();
+  std::shared_lock lock(process_block_shared_lock_);
+  if (process_block_ == nullptr) {
+    ALOGE("%s: Not configured yet.", __FUNCTION__);
+    return NO_INIT;
+  }
+
+  CaptureRequest block_request;
+  block_request.frame_number = request.frame_number;
+  block_request.settings = HalCameraMetadata::Clone(request.settings.get());
+  block_request.input_buffers = request.input_buffers;
+  block_request.input_width = request.input_width;
+  block_request.input_height = request.input_height;
+
+  for (auto& metadata : request.input_buffer_metadata) {
+    block_request.input_buffer_metadata.push_back(
+        HalCameraMetadata::Clone(metadata.get()));
+  }
+
+  block_request.output_buffers = request.output_buffers;
+  for (auto& [camera_id, physical_metadata] : request.physical_camera_settings) {
+    block_request.physical_camera_settings[camera_id] =
+        HalCameraMetadata::Clone(physical_metadata.get());
+  }
+
+  std::vector<ProcessBlockRequest> block_requests(1);
+  block_requests[0].request = std::move(block_request);
+
+  return process_block_->ProcessRequests(block_requests, request);
+}
+
+status_t RealtimeZslResultRequestProcessor::Flush() {
+  ATRACE_CALL();
+  std::shared_lock lock(process_block_shared_lock_);
+  if (process_block_ == nullptr) {
+    return OK;
+  }
+
+  return process_block_->Flush();
 }
 
 }  // namespace google_camera_hal
