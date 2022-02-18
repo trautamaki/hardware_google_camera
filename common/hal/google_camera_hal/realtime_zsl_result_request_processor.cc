@@ -15,16 +15,17 @@
  */
 
 //#define LOG_NDEBUG 0
-#include "realtime_zsl_result_processor.h"
 #define LOG_TAG "GCH_RealtimeZslResultRequestProcessor"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+
+#include "realtime_zsl_result_request_processor.h"
 
 #include <inttypes.h>
 #include <log/log.h>
 #include <utils/Trace.h>
 
 #include "hal_utils.h"
-#include "realtime_zsl_result_request_processor.h"
+#include "realtime_zsl_result_processor.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -116,6 +117,45 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
   if (returned_output && result->result_metadata == nullptr &&
       result->output_buffers.size() == 0) {
     return;
+  }
+
+  // Cache the CaptureRequest in a queue as the metadata and buffers may not
+  // come together.
+  if (pending_frame_number_to_requests_.find(result->frame_number) ==
+      pending_frame_number_to_requests_.end()) {
+    pending_frame_number_to_requests_[result->frame_number] =
+        std::make_unique<CaptureRequest>();
+    pending_frame_number_to_requests_[result->frame_number]->frame_number =
+        result->frame_number;
+  }
+
+  // Fill in final result metadata
+  if (result->result_metadata != nullptr &&
+      result->partial_result == partial_result_count_) {
+    pending_frame_number_to_requests_[result->frame_number]->settings =
+        HalCameraMetadata::Clone(result->result_metadata.get());
+  }
+
+  // Fill in output buffer
+  if (!result->output_buffers.empty()) {
+    pending_frame_number_to_requests_[result->frame_number]->input_buffers =
+        result->input_buffers;
+    pending_frame_number_to_requests_[result->frame_number]->output_buffers =
+        result->output_buffers;
+  }
+
+  // Submit the request and remove the request from the cache when all data is collected.
+  if (!pending_frame_number_to_requests_[result->frame_number]
+           ->output_buffers.empty() &&
+      pending_frame_number_to_requests_[result->frame_number]->settings !=
+          nullptr) {
+    res =
+        ProcessRequest(*pending_frame_number_to_requests_[result->frame_number]);
+    pending_frame_number_to_requests_.erase(result->frame_number);
+    if (res != OK) {
+      ALOGE("%s: ProcessRequest fail", __FUNCTION__);
+      return;
+    }
   }
 }
 

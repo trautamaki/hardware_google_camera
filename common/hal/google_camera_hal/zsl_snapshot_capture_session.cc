@@ -27,6 +27,7 @@
 #include <utils/Trace.h>
 
 #include "hal_utils.h"
+#include "realtime_zsl_result_request_processor.h"
 #include "snapshot_request_processor.h"
 #include "snapshot_result_processor.h"
 #include "system/graphics-base-v1.0.h"
@@ -405,14 +406,28 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   }
 
   // Create preview result processor. Stream ID is not set at this stage.
-  auto realtime_result_processor = RealtimeZslResultProcessor::Create(
-      internal_stream_manager_.get(), additional_stream_id,
-      HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
+
+  std::unique_ptr<ResultProcessor> realtime_result_processor;
+  RealtimeZslResultRequestProcessor* realtime_result_request_processor;
+  if (video_sw_denoise_enabled_) {
+    auto processor = RealtimeZslResultRequestProcessor::Create(
+        internal_stream_manager_.get(), additional_stream_id,
+        HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
+    realtime_result_request_processor = processor.get();
+    realtime_result_processor = std::move(processor);
+  } else {
+    realtime_result_processor = RealtimeZslResultProcessor::Create(
+        internal_stream_manager_.get(), additional_stream_id,
+        HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
+  }
+
   if (realtime_result_processor == nullptr) {
-    ALOGE("%s: Creating RealtimeZslResultProcessor failed.", __FUNCTION__);
+    ALOGE(
+        "%s: Creating "
+        "RealtimeZslResultProcessor/RealtimeZslResultRequestProcessor failed.",
+        __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  realtime_result_processor_ = realtime_result_processor.get();
   realtime_result_processor->SetResultCallback(process_capture_result, notify);
 
   res = process_block->SetResultProcessor(std::move(realtime_result_processor));
@@ -434,6 +449,56 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
       // Set the producer usage so that the buffer will be 64 byte aligned.
       hal_stream.producer_usage |=
           (GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_SW_READ_OFTEN);
+    }
+  }
+
+  if (video_sw_denoise_enabled_) {
+    StreamConfiguration denoise_process_block_stream_config;
+    // Configure streams for request processor
+    res = realtime_result_request_processor->ConfigureStreams(
+        internal_stream_manager_.get(), stream_config,
+        &denoise_process_block_stream_config);
+
+    if (res != OK) {
+      ALOGE(
+          "%s: Configuring stream for process block "
+          "(RealtimeZslResultRequestProcessor) failed.",
+          __FUNCTION__);
+      return res;
+    }
+
+    std::unique_ptr<ProcessBlock> denoise_processor =
+        CreateDenoiseProcessBlock();
+    // Create preview result processor. Stream ID is not set at this stage.
+    auto basic_result_processor = BasicResultProcessor::Create();
+    if (basic_result_processor == nullptr) {
+      ALOGE("%s: Creating BasicResultProcessor failed.", __FUNCTION__);
+      return UNKNOWN_ERROR;
+    }
+    basic_result_processor_ = basic_result_processor.get();
+    basic_result_processor->SetResultCallback(process_capture_result, notify);
+
+    res =
+        denoise_processor->SetResultProcessor(std::move(basic_result_processor));
+    if (res != OK) {
+      ALOGE("%s: Setting result process in process block failed.", __FUNCTION__);
+      return res;
+    }
+
+    // Configure streams for process block.
+    res = denoise_processor->ConfigureStreams(
+        denoise_process_block_stream_config, stream_config);
+    if (res != OK) {
+      ALOGE("%s: Configuring stream for process block failed.", __FUNCTION__);
+      return res;
+    }
+
+    res = realtime_result_request_processor->SetProcessBlock(
+        std::move(denoise_processor));
+    if (res != OK) {
+      ALOGE("%s: Setting process block for RequestProcessor failed: %s(%d)",
+            __FUNCTION__, strerror(-res), res);
+      return res;
     }
   }
 
@@ -539,13 +604,11 @@ status_t ZslSnapshotCaptureSession::SetupRealtimeProcessChain(
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify) {
   ATRACE_CALL();
   if (realtime_process_block_ != nullptr ||
-      realtime_result_processor_ != nullptr ||
       realtime_request_processor_ != nullptr) {
     ALOGE(
-        "%s: realtime_process_block_(%p) or realtime_result_processor_(%p) or "
-        "realtime_request_processor_(%p) is/are "
-        "already set",
-        __FUNCTION__, realtime_process_block_, realtime_result_processor_,
+        "%s: realtime_process_block_(%p) or realtime_request_processor_(%p) "
+        "is/are already set",
+        __FUNCTION__, realtime_process_block_,
         realtime_request_processor_.get());
     return BAD_VALUE;
   }
@@ -646,6 +709,16 @@ status_t ZslSnapshotCaptureSession::Initialize(
   if (res != OK) {
     ALOGE("%s: GetCameraCharacteristics failed.", __FUNCTION__);
     return BAD_VALUE;
+  }
+
+  camera_metadata_ro_entry video_sw_denoise_entry;
+  res = characteristics->Get(VendorTagIds::kVideoSwDenoiseEnabled,
+                             &video_sw_denoise_entry);
+  if (res == OK && video_sw_denoise_entry.data.u8[0] == 1) {
+    video_sw_denoise_enabled_ = true;
+    ALOGI("%s: video sw denoise is enabled.", __FUNCTION__);
+  } else {
+    ALOGI("%s: video sw denoise is disabled.", __FUNCTION__);
   }
 
   for (auto stream : stream_config.streams) {

@@ -17,8 +17,10 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_RESULT_REQUEST_PROCESSOR_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_RESULT_REQUEST_PROCESSOR_H_
 
+#include <cstdint>
 #include <shared_mutex>
 
+#include "hal_types.h"
 #include "internal_stream_manager.h"
 #include "realtime_zsl_result_processor.h"
 #include "request_processor.h"
@@ -66,6 +68,9 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
 
   // Protected by process_block_shared_lock_.
   std::unique_ptr<ProcessBlock> process_block_;
+
+  std::unordered_map<uint32_t, std::unique_ptr<CaptureRequest>>
+      pending_frame_number_to_requests_;
 };
 
 }  // namespace google_camera_hal
