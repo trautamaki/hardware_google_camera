@@ -197,7 +197,8 @@
  ], 
  "android.request.availableDynamicRangeProfilesMap": [
   "2", 
-  "2"
+  "2", 
+  "0"
  ], 
  "android.request.recommendedTenBitDynamicRangeProfile": [
   "2"
