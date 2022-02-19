@@ -70,43 +70,42 @@ class AidlCameraDeviceSession : public BnCameraDeviceSession {
 
   // functions in ICameraDeviceSession
 
-  virtual ScopedAStatus close() override;
+  ScopedAStatus close() override;
 
-  virtual ScopedAStatus configureStreams(const StreamConfiguration&,
-                                         std::vector<HalStream>*) override;
+  ScopedAStatus configureStreams(const StreamConfiguration&,
+                                 std::vector<HalStream>*) override;
 
-  virtual ScopedAStatus constructDefaultRequestSettings(
+  ScopedAStatus constructDefaultRequestSettings(
       RequestTemplate in_type, CameraMetadata* _aidl_return) override;
 
-  virtual ScopedAStatus flush() override;
+  ScopedAStatus flush() override;
 
-  virtual ScopedAStatus getCaptureRequestMetadataQueue(
+  ScopedAStatus getCaptureRequestMetadataQueue(
       ::aidl::android::hardware::common::fmq::MQDescriptor<
           int8_t, SynchronizedReadWrite>* _aidl_return) override;
 
-  virtual ScopedAStatus getCaptureResultMetadataQueue(
+  ScopedAStatus getCaptureResultMetadataQueue(
       ::aidl::android::hardware::common::fmq::MQDescriptor<
           int8_t, SynchronizedReadWrite>* _aidl_return) override;
 
-  virtual ScopedAStatus isReconfigurationRequired(
+  ScopedAStatus isReconfigurationRequired(
       const CameraMetadata& in_oldSessionParams,
       const CameraMetadata& in_newSessionParams, bool* _aidl_return) override;
 
-  virtual ScopedAStatus processCaptureRequest(
+  ScopedAStatus processCaptureRequest(
       const std::vector<CaptureRequest>& in_requests,
       const std::vector<BufferCache>& in_cachesToRemove,
       int32_t* _aidl_return) override;
 
-  virtual ScopedAStatus signalStreamFlush(
-      const std::vector<int32_t>& in_streamIds,
-      int32_t in_streamConfigCounter) override;
+  ScopedAStatus signalStreamFlush(const std::vector<int32_t>& in_streamIds,
+                                  int32_t in_streamConfigCounter) override;
 
-  virtual ScopedAStatus switchToOffline(
+  ScopedAStatus switchToOffline(
       const std::vector<int32_t>& in_streamsToKeep,
       CameraOfflineSessionInfo* out_offlineSessionInfo,
       std::shared_ptr<ICameraOfflineSession>* _aidl_return) override;
 
-  virtual ScopedAStatus repeatingRequestEnd(
+  ScopedAStatus repeatingRequestEnd(
       int32_t /*in_frameNumber*/,
       const std::vector<int32_t>& /*in_streamIds*/) override {
     return ScopedAStatus::ok();
