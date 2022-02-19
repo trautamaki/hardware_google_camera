@@ -172,18 +172,24 @@ extern "C" int openat(int dirfd, const char* pathname, int flags, ...) {
 }
 #endif
 
-using dlopen_function_type = void* (*)(const char*, int);
+using __loader_dlopen_function_type = void* (*)(const char* filename, int flags,
+                                                const void* caller_addr);
 
 // This is a temporary workaround for prebuilts calling dlopen with absolute
-// paths.
-extern "C" void* dlopen(const char* filename, int flags) {
-  static auto real_dlopen_function =
-      reinterpret_cast<dlopen_function_type>(dlsym(RTLD_NEXT, "dlopen"));
-  if (!real_dlopen_function) {
-    ALOGE("Could not RTLD_NEXT dlopen, something very wrong.");
+// paths. We interpose __loader_dlopen instead of dlopen because dlopen calls
+// __builtin_return_address to determine the linker namespace. We need
+// caller_addr to point to the original caller and not "this" lib for the case
+// of system libs that use dlopen.
+extern "C" void* __loader_dlopen(const char* filename, int flags,
+                                 const void* caller_addr) {
+  static auto real__loader_dlopen_function =
+      reinterpret_cast<__loader_dlopen_function_type>(
+          dlsym(RTLD_NEXT, "__loader_dlopen"));
+  if (!real__loader_dlopen_function) {
+    ALOGE("Could not RTLD_NEXT __loader_dlopen, something very wrong.");
     std::abort();
   }
-  void* ret = real_dlopen_function(filename, flags);
+  void* ret = real__loader_dlopen_function(filename, flags, caller_addr);
   if (!ret) {
     ALOGI("dlopen(%s) failed, seeing if we can fix it", filename);
     std::string original_filename(filename);
@@ -192,7 +198,8 @@ extern "C" void* dlopen(const char* filename, int flags) {
       std::string new_filename = "/apex/com.google.pixel.camera.hal/" +
                                  original_filename.substr(strlen("/vendor/"));
       ALOGI("Trying %s instead of %s\n", new_filename.c_str(), filename);
-      ret = real_dlopen_function(new_filename.c_str(), flags);
+      ret = real__loader_dlopen_function(new_filename.c_str(), flags,
+                                         caller_addr);
       if (ret) {
         ALOGE(
             "ERROR: Update your code to not use absolute paths. dlopen(%s) "
