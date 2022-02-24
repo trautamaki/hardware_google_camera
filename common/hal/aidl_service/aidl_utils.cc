@@ -50,8 +50,6 @@ ScopedAStatus ConvertToAidlReturn(status_t hal_status) {
       return ScopedAStatus::fromServiceSpecificError(
           static_cast<int32_t>(Status::MAX_CAMERAS_IN_USE));
     case UNKNOWN_TRANSACTION:
-      return ScopedAStatus::fromServiceSpecificError(
-          static_cast<int32_t>(Status::METHOD_NOT_SUPPORTED));
     case INVALID_OPERATION:
       return ScopedAStatus::fromServiceSpecificError(
           static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
@@ -147,27 +145,6 @@ status_t ConvertToAidlResourceCost(
   }
 
   return OK;
-}
-
-AidlStatus ConvertToAidlStatus(status_t hal_status) {
-  switch (hal_status) {
-    case OK:
-      return AidlStatus::OK;
-    case BAD_VALUE:
-      return Status::ILLEGAL_ARGUMENT;
-    case -EBUSY:
-      return AidlStatus::CAMERA_IN_USE;
-    case -EUSERS:
-      return AidlStatus::MAX_CAMERAS_IN_USE;
-    case UNKNOWN_TRANSACTION:
-      return AidlStatus::METHOD_NOT_SUPPORTED;
-    case INVALID_OPERATION:
-      return AidlStatus::OPERATION_NOT_SUPPORTED;
-    case DEAD_OBJECT:
-      return AidlStatus::CAMERA_DISCONNECTED;
-    default:
-      return AidlStatus::INTERNAL_ERROR;
-  }
 }
 
 status_t ConvertToHalTemplateType(

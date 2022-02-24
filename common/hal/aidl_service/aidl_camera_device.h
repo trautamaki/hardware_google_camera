@@ -58,37 +58,33 @@ class AidlCameraDevice : public BnCameraDevice {
       std::unique_ptr<CameraDevice> google_camera_device);
   virtual ~AidlCameraDevice() = default;
 
+  binder_status_t dump(int fd, const char**, uint32_t) override;
+
   // Override functions in ICameraDevice
-
-  virtual ScopedAStatus dumpState(const ScopedFileDescriptor& in_fd) override;
-
-  virtual ScopedAStatus getCameraCharacteristics(
+  ScopedAStatus getCameraCharacteristics(
       CameraMetadata* characteristics) override;
 
-  virtual ScopedAStatus getPhysicalCameraCharacteristics(
+  ScopedAStatus getPhysicalCameraCharacteristics(
       const std::string& in_physicalCameraId,
       CameraMetadata* characteristics) override;
 
-  virtual ScopedAStatus getResourceCost(
-      CameraResourceCost* resource_cost) override;
+  ScopedAStatus getResourceCost(CameraResourceCost* resource_cost) override;
 
-  virtual ScopedAStatus isStreamCombinationSupported(
+  ScopedAStatus isStreamCombinationSupported(
       const StreamConfiguration& in_streams, bool* supported) override;
 
-  virtual ScopedAStatus open(
-      const std::shared_ptr<ICameraDeviceCallback>& in_callback,
-      std::shared_ptr<ICameraDeviceSession>* session) override;
+  ScopedAStatus open(const std::shared_ptr<ICameraDeviceCallback>& in_callback,
+                     std::shared_ptr<ICameraDeviceSession>* session) override;
 
-  virtual ScopedAStatus openInjectionSession(
+  ScopedAStatus openInjectionSession(
       const std::shared_ptr<ICameraDeviceCallback>& in_callback,
       std::shared_ptr<ICameraInjectionSession>* session) override;
 
-  virtual ScopedAStatus setTorchMode(bool on) override;
+  ScopedAStatus setTorchMode(bool on) override;
 
-  virtual ScopedAStatus turnOnTorchWithStrengthLevel(
-      int32_t torchStrength) override;
+  ScopedAStatus turnOnTorchWithStrengthLevel(int32_t torchStrength) override;
 
-  virtual ScopedAStatus getTorchStrengthLevel(int32_t* strength_level) override;
+  ScopedAStatus getTorchStrengthLevel(int32_t* strength_level) override;
 
   // End of override functions in ICameraDevice
   AidlCameraDevice() = default;

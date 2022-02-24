@@ -232,16 +232,16 @@ ScopedAStatus AidlCameraDevice::openInjectionSession(
     std::shared_ptr<ICameraInjectionSession>* session) {
   if (session == nullptr) {
     return ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+        static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
   }
   *session = nullptr;
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus AidlCameraDevice::dumpState(const ::ndk::ScopedFileDescriptor& fd) {
-  int raw_fd = fd.get();
-  google_camera_device_->DumpState(raw_fd);
-  return ScopedAStatus::ok();
+binder_status_t AidlCameraDevice::dump(int fd, const char** /*args*/,
+                                       uint32_t /*numArgs*/) {
+  google_camera_device_->DumpState(fd);
+  return OK;
 }
 
 ScopedAStatus AidlCameraDevice::isStreamCombinationSupported(

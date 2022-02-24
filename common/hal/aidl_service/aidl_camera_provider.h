@@ -51,25 +51,23 @@ class AidlCameraProvider : public BnCameraProvider {
 
   // Override functions in ICameraProvider.
 
-  virtual ScopedAStatus setCallback(
+  ScopedAStatus setCallback(
       const std::shared_ptr<ICameraProviderCallback>& callback) override;
 
-  virtual ScopedAStatus getVendorTags(
-      std::vector<VendorTagSection>* vts) override;
+  ScopedAStatus getVendorTags(std::vector<VendorTagSection>* vts) override;
 
-  virtual ScopedAStatus getCameraIdList(
-      std::vector<std::string>* camera_ids) override;
+  ScopedAStatus getCameraIdList(std::vector<std::string>* camera_ids) override;
 
-  virtual ScopedAStatus getCameraDeviceInterface(
+  ScopedAStatus getCameraDeviceInterface(
       const std::string& in_cameraDeviceName,
       std::shared_ptr<ICameraDevice>* device) override;
 
-  virtual ScopedAStatus notifyDeviceStateChange(int64_t in_deviceState) override;
+  ScopedAStatus notifyDeviceStateChange(int64_t in_deviceState) override;
 
-  virtual ScopedAStatus getConcurrentCameraIds(
+  ScopedAStatus getConcurrentCameraIds(
       std::vector<ConcurrentCameraIdCombination>* concurrent_camera_ids) override;
 
-  virtual ScopedAStatus isConcurrentStreamCombinationSupported(
+  ScopedAStatus isConcurrentStreamCombinationSupported(
       const std::vector<CameraIdAndStreamCombination>& in_configs,
       bool* support) override;
 
