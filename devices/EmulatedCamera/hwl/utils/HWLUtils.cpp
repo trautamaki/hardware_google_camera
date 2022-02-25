@@ -67,30 +67,30 @@ status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
           ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DYNAMIC_RANGE_TEN_BIT)) {
     ret = metadata->Get(ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP,
                         &entry);
-    if ((ret != OK) || ((entry.count % 2) != 0)) {
+    if ((ret != OK) || ((entry.count % 3) != 0)) {
       ALOGE("%s: Invalid ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP!",
             __FUNCTION__);
       return BAD_VALUE;
     }
 
-    for (size_t i = 0; i < entry.count; i += 2) {
+    for (size_t i = 0; i < entry.count; i += 3) {
       sensor_chars->dynamic_range_profiles.emplace(
           static_cast<
               camera_metadata_enum_android_request_available_dynamic_range_profiles_map>(
-              entry.data.i32[i]),
+              entry.data.i64[i]),
           std::unordered_set<
               camera_metadata_enum_android_request_available_dynamic_range_profiles_map>());
       const auto profile_end =
           ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_DOLBY_VISION_8B_HDR_OEM_PO
           << 1;
-      uint32_t current_profile =
+      uint64_t current_profile =
           ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD;
       for (; current_profile != profile_end; current_profile <<= 1) {
-        if (entry.data.i32[i + 1] & current_profile) {
+        if (entry.data.i64[i + 1] & current_profile) {
           sensor_chars->dynamic_range_profiles
               .at(static_cast<
                   camera_metadata_enum_android_request_available_dynamic_range_profiles_map>(
-                  entry.data.i32[i]))
+                  entry.data.i64[i]))
               .emplace(
                   static_cast<
                       camera_metadata_enum_android_request_available_dynamic_range_profiles_map>(
