@@ -20,16 +20,17 @@
 #include <shared_mutex>
 
 #include "internal_stream_manager.h"
+#include "realtime_zsl_result_processor.h"
 #include "request_processor.h"
 #include "result_processor.h"
 
 namespace android {
 namespace google_camera_hal {
 
-// RealtimeZslResultRequestProcessor implements a ResultProcessor that return
-// filled raw buffer and metadata to internal stream manager. It also implements
-// a RequestProcess to forward the results.
-class RealtimeZslResultRequestProcessor : public ResultProcessor,
+// RealtimeZslResultRequestProcessor implements a RealtimeZslResultProcessor
+// that return filled raw buffer and metadata to internal stream manager. It
+// also implements a RequestProcess to forward the results.
+class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
                                           RequestProcessor {
  public:
   static std::unique_ptr<RealtimeZslResultRequestProcessor> Create(
@@ -38,22 +39,9 @@ class RealtimeZslResultRequestProcessor : public ResultProcessor,
 
   virtual ~RealtimeZslResultRequestProcessor() = default;
 
-  // Override functions of ResultProcessor start.
-  void SetResultCallback(ProcessCaptureResultFunc process_capture_result,
-                         NotifyFunc notify) override;
-
-  status_t AddPendingRequests(
-      const std::vector<ProcessBlockRequest>& process_block_requests,
-      const CaptureRequest& remaining_session_request) override;
-
-  // Return filled raw buffer and matedata to internal stream manager
-  // and forwards the results without raw buffer to its callback functions.
+  // Override functions of RealtimeZslResultProcessor start.
   void ProcessResult(ProcessBlockResult block_result) override;
-
-  void Notify(const ProcessBlockNotifyMessage& block_message) override;
-
-  status_t FlushPendingRequests() override;
-  // Override functions of ResultProcessor end.
+  // Override functions of RealtimeZslResultProcessor end.
 
   // Override functions of RequestProcessor start.
   status_t ConfigureStreams(
@@ -74,48 +62,6 @@ class RealtimeZslResultRequestProcessor : public ResultProcessor,
       android_pixel_format_t pixel_format, uint32_t partial_result_count);
 
  private:
-  // Save face detect mode for HDR+
-  void SaveFdForHdrplus(const CaptureRequest& request);
-  // Handle face detect metadata from result for HDR+
-  status_t HandleFdResultForHdrplus(uint32_t frameNumber,
-                                    HalCameraMetadata* metadata);
-  // Save lens shading map mode for HDR+
-  void SaveLsForHdrplus(const CaptureRequest& request);
-  // Handle Lens shading metadata from result for HDR+
-  status_t HandleLsResultForHdrplus(uint32_t frameNumber,
-                                    HalCameraMetadata* metadata);
-  std::mutex callback_lock_;
-
-  // The following callbacks must be protected by callback_lock_.
-  ProcessCaptureResultFunc process_capture_result_;
-  NotifyFunc notify_;
-
-  InternalStreamManager* internal_stream_manager_;
-  int32_t stream_id_ = -1;
-  android_pixel_format_t pixel_format_;
-
-  // Current face detect mode set by framework.
-  uint8_t current_face_detect_mode_ = ANDROID_STATISTICS_FACE_DETECT_MODE_OFF;
-
-  std::mutex face_detect_lock_;
-  // Map from frame number to face detect mode requested for that frame by
-  // framework. And requested_face_detect_modes_ is protected by
-  // face_detect_lock_
-  std::unordered_map<uint32_t, uint8_t> requested_face_detect_modes_;
-
-  // Current lens shading map mode set by framework.
-  uint8_t current_lens_shading_map_mode_ =
-      ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_OFF;
-
-  std::mutex lens_shading_lock_;
-  // Map from frame number to lens shading map mode requested for that frame
-  // by framework. And requested_lens_shading_map_modes_ is protected by
-  // lens_shading_lock_
-  std::unordered_map<uint32_t, uint8_t> requested_lens_shading_map_modes_;
-
-  // Partial result count reported by HAL
-  uint32_t partial_result_count_;
-
   std::shared_mutex process_block_shared_lock_;
 
   // Protected by process_block_shared_lock_.

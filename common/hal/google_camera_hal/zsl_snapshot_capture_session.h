@@ -25,7 +25,7 @@
 #include "hwl_types.h"
 #include "process_block.h"
 #include "realtime_zsl_request_processor.h"
-#include "realtime_zsl_result_request_processor.h"
+#include "realtime_zsl_result_processor.h"
 #include "request_processor.h"
 #include "result_processor.h"
 #include "snapshot_request_processor.h"
@@ -144,8 +144,7 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   CaptureSessionWrapperProcessBlock* realtime_process_block_ = nullptr;
   // RealtimeZslResultRequestProcessor will be owned and released by
   // CaptureSessionWrapperProcessBlock.
-  RealtimeZslResultRequestProcessor* realtime_result_request_processor_ =
-      nullptr;
+  RealtimeZslResultProcessor* realtime_result_processor_ = nullptr;
 
   std::unique_ptr<SnapshotRequestProcessor> snapshot_request_processor_;
   // SnapshotProcessBlock will be owned and released by
