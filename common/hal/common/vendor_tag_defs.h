@@ -47,6 +47,7 @@ enum VendorTagIds : uint32_t {
   kNonWarpedCropRegion,
   kHdrUsageMode,
   kSwDenoiseEnabled,
+  kVideoSwDenoiseEnabled,
   // This should not be used as a vendor tag ID on its own, but as a placeholder
   // to indicate the end of currently defined vendor tag IDs
   kEndMarker
@@ -213,6 +214,15 @@ static const std::vector<VendorTag> kInternalVendorTags = {
     // Payload: SwDenoiseEnabled
     {.tag_id = VendorTagIds::kSwDenoiseEnabled,
      .tag_name = "SwDenoiseEnabled",
+     .tag_type = CameraMetadataType::kByte},
+    // Video software denoise enabled
+    //
+    // Indicates whether the software denoise for video is enabled
+    //
+    // Present in: Characteristics
+    // Payload: VideoSwDenoiseEnabled
+    {.tag_id = VendorTagIds::kVideoSwDenoiseEnabled,
+     .tag_name = "VideoSwDenoiseEnabled",
      .tag_type = CameraMetadataType::kByte},
 };
 
