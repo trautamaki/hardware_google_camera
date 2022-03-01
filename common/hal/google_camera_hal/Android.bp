@@ -69,6 +69,7 @@ cc_library_shared {
         "pending_requests_tracker.cc",
         "realtime_process_block.cc",
         "realtime_zsl_request_processor.cc",
+        "realtime_zsl_result_processor.cc",
         "realtime_zsl_result_request_processor.cc",
         "rgbird_capture_session.cc",
         "rgbird_depth_result_processor.cc",
