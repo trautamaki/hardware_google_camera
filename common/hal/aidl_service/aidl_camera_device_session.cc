@@ -311,7 +311,13 @@ void AidlCameraDeviceSession::ReturnStreamBuffers(
     }
   }
 
-  aidl_device_callback_->returnStreamBuffers(aidl_return_buffers);
+  auto aidl_res =
+      aidl_device_callback_->returnStreamBuffers(aidl_return_buffers);
+  if (!aidl_res.isOk()) {
+    ALOGE("%s: return stream buffers transaction failed: %s", __FUNCTION__,
+          aidl_res.getMessage());
+    return;
+  }
 }
 
 status_t AidlCameraDeviceSession::InitializeBufferMapper() {
