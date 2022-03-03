@@ -33,8 +33,8 @@ prebuilt_etc {
     installable: false,
 }
 
-apex {
-    name: "com.google.emulated.camera.provider.hal",
+apex_defaults {
+    name: "com.google.emulated.camera.provider.hal.defaults",
     manifest: "apex_manifest.json",
     key: "com.google.emulated.camera.provider.hal.key",
     certificate: ":com.google.emulated.camera.provider.hal.certificate",
@@ -46,13 +46,11 @@ apex {
     binaries: [
         "android.hardware.camera.provider@2.7-service-google",
     ],
-    native_shared_libs: [
-        "libgooglecamerahwl_impl",
-    ],
     overrides: [
         "android.hardware.camera.provider@2.7-impl-google",
         "android.hardware.camera.provider@2.7-service-google",
         "libgooglecamerahwl_impl",
+        "libgooglecamerahwl_impl_fast_scene_cycle",
     ],
     prebuilts: [
         "com.google.emulated.camera.provider.hal.rc",
@@ -66,4 +64,17 @@ apex {
         "emu_camera_front.json",
     ],
     vintf_fragments: [":android.hardware.camera.provider@2.7-service-google.xml"],
+}
+
+apex {
+    name: "com.google.emulated.camera.provider.hal",
+    defaults: ["com.google.emulated.camera.provider.hal.defaults"],
+    native_shared_libs: ["libgooglecamerahwl_impl"],
+}
+
+apex {
+    name: "com.google.emulated.camera.provider.hal.fastscenecycle",
+    defaults: ["com.google.emulated.camera.provider.hal.defaults"],
+    native_shared_libs: ["libgooglecamerahwl_impl_fast_scene_cycle"],
+    multi_install_skip_symbol_files: true,
 }
