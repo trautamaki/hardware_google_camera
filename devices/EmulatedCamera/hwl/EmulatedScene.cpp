@@ -211,9 +211,12 @@ void EmulatedScene::SetTestPatternData(uint32_t data[4]) {
 
 void EmulatedScene::CalculateScene(nsecs_t time, int32_t handshake_divider) {
   // Calculate time fractions for interpolation
+  const nsecs_t kOneHourInNsec = 1e9 * 60 * 60;
+#ifdef FAST_SCENE_CYCLE
+  hour_ = static_cast<int>(time * 6000 / kOneHourInNsec) % 24;
+#endif
   int time_idx = hour_ / kTimeStep;
   int next_time_idx = (time_idx + 1) % (24 / kTimeStep);
-  const nsecs_t kOneHourInNsec = 1e9 * 60 * 60;
   nsecs_t time_since_idx =
       (hour_ - time_idx * kTimeStep) * kOneHourInNsec + time;
   float time_frac = time_since_idx / (float)(kOneHourInNsec * kTimeStep);
