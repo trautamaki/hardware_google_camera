@@ -17,6 +17,7 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_ZSL_SNAPSHOT_CAPTURE_SESSION_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_ZSL_SNAPSHOT_CAPTURE_SESSION_H_
 
+#include "basic_result_processor.h"
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_session_hwl.h"
 #include "capture_session.h"
@@ -25,7 +26,7 @@
 #include "hwl_types.h"
 #include "process_block.h"
 #include "realtime_zsl_request_processor.h"
-#include "realtime_zsl_result_request_processor.h"
+#include "realtime_zsl_result_processor.h"
 #include "request_processor.h"
 #include "result_processor.h"
 #include "snapshot_request_processor.h"
@@ -142,10 +143,6 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   // CaptureSessionWrapperProcessBlock will be owned and released by
   // RealtimeZslRequestProcessor.
   CaptureSessionWrapperProcessBlock* realtime_process_block_ = nullptr;
-  // RealtimeZslResultRequestProcessor will be owned and released by
-  // CaptureSessionWrapperProcessBlock.
-  RealtimeZslResultRequestProcessor* realtime_result_request_processor_ =
-      nullptr;
 
   std::unique_ptr<SnapshotRequestProcessor> snapshot_request_processor_;
   // SnapshotProcessBlock will be owned and released by
@@ -153,6 +150,8 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   ProcessBlock* snapshot_process_block_ = nullptr;
   // SnapshotResultProcessor will be owned and released by SnapshotProcessBlock.
   SnapshotResultProcessor* snapshot_result_processor_ = nullptr;
+
+  BasicResultProcessor* basic_result_processor_ = nullptr;
 
   // Use this stream id to check the request is ZSL compatible
   int32_t hal_preview_stream_id_ = -1;
@@ -189,6 +188,9 @@ class ZslSnapshotCaptureSession : public CaptureSession {
 
   // Partial result count reported by HAL
   uint32_t partial_result_count_ = 1;
+
+  // Whether video software denoise is enabled
+  bool video_sw_denoise_enabled_ = false;
 };
 
 }  // namespace google_camera_hal
