@@ -77,11 +77,11 @@
 
 #include <hwl_types.h>
 
+#include <algorithm>
 #include <functional>
 
 #include "Base.h"
 #include "EmulatedScene.h"
-#include "HandleImporter.h"
 #include "JpegCompressor.h"
 #include "utils/Mutex.h"
 #include "utils/StreamConfigurationMap.h"
@@ -90,7 +90,6 @@
 
 namespace android {
 
-using android::hardware::camera::common::V1_0::helper::HandleImporter;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
 using google_camera_hal::StreamConfiguration;
@@ -241,6 +240,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     uint8_t sensor_pixel_mode = ANDROID_SENSOR_PIXEL_MODE_DEFAULT;
     uint8_t test_pattern_mode = ANDROID_SENSOR_TEST_PATTERN_MODE_OFF;
     uint32_t test_pattern_data[4] = {0, 0, 0, 0};
+    uint32_t screen_rotation = 0;
   };
 
   // Maps physical and logical camera ids to individual device settings
@@ -349,7 +349,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   std::map<uint32_t, SensorBinningFactorInfo> sensor_binning_factor_info_;
 
-  sp<EmulatedScene> scene_;
+  std::unique_ptr<EmulatedScene> scene_;
 
   static EmulatedScene::ColorChannels GetQuadBayerColor(uint32_t x, uint32_t y);
 
