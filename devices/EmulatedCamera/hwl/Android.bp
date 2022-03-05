@@ -3,8 +3,8 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-cc_library_shared {
-    name: "libgooglecamerahwl_impl",
+cc_defaults {
+    name: "libgooglecamerahwl_impl_defaults",
     owner: "google",
     proprietary: true,
     srcs: [
@@ -63,4 +63,18 @@ cc_library_shared {
     header_libs: [
         "libgooglecamerahal_headers",
     ],
+}
+
+cc_library_shared {
+    name: "libgooglecamerahwl_impl",
+    defaults: ["libgooglecamerahwl_impl_defaults"],
+}
+
+cc_library_shared {
+    name: "libgooglecamerahwl_impl_fast_scene_cycle",
+    defaults: ["libgooglecamerahwl_impl_defaults"],
+    stem: "libgooglecamerahwl_impl",
+    cflags: ["-DFAST_SCENE_CYCLE"],
+    // Never installed to /vendor, only used inside an APEX.
+    installable: false,
 }
