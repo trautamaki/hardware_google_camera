@@ -232,10 +232,11 @@ ScopedAStatus AidlCameraDevice::openInjectionSession(
     std::shared_ptr<ICameraInjectionSession>* session) {
   if (session == nullptr) {
     return ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
   }
   *session = nullptr;
-  return ScopedAStatus::ok();
+  return ScopedAStatus::fromServiceSpecificError(
+      static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
 }
 
 binder_status_t AidlCameraDevice::dump(int fd, const char** /*args*/,
