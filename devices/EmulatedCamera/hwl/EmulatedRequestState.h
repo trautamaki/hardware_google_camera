@@ -96,7 +96,7 @@ class EmulatedRequestState {
   static const std::set<uint8_t> kSupportedCapabilites;
   static const std::set<uint8_t> kSupportedHWLevels;
   std::unique_ptr<HalCameraMetadata> static_metadata_;
-  static const std::vector<int32_t> kSupportedUseCases;
+  static const std::vector<int64_t> kSupportedUseCases;
 
   // android.blacklevel.*
   uint8_t black_level_lock_ = ANDROID_BLACK_LEVEL_LOCK_ON;

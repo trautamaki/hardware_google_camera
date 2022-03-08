@@ -51,7 +51,7 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedHWLevels = {
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_3,
 };
 
-const std::vector<int32_t> EmulatedRequestState::kSupportedUseCases = {
+const std::vector<int64_t> EmulatedRequestState::kSupportedUseCases = {
     ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT,
     ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_PREVIEW,
     ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_STILL_CAPTURE,
@@ -2861,11 +2861,11 @@ status_t EmulatedRequestState::InitializeRequestDefaults() {
       ALOGE("%s: No available stream use cases!", __FUNCTION__);
       return BAD_VALUE;
     }
-    for (int32_t useCase : kSupportedUseCases) {
-      if (std::find(entry.data.i32, entry.data.i32 + entry.count, useCase) ==
-          entry.data.i32 + entry.count) {
-        ALOGE("%s: Mandatory stream use case %d not found!", __FUNCTION__,
-              useCase);
+    for (int64_t useCase : kSupportedUseCases) {
+      if (std::find(entry.data.i64, entry.data.i64 + entry.count, useCase) ==
+          entry.data.i64 + entry.count) {
+        ALOGE("%s: Mandatory stream use case %" PRId64 " not found!",
+              __FUNCTION__, useCase);
         return BAD_VALUE;
       }
     }
