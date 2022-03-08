@@ -24,6 +24,7 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
+#include "hal_types.h"
 #include "hal_utils.h"
 #include "realtime_zsl_result_processor.h"
 
@@ -116,6 +117,14 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
   // Don't send result to framework if only internal raw callback
   if (returned_output && result->result_metadata == nullptr &&
       result->output_buffers.size() == 0) {
+    return;
+  }
+
+  // Return directly for frames with errors.
+  if (pending_error_frames_.find(result->frame_number) !=
+      pending_error_frames_.end()) {
+    pending_error_frames_.erase(result->frame_number);
+    process_capture_result_(std::move(result));
     return;
   }
 
@@ -240,6 +249,26 @@ status_t RealtimeZslResultRequestProcessor::Flush() {
   }
 
   return process_block_->Flush();
+}
+
+void RealtimeZslResultRequestProcessor::Notify(
+    const ProcessBlockNotifyMessage& block_message) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  const NotifyMessage& message = block_message.message;
+  if (notify_ == nullptr) {
+    ALOGE("%s: notify_ is nullptr. Dropping a message.", __FUNCTION__);
+    return;
+  }
+
+  // Will return buffer for kErrorRequest and kErrorBuffer.
+  if (message.type == MessageType::kError) {
+    if (message.message.error.error_code == ErrorCode::kErrorRequest ||
+        message.message.error.error_code == ErrorCode::kErrorBuffer) {
+      pending_error_frames_.insert(message.message.error.frame_number);
+    }
+  }
+  notify_(message);
 }
 
 }  // namespace google_camera_hal

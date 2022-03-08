@@ -65,6 +65,10 @@ class RealtimeZslResultProcessor : public ResultProcessor {
 
   std::mutex callback_lock_;
 
+  // The following callbacks must be protected by callback_lock_.
+  ProcessCaptureResultFunc process_capture_result_;
+  NotifyFunc notify_;
+
  private:
   // Save face detect mode for HDR+
   void SaveFdForHdrplus(const CaptureRequest& request);
@@ -76,10 +80,6 @@ class RealtimeZslResultProcessor : public ResultProcessor {
   // Handle Lens shading metadata from result for HDR+
   status_t HandleLsResultForHdrplus(uint32_t frameNumber,
                                     HalCameraMetadata* metadata);
-
-  // The following callbacks must be protected by callback_lock_.
-  ProcessCaptureResultFunc process_capture_result_;
-  NotifyFunc notify_;
 
   android_pixel_format_t pixel_format_;
 
