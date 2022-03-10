@@ -85,11 +85,16 @@ status_t AidlCameraProvider::Initialize() {
             }
 
             std::unique_lock<std::mutex> lock(callbacks_lock_);
-            callbacks_->cameraDeviceStatusChange(
+            auto aidl_res = callbacks_->cameraDeviceStatusChange(
                 "device@" +
                     device::implementation::AidlCameraDevice::kDeviceVersion +
                     "/" + kProviderName + "/" + camera_id,
                 aidl_camera_device_status);
+            if (!aidl_res.isOk()) {
+              ALOGE("%s: device status change transaction error: %s",
+                    __FUNCTION__, aidl_res.getMessage());
+              return;
+            }
           }),
       .physical_camera_device_status_change =
           google_camera_hal::PhysicalCameraDeviceStatusChangeFunc(
@@ -125,11 +130,17 @@ status_t AidlCameraProvider::Initialize() {
                 }
 
                 std::unique_lock<std::mutex> lock(callbacks_lock_);
-                callbacks_->physicalCameraDeviceStatusChange(
+                auto aidl_res = callbacks_->physicalCameraDeviceStatusChange(
                     "device@" +
                         device::implementation::AidlCameraDevice::kDeviceVersion +
                         "/" + kProviderName + "/" + camera_id,
                     physical_camera_id, aidl_camera_device_status);
+                if (!aidl_res.isOk()) {
+                  ALOGE(
+                      "%s: physical camera status change transaction error: %s",
+                      __FUNCTION__, aidl_res.getMessage());
+                  return;
+                }
               }),
       .torch_mode_status_change = google_camera_hal::TorchModeStatusChangeFunc(
           [this](std::string camera_id,
@@ -149,11 +160,16 @@ status_t AidlCameraProvider::Initialize() {
             }
 
             std::unique_lock<std::mutex> lock(callbacks_lock_);
-            callbacks_->torchModeStatusChange(
+            auto aidl_res = callbacks_->torchModeStatusChange(
                 "device@" +
                     device::implementation::AidlCameraDevice::kDeviceVersion +
                     "/" + kProviderName + "/" + camera_id,
                 aidl_torch_status);
+            if (!aidl_res.isOk()) {
+              ALOGE("%s: torch status change transaction error: %s",
+                    __FUNCTION__, aidl_res.getMessage());
+              return;
+            }
           }),
   };
 

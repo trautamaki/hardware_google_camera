@@ -43,6 +43,8 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
 
   // Override functions of RealtimeZslResultProcessor start.
   void ProcessResult(ProcessBlockResult block_result) override;
+
+  void Notify(const ProcessBlockNotifyMessage& block_message) override;
   // Override functions of RealtimeZslResultProcessor end.
 
   // Override functions of RequestProcessor start.
@@ -71,6 +73,8 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
 
   std::unordered_map<uint32_t, std::unique_ptr<CaptureRequest>>
       pending_frame_number_to_requests_;
+
+  std::unordered_set<uint32_t> pending_error_frames_;
 };
 
 }  // namespace google_camera_hal
