@@ -123,6 +123,20 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
   // Return directly for frames with errors.
   if (pending_error_frames_.find(result->frame_number) !=
       pending_error_frames_.end()) {
+    // Also need to process pending buffers and metadata for the frame if exists.
+    if (pending_frame_number_to_requests_.find(result->frame_number) !=
+        pending_frame_number_to_requests_.end()) {
+      auto& entry = pending_frame_number_to_requests_[result->frame_number];
+      if (!entry->output_buffers.empty()) {
+        result->output_buffers = entry->output_buffers;
+        result->input_buffers = entry->input_buffers;
+      }
+      if (entry->settings != nullptr) {
+        result->result_metadata =
+            HalCameraMetadata::Clone(entry->settings.get());
+      }
+      pending_frame_number_to_requests_.erase(result->frame_number);
+    }
     pending_error_frames_.erase(result->frame_number);
     process_capture_result_(std::move(result));
     return;
