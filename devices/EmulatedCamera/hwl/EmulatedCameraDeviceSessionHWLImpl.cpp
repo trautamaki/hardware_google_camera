@@ -24,6 +24,8 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
+#include <memory>
+
 #include "EmulatedSensor.h"
 #include "utils.h"
 #include "utils/HWLUtils.h"
@@ -204,8 +206,10 @@ status_t EmulatedCameraDeviceSessionHwlImpl::InitializeRequestProcessor() {
     return ret;
   }
 
-  request_processor_ = std::make_unique<EmulatedRequestProcessor>(
+  request_processor_ = std::make_shared<EmulatedRequestProcessor>(
       camera_id_, emulated_sensor, session_callback_);
+
+  request_processor_->InitializeSensorQueue(request_processor_);
 
   return request_processor_->Initialize(
       HalCameraMetadata::Clone(static_metadata_.get()),
