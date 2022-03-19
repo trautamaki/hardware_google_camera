@@ -260,7 +260,7 @@ size_t JpegCompressor::CompressYUV420Frame(YUV420Frame frame) {
           dmgr.buffer_size);
   };
 
-  dmgr.empty_output_buffer = [](j_compress_ptr cinfo __unused) {
+  dmgr.empty_output_buffer = [](j_compress_ptr) {
     ALOGE("%s:%d Out of buffer", __FUNCTION__, __LINE__);
     return 0;
   };

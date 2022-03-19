@@ -30,6 +30,7 @@
 #include <cutils/properties.h>
 #include <inttypes.h>
 #include <libyuv.h>
+#include <memory.h>
 #include <system/camera_metadata.h>
 #include <utils/Log.h>
 #include <utils/Trace.h>
@@ -43,6 +44,7 @@
 
 namespace android {
 
+using android::google_camera_hal::ErrorCode;
 using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::MessageType;
 using google_camera_hal::NotifyMessage;
@@ -585,11 +587,10 @@ status_t EmulatedSensor::StartUp(
   }
 
   logical_camera_id_ = logical_camera_id;
-  scene_ = new EmulatedScene(
+  scene_ = std::make_unique<EmulatedScene>(
       device_chars->second.full_res_width, device_chars->second.full_res_height,
       kElectronsPerLuxSecond, device_chars->second.orientation,
       device_chars->second.is_front_facing);
-  scene_->InitializeSensorQueue();
   jpeg_compressor_ = std::make_unique<JpegCompressor>();
 
   auto res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);
@@ -813,6 +814,7 @@ bool EmulatedSensor::threadLoop() {
       scene_->SetTestPattern(device_settings->second.test_pattern_mode ==
                              ANDROID_SENSOR_TEST_PATTERN_MODE_SOLID_COLOR);
       scene_->SetTestPatternData(device_settings->second.test_pattern_data);
+      scene_->SetScreenRotation(device_settings->second.screen_rotation);
 
       uint32_t handshake_divider =
           (device_settings->second.video_stab ==
@@ -1109,9 +1111,6 @@ bool EmulatedSensor::threadLoop() {
       ret = nanosleep(&t, &t);
     } while (ret != 0);
   }
-  nsecs_t end_real_time __unused = systemTime();
-  ALOGVV("Frame cycle took %" PRIu64 "  ms, target %" PRIu64 " ms",
-         ns2ms(end_real_time - start_real_time), ns2ms(frame_duration));
 
   ReturnResults(callback, std::move(settings), std::move(next_result),
                 reprocess_request);
