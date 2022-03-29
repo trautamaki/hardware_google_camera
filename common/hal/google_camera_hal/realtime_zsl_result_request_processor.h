@@ -71,10 +71,20 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
   // Protected by process_block_shared_lock_.
   std::unique_ptr<ProcessBlock> process_block_;
 
-  std::unordered_map<uint32_t, std::unique_ptr<CaptureRequest>>
-      pending_frame_number_to_requests_;
+  // Simple wrapper struct to add partial result count to CaptureResult
+  struct RequestEntry {
+    std::unique_ptr<CaptureRequest> capture_request = nullptr;
+    uint32_t partial_results_received = 0;
+  };
 
-  std::unordered_set<uint32_t> pending_error_frames_;
+  // Results collected so far on a valid frame. Results are passed to the
+  // processor block once all items in the RequestEntry struct are complete -
+  // i.e. all buffers arrived an all partial results arrived.
+  std::unordered_map<uint32_t, RequestEntry> pending_frame_number_to_requests_;
+  // Results collected so far on a frame with an error. Each result item gets
+  // reported to the upper layer as it comes in, and once the RequestEntry
+  // struct is complete the entry is removed.
+  std::unordered_map<uint32_t, RequestEntry> pending_error_frames_;
 };
 
 }  // namespace google_camera_hal
