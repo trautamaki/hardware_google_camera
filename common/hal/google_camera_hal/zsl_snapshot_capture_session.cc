@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 
 #define LOG_TAG "GCH_ZslSnapshotCaptureSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
@@ -408,12 +408,11 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   // Create preview result processor. Stream ID is not set at this stage.
 
   std::unique_ptr<ResultProcessor> realtime_result_processor;
-  RealtimeZslResultRequestProcessor* realtime_result_request_processor;
   if (video_sw_denoise_enabled_) {
     auto processor = RealtimeZslResultRequestProcessor::Create(
         internal_stream_manager_.get(), additional_stream_id,
         HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
-    realtime_result_request_processor = processor.get();
+    realtime_zsl_result_request_processor_ = processor.get();
     realtime_result_processor = std::move(processor);
   } else {
     realtime_result_processor = RealtimeZslResultProcessor::Create(
@@ -455,7 +454,7 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   if (video_sw_denoise_enabled_) {
     StreamConfiguration denoise_process_block_stream_config;
     // Configure streams for request processor
-    res = realtime_result_request_processor->ConfigureStreams(
+    res = realtime_zsl_result_request_processor_->ConfigureStreams(
         internal_stream_manager_.get(), stream_config,
         &denoise_process_block_stream_config);
 
@@ -493,7 +492,7 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
       return res;
     }
 
-    res = realtime_result_request_processor->SetProcessBlock(
+    res = realtime_zsl_result_request_processor_->SetProcessBlock(
         std::move(denoise_processor));
     if (res != OK) {
       ALOGE("%s: Setting process block for RequestProcessor failed: %s(%d)",
@@ -829,6 +828,11 @@ status_t ZslSnapshotCaptureSession::ProcessRequest(const CaptureRequest& request
       res = realtime_request_processor_->ProcessRequest(request);
     }
   } else {
+    if (realtime_zsl_result_request_processor_ != nullptr) {
+      realtime_zsl_result_request_processor_->UpdateOutputBufferCount(
+          request.frame_number, request.output_buffers.size());
+    }
+
     res = realtime_request_processor_->ProcessRequest(request);
   }
 

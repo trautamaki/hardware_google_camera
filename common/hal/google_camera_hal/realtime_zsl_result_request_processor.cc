@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_RealtimeZslResultRequestProcessor"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 
@@ -30,6 +30,15 @@
 
 namespace android {
 namespace google_camera_hal {
+
+bool RealtimeZslResultRequestProcessor::AllDataCollected(
+    const RequestEntry& request_entry) const {
+  return request_entry.zsl_buffer_received &&
+         request_entry.framework_buffer_count ==
+             static_cast<int>(
+                 request_entry.capture_request->output_buffers.size()) &&
+         request_entry.partial_results_received == partial_result_count_;
+}
 
 std::unique_ptr<RealtimeZslResultRequestProcessor>
 RealtimeZslResultRequestProcessor::Create(
@@ -60,6 +69,20 @@ RealtimeZslResultRequestProcessor::RealtimeZslResultRequestProcessor(
                                  pixel_format, partial_result_count) {
 }
 
+void RealtimeZslResultRequestProcessor::UpdateOutputBufferCount(
+    int32_t frame_number, int output_buffer_count) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  // Cache the CaptureRequest in a queue as the metadata and buffers may not
+  // come together.
+  RequestEntry request_entry = {
+      .capture_request = std::make_unique<CaptureRequest>(),
+      .framework_buffer_count = output_buffer_count};
+  request_entry.capture_request->frame_number = frame_number;
+
+  pending_frame_number_to_requests_[frame_number] = std::move(request_entry);
+}
+
 void RealtimeZslResultRequestProcessor::ProcessResult(
     ProcessBlockResult block_result) {
   ATRACE_CALL();
@@ -84,6 +107,8 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
         ALOGW("%s: (%d)ReturnStreamBuffer fail", __FUNCTION__,
               result->frame_number);
       }
+      pending_frame_number_to_requests_[result->frame_number].zsl_buffer_received =
+          true;
     } else {
       modified_output_buffers.push_back(result->output_buffers[i]);
     }
@@ -114,12 +139,6 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     }
   }
 
-  // Don't send result to framework if only internal raw callback
-  if (returned_output && result->result_metadata == nullptr &&
-      result->output_buffers.size() == 0) {
-    return;
-  }
-
   // Return directly for frames with errors.
   const auto& error_entry = pending_error_frames_.find(result->frame_number);
   if (error_entry != pending_error_frames_.end()) {
@@ -129,13 +148,20 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     if (entry != pending_frame_number_to_requests_.end()) {
       // If the result is complete (buffers and all partial results arrived), send
       // the callback directly. Otherwise wait until the missing pieces arrive.
-      if (!entry->second.capture_request->output_buffers.empty()) {
+      if (entry->second.zsl_buffer_received &&
+          entry->second.framework_buffer_count ==
+              static_cast<int>(
+                  entry->second.capture_request->output_buffers.size())) {
         result->output_buffers = entry->second.capture_request->output_buffers;
         result->input_buffers = entry->second.capture_request->input_buffers;
         error_entry->second.capture_request->output_buffers =
             result->output_buffers;
         error_entry->second.capture_request->input_buffers =
             result->input_buffers;
+        error_entry->second.zsl_buffer_received =
+            entry->second.zsl_buffer_received;
+        error_entry->second.framework_buffer_count =
+            entry->second.framework_buffer_count;
       }
       if (entry->second.capture_request->settings != nullptr) {
         result->result_metadata = HalCameraMetadata::Clone(
@@ -145,22 +171,17 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
       }
       pending_frame_number_to_requests_.erase(result->frame_number);
     }
-    if (!error_entry->second.capture_request->output_buffers.empty() &&
-        error_entry->second.partial_results_received == partial_result_count_) {
+    if (AllDataCollected(error_entry->second)) {
       pending_error_frames_.erase(result->frame_number);
+    }
+
+    // Don't send result to framework if only internal raw callback
+    if (returned_output && result->result_metadata == nullptr &&
+        result->output_buffers.size() == 0) {
+      return;
     }
     process_capture_result_(std::move(result));
     return;
-  }
-
-  // Cache the CaptureRequest in a queue as the metadata and buffers may not
-  // come together.
-  if (pending_frame_number_to_requests_.find(result->frame_number) ==
-      pending_frame_number_to_requests_.end()) {
-    pending_frame_number_to_requests_[result->frame_number] = {
-        .capture_request = std::make_unique<CaptureRequest>()};
-    pending_frame_number_to_requests_[result->frame_number]
-        .capture_request->frame_number = result->frame_number;
   }
 
   // Fill in final result metadata
@@ -189,19 +210,25 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     }
   }
 
-  // Fill in output buffer
+  // Fill in output buffers
   if (!result->output_buffers.empty()) {
-    pending_frame_number_to_requests_[result->frame_number]
-        .capture_request->input_buffers = result->input_buffers;
-    pending_frame_number_to_requests_[result->frame_number]
-        .capture_request->output_buffers = result->output_buffers;
+    auto& output_buffers =
+        pending_frame_number_to_requests_[result->frame_number]
+            .capture_request->output_buffers;
+    output_buffers.insert(output_buffers.begin(), result->output_buffers.begin(),
+                          result->output_buffers.end());
+  }
+
+  // Fill in input buffers
+  if (!result->input_buffers.empty()) {
+    auto& input_buffers = pending_frame_number_to_requests_[result->frame_number]
+                              .capture_request->input_buffers;
+    input_buffers.insert(input_buffers.begin(), result->input_buffers.begin(),
+                         result->input_buffers.end());
   }
 
   // Submit the request and remove the request from the cache when all data is collected.
-  if (!pending_frame_number_to_requests_[result->frame_number]
-           .capture_request->output_buffers.empty() &&
-      pending_frame_number_to_requests_[result->frame_number]
-              .partial_results_received == partial_result_count_) {
+  if (AllDataCollected(pending_frame_number_to_requests_[result->frame_number])) {
     res = ProcessRequest(
         *pending_frame_number_to_requests_[result->frame_number].capture_request);
     pending_frame_number_to_requests_.erase(result->frame_number);

@@ -60,6 +60,8 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
   status_t Flush() override;
   // Override functions of RequestProcessor end.
 
+  void UpdateOutputBufferCount(int32_t frame_number, int output_buffer_count);
+
  protected:
   RealtimeZslResultRequestProcessor(
       InternalStreamManager* internal_stream_manager, int32_t stream_id,
@@ -75,7 +77,11 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
   struct RequestEntry {
     std::unique_ptr<CaptureRequest> capture_request = nullptr;
     uint32_t partial_results_received = 0;
+    bool zsl_buffer_received = false;
+    int framework_buffer_count = INT_MAX;
   };
+
+  bool AllDataCollected(const RequestEntry& request_entry) const;
 
   // Results collected so far on a valid frame. Results are passed to the
   // processor block once all items in the RequestEntry struct are complete -
