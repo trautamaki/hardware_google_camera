@@ -295,6 +295,8 @@ ZslSnapshotCaptureSession::~ZslSnapshotCaptureSession() {
   release_thread.join();
   dlclose(snapshot_process_block_lib_handle_);
   dlclose(denoise_process_block_lib_handle_);
+
+  ALOGI("%s: finished", __FUNCTION__);
 }
 
 status_t ZslSnapshotCaptureSession::BuildPipelines(
