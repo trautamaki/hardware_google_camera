@@ -67,7 +67,12 @@ enum class SmoothyMode : uint32_t {
 
   // Uses UW camera with a larger margin. In this way, we get a better video
   // stabilization quality, while preserving a similar FoV as the main camera.
-  kSuperstabMode
+  kSuperstabMode,
+
+  // Tracks an object of interest with a frame delay. For example, tracking is
+  // done at app side which is N frame later than HAL where N is the pipeline
+  // depth.
+  kDelayedTrackingMode,
 };
 
 // Logical camera vendor tags

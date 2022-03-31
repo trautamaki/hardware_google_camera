@@ -60,6 +60,8 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
   status_t Flush() override;
   // Override functions of RequestProcessor end.
 
+  void UpdateOutputBufferCount(int32_t frame_number, int output_buffer_count);
+
  protected:
   RealtimeZslResultRequestProcessor(
       InternalStreamManager* internal_stream_manager, int32_t stream_id,
@@ -71,10 +73,24 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
   // Protected by process_block_shared_lock_.
   std::unique_ptr<ProcessBlock> process_block_;
 
-  std::unordered_map<uint32_t, std::unique_ptr<CaptureRequest>>
-      pending_frame_number_to_requests_;
+  // Simple wrapper struct to add partial result count to CaptureResult
+  struct RequestEntry {
+    std::unique_ptr<CaptureRequest> capture_request = nullptr;
+    uint32_t partial_results_received = 0;
+    bool zsl_buffer_received = false;
+    int framework_buffer_count = INT_MAX;
+  };
 
-  std::unordered_set<uint32_t> pending_error_frames_;
+  bool AllDataCollected(const RequestEntry& request_entry) const;
+
+  // Results collected so far on a valid frame. Results are passed to the
+  // processor block once all items in the RequestEntry struct are complete -
+  // i.e. all buffers arrived an all partial results arrived.
+  std::unordered_map<uint32_t, RequestEntry> pending_frame_number_to_requests_;
+  // Results collected so far on a frame with an error. Each result item gets
+  // reported to the upper layer as it comes in, and once the RequestEntry
+  // struct is complete the entry is removed.
+  std::unordered_map<uint32_t, RequestEntry> pending_error_frames_;
 };
 
 }  // namespace google_camera_hal
