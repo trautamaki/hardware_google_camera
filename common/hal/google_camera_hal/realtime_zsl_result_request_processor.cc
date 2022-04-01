@@ -93,6 +93,10 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     return;
   }
 
+  // Pending request should always exist
+  RequestEntry& pending_request =
+      pending_frame_number_to_requests_[result->frame_number];
+
   // Return filled raw buffer to internal stream manager
   // And remove raw buffer from result
   bool returned_output = false;
@@ -107,8 +111,7 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
         ALOGW("%s: (%d)ReturnStreamBuffer fail", __FUNCTION__,
               result->frame_number);
       }
-      pending_frame_number_to_requests_[result->frame_number].zsl_buffer_received =
-          true;
+      pending_request.zsl_buffer_received = true;
     } else {
       modified_output_buffers.push_back(result->output_buffers[i]);
     }
@@ -140,39 +143,39 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
   }
 
   // Return directly for frames with errors.
-  const auto& error_entry = pending_error_frames_.find(result->frame_number);
-  if (error_entry != pending_error_frames_.end()) {
+  if (pending_error_frames_.find(result->frame_number) !=
+      pending_error_frames_.end()) {
+    RequestEntry& error_entry = pending_error_frames_[result->frame_number];
     // Also need to process pending buffers and metadata for the frame if exists.
-    const auto& entry =
-        pending_frame_number_to_requests_.find(result->frame_number);
-    if (entry != pending_frame_number_to_requests_.end()) {
-      // If the result is complete (buffers and all partial results arrived), send
-      // the callback directly. Otherwise wait until the missing pieces arrive.
-      if (entry->second.zsl_buffer_received &&
-          entry->second.framework_buffer_count ==
-              static_cast<int>(
-                  entry->second.capture_request->output_buffers.size())) {
-        result->output_buffers = entry->second.capture_request->output_buffers;
-        result->input_buffers = entry->second.capture_request->input_buffers;
-        error_entry->second.capture_request->output_buffers =
-            result->output_buffers;
-        error_entry->second.capture_request->input_buffers =
-            result->input_buffers;
-        error_entry->second.zsl_buffer_received =
-            entry->second.zsl_buffer_received;
-        error_entry->second.framework_buffer_count =
-            entry->second.framework_buffer_count;
-      }
-      if (entry->second.capture_request->settings != nullptr) {
-        result->result_metadata = HalCameraMetadata::Clone(
-            entry->second.capture_request->settings.get());
-        result->partial_result = entry->second.partial_results_received;
-        error_entry->second.partial_results_received++;
-      }
-      pending_frame_number_to_requests_.erase(result->frame_number);
+    // If the result is complete (buffers and all partial results arrived), send
+    // the callback directly. Otherwise wait until the missing pieces arrive.
+    if (pending_request.zsl_buffer_received &&
+        pending_request.framework_buffer_count ==
+            static_cast<int>(
+                pending_request.capture_request->output_buffers.size())) {
+      result->output_buffers = pending_request.capture_request->output_buffers;
+      result->input_buffers = pending_request.capture_request->input_buffers;
+      error_entry.capture_request->output_buffers = result->output_buffers;
+      error_entry.capture_request->input_buffers = result->input_buffers;
+      error_entry.zsl_buffer_received = pending_request.zsl_buffer_received;
+      error_entry.framework_buffer_count =
+          pending_request.framework_buffer_count;
     }
-    if (AllDataCollected(error_entry->second)) {
+    if (pending_request.capture_request->settings != nullptr) {
+      result->result_metadata = HalCameraMetadata::Clone(
+          pending_request.capture_request->settings.get());
+      result->partial_result = pending_request.partial_results_received;
+      error_entry.partial_results_received++;
+    }
+
+    // Reset capture request for pending request as all data has been
+    // transferred to error_entry already.
+    pending_request.capture_request = std::make_unique<CaptureRequest>();
+    pending_request.capture_request->frame_number = result->frame_number;
+
+    if (AllDataCollected(error_entry)) {
       pending_error_frames_.erase(result->frame_number);
+      pending_frame_number_to_requests_.erase(result->frame_number);
     }
 
     // Don't send result to framework if only internal raw callback
@@ -186,51 +189,42 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
 
   // Fill in final result metadata
   if (result->result_metadata != nullptr) {
-    pending_frame_number_to_requests_[result->frame_number]
-        .partial_results_received++;
+    pending_request.partial_results_received++;
     if (result->partial_result < partial_result_count_) {
       // Early result, clone it
-      pending_frame_number_to_requests_[result->frame_number]
-          .capture_request->settings =
+      pending_request.capture_request->settings =
           HalCameraMetadata::Clone(result->result_metadata.get());
     } else {
       // Final result, early result may or may not exist
-      if (pending_frame_number_to_requests_[result->frame_number]
-              .capture_request->settings == nullptr) {
+      if (pending_request.capture_request->settings == nullptr) {
         // No early result, i.e. partial results disabled. Clone final result
-        pending_frame_number_to_requests_[result->frame_number]
-            .capture_request->settings =
+        pending_request.capture_request->settings =
             HalCameraMetadata::Clone(result->result_metadata.get());
       } else {
         // Append final result to early result
-        pending_frame_number_to_requests_[result->frame_number]
-            .capture_request->settings->Append(
-                result->result_metadata->GetRawCameraMetadata());
+        pending_request.capture_request->settings->Append(
+            result->result_metadata->GetRawCameraMetadata());
       }
     }
   }
 
   // Fill in output buffers
   if (!result->output_buffers.empty()) {
-    auto& output_buffers =
-        pending_frame_number_to_requests_[result->frame_number]
-            .capture_request->output_buffers;
+    auto& output_buffers = pending_request.capture_request->output_buffers;
     output_buffers.insert(output_buffers.begin(), result->output_buffers.begin(),
                           result->output_buffers.end());
   }
 
   // Fill in input buffers
   if (!result->input_buffers.empty()) {
-    auto& input_buffers = pending_frame_number_to_requests_[result->frame_number]
-                              .capture_request->input_buffers;
+    auto& input_buffers = pending_request.capture_request->input_buffers;
     input_buffers.insert(input_buffers.begin(), result->input_buffers.begin(),
                          result->input_buffers.end());
   }
 
   // Submit the request and remove the request from the cache when all data is collected.
-  if (AllDataCollected(pending_frame_number_to_requests_[result->frame_number])) {
-    res = ProcessRequest(
-        *pending_frame_number_to_requests_[result->frame_number].capture_request);
+  if (AllDataCollected(pending_request)) {
+    res = ProcessRequest(*pending_request.capture_request);
     pending_frame_number_to_requests_.erase(result->frame_number);
     if (res != OK) {
       ALOGE("%s: ProcessRequest fail", __FUNCTION__);
