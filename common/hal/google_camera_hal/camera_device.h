@@ -110,6 +110,8 @@ class CameraDevice {
   std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries_;
   // Opened library handles that should be closed on destruction
   std::vector<void*> external_capture_session_lib_handles_;
+  // Stream use cases supported by this camera device
+  std::set<int64_t> stream_use_cases_;
 
   const std::vector<std::string>* configure_streams_libs_ = nullptr;
 };
