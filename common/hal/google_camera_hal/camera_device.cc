@@ -167,6 +167,21 @@ status_t CameraDevice::Initialize(
     return res;
   }
 
+  std::unique_ptr<HalCameraMetadata> static_metadata;
+  res = camera_device_hwl_->GetCameraCharacteristics(&static_metadata);
+  if (res != OK) {
+    ALOGE("%s: Getting camera characteristics failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
+  res = utils::GetStreamUseCases(static_metadata.get(), &stream_use_cases_);
+  if (res != OK) {
+    ALOGE("%s: Getting stream use cases failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
   return OK;
 }
 
@@ -264,6 +279,10 @@ status_t CameraDevice::CreateCameraDeviceSession(
 
 bool CameraDevice::IsStreamCombinationSupported(
     const StreamConfiguration& stream_config) {
+  if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
+    return false;
+  }
+
   bool supported =
       camera_device_hwl_->IsStreamCombinationSupported(stream_config);
   if (!supported) {
