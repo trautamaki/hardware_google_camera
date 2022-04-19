@@ -60,7 +60,8 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
   status_t Flush() override;
   // Override functions of RequestProcessor end.
 
-  void UpdateOutputBufferCount(int32_t frame_number, int output_buffer_count);
+  void UpdateOutputBufferCount(int32_t frame_number, int output_buffer_count,
+                               bool is_preview_intent);
 
  protected:
   RealtimeZslResultRequestProcessor(
