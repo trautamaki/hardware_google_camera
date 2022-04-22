@@ -318,15 +318,15 @@ status_t CameraProvider::CreateHwl(
   }
 
   // Create the HWL camera provider
-  *camera_provider_hwl = std::unique_ptr<CameraProviderHwl>(create_hwl());
+  camera_provider_hwl->reset(create_hwl());
+#else
+  camera_provider_hwl->reset(CreateCameraProviderHwl());
+#endif
+
   if (*camera_provider_hwl == nullptr) {
     ALOGE("Error! Creating CameraProviderHwl failed");
     return UNKNOWN_ERROR;
   }
-#else
-  *camera_provider_hwl =
-      std::unique_ptr<CameraProviderHwl>(CreateCameraProviderHwl());
-#endif
 
   return OK;
 }
