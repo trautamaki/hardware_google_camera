@@ -181,6 +181,12 @@ status_t AidlCameraProvider::Initialize() {
 
 ScopedAStatus AidlCameraProvider::setCallback(
     const std::shared_ptr<ICameraProviderCallback>& callback) {
+  if (callback == nullptr) {
+    ALOGE("AidlCameraProvider::setCallback() called with nullptr");
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+
   bool first_time = false;
   {
     std::unique_lock<std::mutex> lock(callbacks_lock_);
