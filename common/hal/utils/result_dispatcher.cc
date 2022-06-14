@@ -240,27 +240,29 @@ status_t ResultDispatcher::AddShutter(uint32_t frame_number,
                                       int64_t timestamp_ns,
                                       int64_t readout_timestamp_ns) {
   ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(result_lock_);
+  {
+    std::lock_guard<std::mutex> lock(result_lock_);
 
-  auto shutter_it = pending_shutters_.find(frame_number);
-  if (shutter_it == pending_shutters_.end()) {
-    ALOGE("%s: Cannot find the pending shutter for frame %u", __FUNCTION__,
-          frame_number);
-    return NAME_NOT_FOUND;
+    auto shutter_it = pending_shutters_.find(frame_number);
+    if (shutter_it == pending_shutters_.end()) {
+      ALOGE("%s: Cannot find the pending shutter for frame %u", __FUNCTION__,
+            frame_number);
+      return NAME_NOT_FOUND;
+    }
+
+    if (shutter_it->second.ready) {
+      ALOGE("%s: Already received shutter (%" PRId64
+            ") for frame %u. New "
+            "timestamp %" PRId64,
+            __FUNCTION__, shutter_it->second.timestamp_ns, frame_number,
+            timestamp_ns);
+      return ALREADY_EXISTS;
+    }
+
+    shutter_it->second.timestamp_ns = timestamp_ns;
+    shutter_it->second.readout_timestamp_ns = readout_timestamp_ns;
+    shutter_it->second.ready = true;
   }
-
-  if (shutter_it->second.ready) {
-    ALOGE("%s: Already received shutter (%" PRId64
-          ") for frame %u. New "
-          "timestamp %" PRId64,
-          __FUNCTION__, shutter_it->second.timestamp_ns, frame_number,
-          timestamp_ns);
-    return ALREADY_EXISTS;
-  }
-
-  shutter_it->second.timestamp_ns = timestamp_ns;
-  shutter_it->second.readout_timestamp_ns = readout_timestamp_ns;
-  shutter_it->second.ready = true;
   {
     std::unique_lock<std::mutex> lock(notify_callback_lock_);
     is_result_shutter_updated_ = true;
