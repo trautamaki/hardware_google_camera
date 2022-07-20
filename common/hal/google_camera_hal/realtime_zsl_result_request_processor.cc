@@ -192,7 +192,7 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
         result->result_metadata->Append(
             pending_request.capture_request->settings->GetRawCameraMetadata());
       }
-      error_entry.partial_results_received = result->partial_result;
+      error_entry.partial_results_received += result->partial_result;
     }
 
     // Reset capture request for pending request as all data has been
