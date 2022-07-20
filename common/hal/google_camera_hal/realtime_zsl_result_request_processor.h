@@ -95,6 +95,12 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
       RequestEntry& error_entry, RequestEntry& pending_request,
       std::unique_ptr<CaptureResult>& result) const;
 
+  // Returns result directly for frames with errors, if applicable. Call site
+  // must hold callback_lock_.
+  void ReturnResultDirectlyForFramesWithErrorsLocked(
+      RequestEntry& error_entry, RequestEntry& pending_request,
+      std::unique_ptr<CaptureResult> result);
+
   // Results collected so far on a valid frame. Results are passed to the
   // processor block once all items in the RequestEntry struct are complete -
   // i.e. all buffers arrived an all partial results arrived.

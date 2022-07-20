@@ -165,24 +165,8 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
   if (pending_error_frames_.find(result->frame_number) !=
       pending_error_frames_.end()) {
     RequestEntry& error_entry = pending_error_frames_[result->frame_number];
-    // Also need to process pending buffers and metadata for the frame if exists.
-    // If the result is complete (buffers and all partial results arrived), send
-    // the callback directly. Otherwise wait until the missing pieces arrive.
-    CombineErrorAndPendingEntriesToResult(error_entry, pending_request, result);
-
-    if (AllDataCollected(error_entry)) {
-      pending_error_frames_.erase(result->frame_number);
-      pending_frame_number_to_requests_.erase(result->frame_number);
-    }
-
-    // Don't send result to framework if only internal raw callback
-    if (pending_request.has_returned_output_to_internal_stream_manager &&
-        result->result_metadata == nullptr &&
-        result->output_buffers.size() == 0) {
-      return;
-    }
-    process_capture_result_(std::move(result));
-    return;
+    return ReturnResultDirectlyForFramesWithErrorsLocked(
+        error_entry, pending_request, std::move(result));
   }
 
   // Fill in final result metadata
@@ -391,6 +375,28 @@ void RealtimeZslResultRequestProcessor::CombineErrorAndPendingEntriesToResult(
   // transferred to error_entry already.
   pending_request.capture_request = std::make_unique<CaptureRequest>();
   pending_request.capture_request->frame_number = result->frame_number;
+}
+
+void RealtimeZslResultRequestProcessor::ReturnResultDirectlyForFramesWithErrorsLocked(
+    RequestEntry& error_entry, RequestEntry& pending_request,
+    std::unique_ptr<CaptureResult> result) {
+  // Also need to process pending buffers and metadata for the frame if exists.
+  // If the result is complete (buffers and all partial results arrived), send
+  // the callback directly. Otherwise wait until the missing pieces arrive.
+  CombineErrorAndPendingEntriesToResult(error_entry, pending_request, result);
+
+  if (AllDataCollected(error_entry)) {
+    pending_error_frames_.erase(result->frame_number);
+    pending_frame_number_to_requests_.erase(result->frame_number);
+  }
+
+  // Don't send result to framework if only internal raw callback
+  if (pending_request.has_returned_output_to_internal_stream_manager &&
+      result->result_metadata == nullptr && result->output_buffers.size() == 0) {
+    return;
+  }
+  process_capture_result_(std::move(result));
+  return;
 }
 
 }  // namespace google_camera_hal
