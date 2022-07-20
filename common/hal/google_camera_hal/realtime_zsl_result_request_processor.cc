@@ -117,12 +117,11 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
 
   // Return filled raw buffer to internal stream manager
   // And remove raw buffer from result
-  bool returned_output = false;
   status_t res;
   std::vector<StreamBuffer> modified_output_buffers;
   for (uint32_t i = 0; i < result->output_buffers.size(); i++) {
     if (stream_id_ == result->output_buffers[i].stream_id) {
-      returned_output = true;
+      pending_request.has_returned_output_to_internal_stream_manager = true;
       res = internal_stream_manager_->ReturnFilledBuffer(
           result->frame_number, result->output_buffers[i]);
       if (res != OK) {
@@ -207,7 +206,8 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     }
 
     // Don't send result to framework if only internal raw callback
-    if (returned_output && result->result_metadata == nullptr &&
+    if (pending_request.has_returned_output_to_internal_stream_manager &&
+        result->result_metadata == nullptr &&
         result->output_buffers.size() == 0) {
       return;
     }

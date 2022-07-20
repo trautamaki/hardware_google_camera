@@ -80,6 +80,9 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
     uint32_t partial_results_received = 0;
     bool zsl_buffer_received = false;
     int framework_buffer_count = INT_MAX;
+    // Whether there were filled raw buffers that have been returned to internal
+    // stream manager.
+    bool has_returned_output_to_internal_stream_manager = false;
   };
 
   bool AllDataCollected(const RequestEntry& request_entry) const;
