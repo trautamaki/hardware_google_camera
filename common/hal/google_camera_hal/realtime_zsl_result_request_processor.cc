@@ -327,6 +327,21 @@ void RealtimeZslResultRequestProcessor::Notify(
             .partial_results_received++;
       }
     }
+    // Gives latched results (those that have arrived but are waiting for
+    // AllDataCollected()) a chance to return their valid buffer.
+    uint32_t frame_number = message.message.error.frame_number;
+    auto result = std::make_unique<CaptureResult>();
+    result->frame_number = frame_number;
+    if (pending_frame_number_to_requests_.find(frame_number) !=
+        pending_frame_number_to_requests_.end()) {
+      RequestEntry& pending_request =
+          pending_frame_number_to_requests_[frame_number];
+      if (pending_request.zsl_buffer_received) {
+        ReturnResultDirectlyForFramesWithErrorsLocked(
+            pending_error_frames_[frame_number], pending_request,
+            std::move(result));
+      }
+    }
   } else {
     // May change to ALOGD for per-frame shutter messages.
     ALOGV(
@@ -395,6 +410,8 @@ void RealtimeZslResultRequestProcessor::ReturnResultDirectlyForFramesWithErrorsL
       result->result_metadata == nullptr && result->output_buffers.size() == 0) {
     return;
   }
+  ALOGV("%s: Returning capture result for frame %d due to existing errors.",
+        __FUNCTION__, result->frame_number);
   process_capture_result_(std::move(result));
   return;
 }
