@@ -87,6 +87,14 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
 
   bool AllDataCollected(const RequestEntry& request_entry) const;
 
+  // A helper function to combine information for the same frame number from
+  // `pending_error_frames_` and `pending_frame_number_to_requests_` to the
+  // `result`. This is a 3-way update, where `pending_request` info is copied to
+  // `error_entry` and `result`, and `pending_request` info gets reset.
+  void CombineErrorAndPendingEntriesToResult(
+      RequestEntry& error_entry, RequestEntry& pending_request,
+      std::unique_ptr<CaptureResult>& result) const;
+
   // Results collected so far on a valid frame. Results are passed to the
   // processor block once all items in the RequestEntry struct are complete -
   // i.e. all buffers arrived an all partial results arrived.

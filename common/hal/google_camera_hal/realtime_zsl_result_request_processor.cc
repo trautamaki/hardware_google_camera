@@ -24,6 +24,8 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
+#include <memory>
+
 #include "hal_types.h"
 #include "hal_utils.h"
 #include "realtime_zsl_result_processor.h"
@@ -166,39 +168,7 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     // Also need to process pending buffers and metadata for the frame if exists.
     // If the result is complete (buffers and all partial results arrived), send
     // the callback directly. Otherwise wait until the missing pieces arrive.
-    result->output_buffers.insert(
-        result->output_buffers.end(),
-        pending_request.capture_request->output_buffers.begin(),
-        pending_request.capture_request->output_buffers.end());
-    result->input_buffers.insert(
-        result->input_buffers.end(),
-        pending_request.capture_request->input_buffers.begin(),
-        pending_request.capture_request->input_buffers.end());
-    error_entry.capture_request->output_buffers = result->output_buffers;
-    error_entry.capture_request->input_buffers = result->input_buffers;
-    error_entry.zsl_buffer_received = pending_request.zsl_buffer_received;
-    error_entry.framework_buffer_count = pending_request.framework_buffer_count;
-    if (pending_request.capture_request->settings != nullptr) {
-      if (result->result_metadata == nullptr) {
-        // result is a buffer-only result and we have early metadata sitting in
-        // pending_request. Copy this early metadata and its partial_result count.
-        result->result_metadata = HalCameraMetadata::Clone(
-            pending_request.capture_request->settings.get());
-        result->partial_result = pending_request.partial_results_received;
-      } else {
-        // result carries final metadata and we have early metadata sitting in
-        // pending_request. Append the early metadata but keep the
-        // partial_result count to reflect that this is the final metadata.
-        result->result_metadata->Append(
-            pending_request.capture_request->settings->GetRawCameraMetadata());
-      }
-      error_entry.partial_results_received += result->partial_result;
-    }
-
-    // Reset capture request for pending request as all data has been
-    // transferred to error_entry already.
-    pending_request.capture_request = std::make_unique<CaptureRequest>();
-    pending_request.capture_request->frame_number = result->frame_number;
+    CombineErrorAndPendingEntriesToResult(error_entry, pending_request, result);
 
     if (AllDataCollected(error_entry)) {
       pending_error_frames_.erase(result->frame_number);
@@ -383,6 +353,44 @@ void RealtimeZslResultRequestProcessor::Notify(
         message.message.shutter.readout_timestamp_ns);
   }
   notify_(message);
+}
+
+void RealtimeZslResultRequestProcessor::CombineErrorAndPendingEntriesToResult(
+    RequestEntry& error_entry, RequestEntry& pending_request,
+    std::unique_ptr<CaptureResult>& result) const {
+  result->output_buffers.insert(
+      result->output_buffers.end(),
+      pending_request.capture_request->output_buffers.begin(),
+      pending_request.capture_request->output_buffers.end());
+  result->input_buffers.insert(
+      result->input_buffers.end(),
+      pending_request.capture_request->input_buffers.begin(),
+      pending_request.capture_request->input_buffers.end());
+  error_entry.capture_request->output_buffers = result->output_buffers;
+  error_entry.capture_request->input_buffers = result->input_buffers;
+  error_entry.zsl_buffer_received = pending_request.zsl_buffer_received;
+  error_entry.framework_buffer_count = pending_request.framework_buffer_count;
+  if (pending_request.capture_request->settings != nullptr) {
+    if (result->result_metadata == nullptr) {
+      // result is a buffer-only result and we have early metadata sitting in
+      // pending_request. Copy this early metadata and its partial_result count.
+      result->result_metadata = HalCameraMetadata::Clone(
+          pending_request.capture_request->settings.get());
+      result->partial_result = pending_request.partial_results_received;
+    } else {
+      // result carries final metadata and we have early metadata sitting in
+      // pending_request. Append the early metadata but keep the
+      // partial_result count to reflect that this is the final metadata.
+      result->result_metadata->Append(
+          pending_request.capture_request->settings->GetRawCameraMetadata());
+    }
+    error_entry.partial_results_received += result->partial_result;
+  }
+
+  // Reset capture request for pending request as all data has been
+  // transferred to error_entry already.
+  pending_request.capture_request = std::make_unique<CaptureRequest>();
+  pending_request.capture_request->frame_number = result->frame_number;
 }
 
 }  // namespace google_camera_hal
