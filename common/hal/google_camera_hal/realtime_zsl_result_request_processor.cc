@@ -99,6 +99,14 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     return;
   }
 
+  // May change to ALOGD for per-frame results.
+  ALOGV(
+      "%s: Received result at frame: %d, has metadata (%s), output buffer "
+      "counts: %lu, input buffer counts: %lu",
+      __FUNCTION__, result->frame_number,
+      (result->result_metadata ? "yes" : "no"), result->output_buffers.size(),
+      result->input_buffers.size());
+
   // Pending request should always exist
   RequestEntry& pending_request =
       pending_frame_number_to_requests_[result->frame_number];
@@ -348,6 +356,10 @@ void RealtimeZslResultRequestProcessor::Notify(
 
   // Will return buffer for kErrorRequest and kErrorBuffer.
   if (message.type == MessageType::kError) {
+    // May change to ALOGD for per-frame error messages.
+    ALOGV("%s: Received error message at frame: %d, error code (%d)",
+          __FUNCTION__, message.message.error.frame_number,
+          static_cast<int>(message.message.error.error_code));
     if (message.message.error.error_code == ErrorCode::kErrorRequest ||
         message.message.error.error_code == ErrorCode::kErrorBuffer) {
       pending_error_frames_.try_emplace(
@@ -361,6 +373,14 @@ void RealtimeZslResultRequestProcessor::Notify(
             .partial_results_received++;
       }
     }
+  } else {
+    // May change to ALOGD for per-frame shutter messages.
+    ALOGV(
+        "%s: Received shutter message for frame %d, timestamp_ns: %lu, "
+        "readout_timestamp_ns: %lu",
+        __FUNCTION__, message.message.shutter.frame_number,
+        message.message.shutter.timestamp_ns,
+        message.message.shutter.readout_timestamp_ns);
   }
   notify_(message);
 }
