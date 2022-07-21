@@ -63,17 +63,17 @@ status_t ZslResultDispatcher::Initialize(uint32_t partial_result_count) {
   notify_ = NotifyFunc(
       [this](const NotifyMessage& message) { NotifyHalMessage(message); });
 
-  normal_result_dispatcher_ =
-      std::unique_ptr<ResultDispatcher>(new ResultDispatcher(
-          partial_result_count, process_capture_result_, notify_));
+  normal_result_dispatcher_ = std::unique_ptr<ResultDispatcher>(
+      new ResultDispatcher(partial_result_count, process_capture_result_,
+                           notify_, "ZslNormalDispatcher"));
   if (normal_result_dispatcher_ == nullptr) {
     ALOGE("%s: Creating normal_result_dispatcher_ failed.", __FUNCTION__);
     return BAD_VALUE;
   }
 
-  zsl_result_dispatcher_ =
-      std::unique_ptr<ResultDispatcher>(new ResultDispatcher(
-          partial_result_count, process_capture_result_, notify_));
+  zsl_result_dispatcher_ = std::unique_ptr<ResultDispatcher>(
+      new ResultDispatcher(partial_result_count, process_capture_result_,
+                           notify_, "ZslZslDispatcher"));
   if (zsl_result_dispatcher_ == nullptr) {
     ALOGE("%s: Creating zsl_result_dispatcher_ failed.", __FUNCTION__);
     return BAD_VALUE;
