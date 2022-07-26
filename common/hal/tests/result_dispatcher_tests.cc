@@ -64,7 +64,8 @@ class ResultDispatcherTests : public ::testing::Test {
         [this](std::unique_ptr<CaptureResult> result) {
           ProcessCaptureResult(std::move(result));
         },
-        [this](const NotifyMessage& message) { Notify(message); });
+        [this](const NotifyMessage& message) { Notify(message); },
+        "TestResultDispatcher");
 
     ASSERT_NE(result_dispatcher_, nullptr)
         << "Creating ResultDispatcher failed";

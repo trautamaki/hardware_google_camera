@@ -18,6 +18,8 @@
 #define HARDWARE_GOOGLE_CAMERA_HAL_UTILS_RESULT_DISPATCHER_H_
 
 #include <map>
+#include <string>
+#include <string_view>
 #include <thread>
 
 #include "hal_types.h"
@@ -40,7 +42,8 @@ class ResultDispatcher {
   // notify is the function to notify shutter messages.
   static std::unique_ptr<ResultDispatcher> Create(
       uint32_t partial_result_count,
-      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify);
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+      std::string_view name = "ResultDispatcher");
 
   virtual ~ResultDispatcher();
 
@@ -68,7 +71,8 @@ class ResultDispatcher {
 
   ResultDispatcher(uint32_t partial_result_count,
                    ProcessCaptureResultFunc process_capture_result,
-                   NotifyFunc notify);
+                   NotifyFunc notify,
+                   std::string_view name = "ResultDispatcher");
 
  private:
   static constexpr uint32_t kCallbackThreadTimeoutMs = 500;
@@ -159,6 +163,9 @@ class ResultDispatcher {
   void NotifyCallbackThreadLoop();
 
   void PrintTimeoutMessages();
+
+  // Name used for debugging purpose to disambiguate multiple ResultDispatchers.
+  std::string name_;
 
   std::mutex result_lock_;
 
