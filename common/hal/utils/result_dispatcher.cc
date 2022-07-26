@@ -21,6 +21,7 @@
 
 #include <inttypes.h>
 #include <log/log.h>
+#include <sys/resource.h>
 #include <utils/Trace.h>
 
 #include <string>
@@ -66,6 +67,15 @@ ResultDispatcher::ResultDispatcher(
       ALOGE("[%s] %s: SetRealtimeThread fail", name_.c_str(), __FUNCTION__);
     } else {
       ALOGI("[%s] %s: SetRealtimeThread OK", name_.c_str(), __FUNCTION__);
+    }
+  } else {
+    // Assign higher priority to reduce the preemption when CPU usage is high
+    int32_t res = setpriority(
+        PRIO_PROCESS,
+        pthread_gettid_np(notify_callback_thread_.native_handle()), -20);
+    if (res != 0) {
+      ALOGE("[%s] %s: Set thread priority fail with error: %s", name_.c_str(),
+            __FUNCTION__, strerror(errno));
     }
   }
 }
