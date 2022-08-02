@@ -19,6 +19,7 @@
 //#define LOG_NDEBUG 0
 #include "aidl_camera_device_session.h"
 
+#include <android/binder_ibinder_platform.h>
 #include <cutils/properties.h>
 #include <cutils/trace.h>
 #include <log/log.h>
@@ -796,6 +797,12 @@ ScopedAStatus AidlCameraDeviceSession::isReconfigurationRequired(
   }
 
   return ScopedAStatus::ok();
+}
+
+::ndk::SpAIBinder AidlCameraDeviceSession::createBinder() {
+  auto binder = BnCameraDeviceSession::createBinder();
+  AIBinder_setInheritRt(binder.get(), true);
+  return binder;
 }
 
 }  // namespace implementation
