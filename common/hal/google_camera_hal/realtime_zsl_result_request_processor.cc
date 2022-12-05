@@ -104,7 +104,7 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
   // May change to ALOGD for per-frame results.
   ALOGV(
       "%s: Received result at frame: %d, has metadata (%s), output buffer "
-      "counts: %lu, input buffer counts: %lu",
+      "counts: %d, input buffer counts: %d",
       __FUNCTION__, result->frame_number,
       (result->result_metadata ? "yes" : "no"), result->output_buffers.size(),
       result->input_buffers.size());
@@ -345,8 +345,8 @@ void RealtimeZslResultRequestProcessor::Notify(
   } else {
     // May change to ALOGD for per-frame shutter messages.
     ALOGV(
-        "%s: Received shutter message for frame %d, timestamp_ns: %lu, "
-        "readout_timestamp_ns: %lu",
+        "%s: Received shutter message for frame %d, timestamp_ns: %llu, "
+        "readout_timestamp_ns: %llu",
         __FUNCTION__, message.message.shutter.frame_number,
         message.message.shutter.timestamp_ns,
         message.message.shutter.readout_timestamp_ns);
